@@ -1356,6 +1356,273 @@
                     ttl: CACHE_CONFIG.DISCOVERY_TTL
                 }
             ]
+        },
+        // ── Series Equivalents ────────────────────────────────────────
+        // Genre Shows Group
+        {
+            id: 'discovery-genre-shows',
+            name: 'Genre Shows',
+            sections: [
+                {
+                    id: 'genreShows',
+                    type: 'Genre',
+                    source: 'Dynamic',
+                    name: '{Genre} Shows',
+                    enabled: true,
+                    itemLimit: 20,
+                    sortOrder: 'Random',
+                    cardFormat: 'Poster',
+                    includeItemTypes: ['Series'],
+                    ttl: CACHE_CONFIG.DISCOVERY_TTL
+                },
+                {
+                    id: 'spotlightGenreShows',
+                    type: 'Genre',
+                    source: 'Dynamic',
+                    name: 'Top Rated {Genre} Shows',
+                    enabled: true,
+                    itemLimit: 20,
+                    sortOrder: 'CommunityRating',
+                    sortOrderDirection: 'Descending',
+                    includeItemTypes: ['Series'],
+                    renderMode: 'Spotlight',
+                    ttl: CACHE_CONFIG.DISCOVERY_TTL
+                }
+            ]
+        },
+        // People Shows Group
+        {
+            id: 'discovery-people-shows',
+            name: 'People Shows',
+            sections: [
+                {
+                    id: 'directedByTopDirectorShows',
+                    type: 'Person',
+                    source: 'Dynamic',
+                    personType: 'Director',
+                    name: 'Directed by {Person}',
+                    enabled: true,
+                    itemLimit: 20,
+                    sortOrder: 'Random',
+                    cardFormat: 'Poster',
+                    includeItemTypes: ['Series'],
+                    ttl: CACHE_CONFIG.DISCOVERY_TTL
+                },
+                {
+                    id: 'writtenByTopWriterShows',
+                    type: 'Person',
+                    source: 'Dynamic',
+                    personType: 'Writer',
+                    name: 'Written by {Person}',
+                    enabled: true,
+                    itemLimit: 20,
+                    sortOrder: 'Random',
+                    cardFormat: 'Poster',
+                    includeItemTypes: ['Series'],
+                    ttl: CACHE_CONFIG.DISCOVERY_TTL
+                },
+                {
+                    id: 'starringTopActorShows',
+                    type: 'Person',
+                    source: 'Dynamic',
+                    personType: 'Actor',
+                    name: 'Starring {Person}',
+                    enabled: true,
+                    itemLimit: 20,
+                    sortOrder: 'Random',
+                    cardFormat: 'Poster',
+                    includeItemTypes: ['Series'],
+                    ttl: CACHE_CONFIG.DISCOVERY_TTL
+                }
+            ]
+        },
+        // Recently Watched People Shows Group
+        {
+            id: 'discovery-recently-watched-people-shows',
+            name: 'Recently Watched People (Shows)',
+            sections: [
+                {
+                    id: 'starringActorRecentlyWatchedShows',
+                    type: 'Person',
+                    source: 'Dynamic',
+                    personType: 'Actor',
+                    sourceType: 'watched-recent',
+                    name: 'Starring {Person} since you watched {Title}',
+                    enabled: true,
+                    itemLimit: 20,
+                    sortOrder: 'Random',
+                    cardFormat: 'Poster',
+                    includeItemTypes: ['Series'],
+                    ttl: CACHE_CONFIG.DISCOVERY_TTL
+                },
+                {
+                    id: 'directedByDirectorRecentlyWatchedShows',
+                    type: 'Person',
+                    source: 'Dynamic',
+                    personType: 'Director',
+                    sourceType: 'watched-recent',
+                    name: 'Directed by {Person} since you watched {Title}',
+                    enabled: true,
+                    itemLimit: 20,
+                    sortOrder: 'Random',
+                    cardFormat: 'Poster',
+                    includeItemTypes: ['Series'],
+                    ttl: CACHE_CONFIG.DISCOVERY_TTL
+                },
+                {
+                    id: 'writtenByWriterRecentlyWatchedShows',
+                    type: 'Person',
+                    source: 'Dynamic',
+                    personType: 'Writer',
+                    sourceType: 'watched-recent',
+                    name: 'Written by {Person} since you watched {Title}',
+                    enabled: true,
+                    itemLimit: 20,
+                    sortOrder: 'Random',
+                    cardFormat: 'Poster',
+                    includeItemTypes: ['Series'],
+                    ttl: CACHE_CONFIG.DISCOVERY_TTL
+                }
+            ]
+        },
+        // Similar to Watched Shows Group
+        {
+            id: 'discovery-similar-to-watched-shows',
+            name: 'Similar to Watched (Shows)',
+            sections: [
+                {
+                    id: 'becauseYouWatchedShow',
+                    type: 'Similar',
+                    source: 'Dynamic',
+                    sourceType: 'watched',
+                    name: 'Because you watched {Title}',
+                    enabled: true,
+                    itemLimit: 20,
+                    sortOrder: 'Random',
+                    includeItemTypes: ['Series'],
+                    ttl: CACHE_CONFIG.DISCOVERY_TTL
+                },
+                {
+                    id: 'becauseYouRecentlyWatchedShow',
+                    type: 'Similar',
+                    source: 'Dynamic',
+                    sourceType: 'watched-recent',
+                    name: 'Because you recently watched {Title}',
+                    enabled: true,
+                    itemLimit: 20,
+                    sortOrder: 'Random',
+                    cardFormat: 'Poster',
+                    includeItemTypes: ['Series'],
+                    ttl: CACHE_CONFIG.DISCOVERY_TTL
+                }
+            ]
+        },
+        // Liked Shows Group
+        {
+            id: 'discovery-liked-shows',
+            name: 'Liked (Shows)',
+            sections: [
+                {
+                    id: 'becauseYouLikedShow',
+                    type: 'Similar',
+                    source: 'Dynamic',
+                    sourceType: 'liked',
+                    name: 'Because you liked {Title}',
+                    enabled: true,
+                    itemLimit: 20,
+                    sortOrder: 'Random',
+                    cardFormat: 'Poster',
+                    includeItemTypes: ['Series'],
+                    ttl: CACHE_CONFIG.DISCOVERY_TTL
+                }
+            ]
+        },
+        // ── SmartSuggest Sections ─────────────────────────────────────
+        // SmartSuggest Movies Group
+        {
+            id: 'discovery-smart-suggest',
+            name: 'Smart Suggest (Movies)',
+            sections: [
+                {
+                    id: 'smartBecauseYouWatched',
+                    type: 'SmartSuggest',
+                    source: 'Dynamic',
+                    sourceType: 'watched',
+                    name: 'Because you watched {Title}',
+                    enabled: true,
+                    itemLimit: 20,
+                    cardFormat: 'Poster',
+                    includeItemTypes: ['Movie'],
+                    ttl: CACHE_CONFIG.DISCOVERY_TTL
+                },
+                {
+                    id: 'smartBecauseYouRecentlyWatched',
+                    type: 'SmartSuggest',
+                    source: 'Dynamic',
+                    sourceType: 'watched-recent',
+                    name: 'Because you recently watched {Title}',
+                    enabled: true,
+                    itemLimit: 20,
+                    cardFormat: 'Poster',
+                    includeItemTypes: ['Movie'],
+                    ttl: CACHE_CONFIG.DISCOVERY_TTL
+                },
+                {
+                    id: 'smartBecauseYouLiked',
+                    type: 'SmartSuggest',
+                    source: 'Dynamic',
+                    sourceType: 'liked',
+                    name: 'Because you liked {Title}',
+                    enabled: true,
+                    itemLimit: 20,
+                    cardFormat: 'Poster',
+                    includeItemTypes: ['Movie'],
+                    ttl: CACHE_CONFIG.DISCOVERY_TTL
+                }
+            ]
+        },
+        // SmartSuggest Shows Group
+        {
+            id: 'discovery-smart-suggest-shows',
+            name: 'Smart Suggest (Shows)',
+            sections: [
+                {
+                    id: 'smartBecauseYouWatchedShow',
+                    type: 'SmartSuggest',
+                    source: 'Dynamic',
+                    sourceType: 'watched',
+                    name: 'Because you watched {Title}',
+                    enabled: true,
+                    itemLimit: 20,
+                    cardFormat: 'Poster',
+                    includeItemTypes: ['Series'],
+                    ttl: CACHE_CONFIG.DISCOVERY_TTL
+                },
+                {
+                    id: 'smartBecauseYouRecentlyWatchedShow',
+                    type: 'SmartSuggest',
+                    source: 'Dynamic',
+                    sourceType: 'watched-recent',
+                    name: 'Because you recently watched {Title}',
+                    enabled: true,
+                    itemLimit: 20,
+                    cardFormat: 'Poster',
+                    includeItemTypes: ['Series'],
+                    ttl: CACHE_CONFIG.DISCOVERY_TTL
+                },
+                {
+                    id: 'smartBecauseYouLikedShow',
+                    type: 'SmartSuggest',
+                    source: 'Dynamic',
+                    sourceType: 'liked',
+                    name: 'Because you liked {Title}',
+                    enabled: true,
+                    itemLimit: 20,
+                    cardFormat: 'Poster',
+                    includeItemTypes: ['Series'],
+                    ttl: CACHE_CONFIG.DISCOVERY_TTL
+                }
+            ]
         }
     ];
 
@@ -1371,6 +1638,7 @@
         renderSpotlightAboveMatching: false,
         randomizeOrder: false,
         fadeInSections: false,
+        smartWatchThreshold: 0, // -1 = no filtering, 0 = hide Played only, 1-100 = hide at/above this %
     }
 
     const SEASONAL_THEME_SETTINGS = {

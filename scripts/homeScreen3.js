@@ -50,11 +50,18 @@
             writers: new Set(),
             watchedMovies: new Set(),
             likedMovies: new Set(),
+            watchedSeries: new Set(),
+            likedSeries: new Set(),
+            smartMovies: new Set(),
+            smartSeries: new Set(),
             customDiscoverySections: new Set()
         },
         currentDiscoveryGenre: null,
         currentDiscoveryStudio: null,
         cachedFavorites: null,
+        cachedFavoriteSeries: null,
+        cachedWatchedSeries: null,
+        cachedRecentSeries: null,
         isPeopleCacheComplete: false,
         discoveryGroupIndex: 0,
         isRenderingDiscovery: false,
@@ -1400,6 +1407,66 @@
         const loadSectionDuration = loadSectionTimerEnd - loadSectionTimerStart;
         LOG(`Section ${sectionConfig.id} loaded for rendering in time: ${loadSectionDuration.toFixed(2)}ms`);
 
+        // SmartSuggest: refresh UserData on cached items and apply watch filter
+        if (sectionConfig.refreshUserData || sectionConfig.postFetchFilter) {
+            const applySmartFilter = async (data) => {
+                if (!data) return data;
+
+                let items = data.Items || data;
+                if (!Array.isArray(items) || items.length === 0) return data;
+
+                // Refresh UserData from server if this is cached data
+                if (sectionConfig.refreshUserData) {
+                    try {
+                        const userId = ApiClient.getCurrentUserId();
+                        const ids = items.map(i => i.Id).filter(Boolean).join(',');
+                        if (ids) {
+                            const freshResp = await ApiClient.getJSON(
+                                ApiClient.getUrl(`Users/${userId}/Items`, {
+                                    Ids: ids,
+                                    Fields: 'UserData'
+                                })
+                            );
+                            if (freshResp?.Items) {
+                                const freshMap = new Map(freshResp.Items.map(i => [i.Id, i.UserData]));
+                                for (const item of items) {
+                                    const freshUd = freshMap.get(item.Id);
+                                    if (freshUd) item.UserData = freshUd;
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        WARN('SmartSuggest: Failed to refresh UserData:', e);
+                    }
+                }
+
+                // Apply watch filter
+                if (sectionConfig.postFetchFilter) {
+                    const filtered = sectionConfig.postFetchFilter(items);
+                    if (filtered === null) return null; // Section should be skipped
+                    if (data.Items) {
+                        data.Items = filtered;
+                        data.TotalRecordCount = filtered.length;
+                    } else {
+                        data = filtered;
+                    }
+                }
+
+                return data;
+            };
+
+            for (const result of results) {
+                if (result.data) {
+                    result.data = await applySmartFilter(result.data);
+                    if (result.data === null) return null;
+                }
+                if (result.dataPromise) {
+                    const origPromise = result.dataPromise;
+                    result.dataPromise = origPromise.then(d => applySmartFilter(d));
+                }
+            }
+        }
+
         const postProcess = (sectionConfig, items) => {
             let postProcessedItems = items;
             if (window.cardBuilder.postProcessItems) {
@@ -1580,6 +1647,11 @@
                     const itemId = firstQuery.path.split('/')[2];
                     return `#/details?id=${itemId}&serverId=${serverId}`;
                 }
+                // SmartSuggest: /SmartSuggest/{itemId} → details page
+                if (firstQuery.path.includes('SmartSuggest')) {
+                    const itemId = firstQuery.path.split('/')[2];
+                    return `#/details?id=${itemId}&serverId=${serverId}`;
+                }
             }
         }
         
@@ -1643,7 +1715,8 @@
 
             case 'Person':
                 if (config.sourceType && config.sourceType.includes('watched')) {
-                    const result = await getRandomPersonFromHistory(config.personType, config.sourceType);
+                    const itemType = (config.includeItemTypes && config.includeItemTypes[0]) || 'Movie';
+                    const result = await getRandomPersonFromHistory(config.personType, config.sourceType, itemType);
                     if (!result) return null;
                     
                     return {
@@ -1656,7 +1729,8 @@
                             Director: result.person.name,
                             Writer: result.person.name,
                             Title: result.sourceItem.Name,
-                            Movie: result.sourceItem.Name
+                            Movie: result.sourceItem.Name,
+                            Show: result.sourceItem.Name
                         }
                     };
                 }
@@ -1680,37 +1754,47 @@
                 return { id: network.Id, name: network.Name, metadata: { Studio: network.Name } };
                 
             case 'Similar':
-                if (config.sourceType === 'watched') {
-                    const m = getRandomWatchedMovie();
-                    return m ? { 
-                        id: m.Id,
-                        metadata: { 
-                            Title: m.Name,
-                            Movie: m.Name
-                        } 
-                    } : null;
-                }
+            case 'SmartSuggest': {
+                const isSeries = config.includeItemTypes && config.includeItemTypes.includes('Series');
+                const isSmartSuggest = config.type === 'SmartSuggest';
+                const dedupSet = isSmartSuggest
+                    ? (isSeries ? state.renderedDiscoveryIds.smartSeries : state.renderedDiscoveryIds.smartMovies)
+                    : (isSeries ? state.renderedDiscoveryIds.watchedSeries : state.renderedDiscoveryIds.watchedMovies);
+                const likedSet = isSeries ? state.renderedDiscoveryIds.likedSeries : state.renderedDiscoveryIds.likedMovies;
+
+                let sourceItem = null;
+
                 if (config.sourceType === 'liked') {
-                    const m = await getRandomFavoriteMovie();
-                    return m ? {
-                        id: m.Id,
-                        metadata: {
-                            Title: m.Name,
-                            Movie: m.Name
-                        }
-                    } : null;
+                    sourceItem = isSeries
+                        ? await _getRandomFavoriteSeries(likedSet)
+                        : await getRandomFavoriteMovie();
+                } else if (config.sourceType === 'watched-recent') {
+                    sourceItem = isSeries
+                        ? await _getRandomRecentSeries(dedupSet)
+                        : getRandomWatchedMovie();
+                } else {
+                    sourceItem = isSeries
+                        ? await _getRandomWatchedSeries(dedupSet)
+                        : getRandomWatchedMovie();
                 }
-                if (config.sourceType === 'watched-recent') {
-                     const m = getRandomWatchedMovie();
-                     return m ? { 
-                        id: m.Id, 
-                        metadata: { 
-                            Title: m.Name,
-                            Movie: m.Name 
-                        } 
-                    } : null;
+
+                if (!sourceItem) return null;
+
+                if (isSmartSuggest && !isSeries) {
+                    state.renderedDiscoveryIds.watchedMovies.add(sourceItem.Id);
+                } else if (isSmartSuggest && isSeries) {
+                    state.renderedDiscoveryIds.watchedSeries.add(sourceItem.Id);
                 }
-                return null;
+
+                return {
+                    id: sourceItem.Id,
+                    metadata: {
+                        Title: sourceItem.Name,
+                        Movie: sourceItem.Name,
+                        Show: sourceItem.Name
+                    }
+                };
+            }
                 
             case 'Collection':
                  const selectedCollection = await getRandomCollectionForDiscovery(config.minimumItems || 3);
@@ -1998,7 +2082,7 @@
                     // Handle type-specific query options
                     const resolvedSource = instanceConfig.source;
                     if (instanceConfig.type === 'Similar') {
-                        // Similar type uses custom path
+                        // Similar type uses Jellyfin's built-in Similar API
                         instanceConfig.queries = [{
                             path: `/Items/${resolvedSource}/Similar`,
                             queryOptions: {
@@ -2006,6 +2090,35 @@
                                 Fields: 'PrimaryImageAspectRatio,DateCreated,Overview,Taglines,ProductionYear,RecursiveItemCount,ChildCount,UserData'
                             }
                         }];
+                    } else if (instanceConfig.type === 'SmartSuggest') {
+                        // SmartSuggest uses the SmartSuggest plugin (TF-IDF scoring)
+                        const smartUserId = ApiClient.getCurrentUserId();
+                        const requestLimit = (instanceConfig.itemLimit || 20) * 2; // Over-request for client-side filtering
+                        instanceConfig.queries = [{
+                            path: `/SmartSuggest/${resolvedSource}`,
+                            queryOptions: {
+                                userId: smartUserId,
+                                limit: requestLimit,
+                            }
+                        }];
+
+                        // Attach client-side watch filter
+                        const threshold = getDiscoverySettings().smartWatchThreshold ?? 0;
+                        const finalLimit = instanceConfig.itemLimit || 20;
+                        if (threshold >= 0) {
+                            instanceConfig.postFetchFilter = (items) => {
+                                let filtered = items.filter(item => {
+                                    if (!item.UserData) return true;
+                                    if (threshold === 0) return !item.UserData.Played;
+                                    return (item.UserData.PlayedPercentage || 0) < threshold;
+                                });
+                                if (filtered.length < 3) return null;
+                                return filtered.slice(0, finalLimit);
+                            };
+                        }
+
+                        // Mark for UserData refresh on cached responses
+                        instanceConfig.refreshUserData = true;
                     } else {
                         // Standard query types
                         switch (instanceConfig.type) {
@@ -2284,27 +2397,47 @@
         }
     }
 
-    async function getRandomPersonFromHistory(personType, sourceType) {
-        let sourceItems = [];//window.apiHelper.getQuery(`${ApiClient.serverAddress()}/Items?IncludeItemTypes=Movie&Recursive=true&Filters=IsPlayed&Fields=UserData,People&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1&SortBy=DatePlayed&SortOrder=Descending`, { useCache: true, ttl: Config.CACHE.LONG_TTL });
+    async function getRandomPersonFromHistory(personType, sourceType, itemType) {
+        itemType = itemType || 'Movie';
+        let sourceItems = [];
         let queryUrl = null;
 
-        if (sourceType === 'watched-recent') {
-            queryUrl = `${ApiClient.serverAddress()}/Items?IncludeItemTypes=Movie&Recursive=true&Filters=IsPlayed&Fields=UserData,People&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1&SortBy=DatePlayed&SortOrder=Descending&Limit=5`;
-            /* sourceItems = localCache.get('movies') || [];
-            if (sourceItems.length === 0) return null; */
+        if (itemType === 'Series') {
+            // For Series: find watched episodes → extract SeriesIds → fetch Series with People
+            const userId = ApiClient.getCurrentUserId();
+            const episodeLimit = sourceType === 'watched-recent' ? 30 : 100;
+            const episodeUrl = `${ApiClient.serverAddress()}/Users/${userId}/Items?IncludeItemTypes=Episode&Recursive=true&Filters=IsPlayed&Fields=SeriesId&SortBy=${sourceType === 'watched-recent' ? 'DatePlayed' : 'Random'}&SortOrder=Descending&Limit=${episodeLimit}`;
+            try {
+                const epResp = await window.apiHelper.getQuery(episodeUrl, { useCache: true, ttl: Config.CACHE.LONG_TTL });
+                const episodes = epResp?.data?.Items || epResp?.data || [];
+                const seen = new Set();
+                const seriesIds = [];
+                for (const ep of episodes) {
+                    if (ep.SeriesId && !seen.has(ep.SeriesId)) {
+                        seen.add(ep.SeriesId);
+                        seriesIds.push(ep.SeriesId);
+                    }
+                }
+                if (seriesIds.length) {
+                    const seriesUrl = `${ApiClient.serverAddress()}/Users/${userId}/Items?Ids=${seriesIds.join(',')}&Fields=People`;
+                    const seriesResp = await window.apiHelper.getQuery(seriesUrl, { useCache: true, ttl: Config.CACHE.LONG_TTL });
+                    sourceItems = seriesResp?.data?.Items || seriesResp?.data || [];
+                }
+            } catch (e) {
+                ERR('Failed to get series from watched history for Person:', e);
+                return null;
+            }
+        } else {
+            if (sourceType === 'watched-recent') {
+                queryUrl = `${ApiClient.serverAddress()}/Items?IncludeItemTypes=Movie&Recursive=true&Filters=IsPlayed&Fields=UserData,People&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1&SortBy=DatePlayed&SortOrder=Descending&Limit=5`;
+            } else if (sourceType === 'watched') {
+                queryUrl = `${ApiClient.serverAddress()}/Items?IncludeItemTypes=Movie&Recursive=true&Filters=IsPlayed&Fields=UserData,People&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1&SortBy=Random&SortOrder=Descending`;
+            }
 
-            sourceItems = sourceItems.sort((a, b) => new Date(b.UserData.LastPlayedDate) - new Date(a.UserData.LastPlayedDate)).slice(0, 5);
-        } else if (sourceType === 'watched') {
-            queryUrl = `${ApiClient.serverAddress()}/Items?IncludeItemTypes=Movie&Recursive=true&Filters=IsPlayed&Fields=UserData,People&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1&SortBy=Random&SortOrder=Descending`;
-            /* sourceItems = localCache.get('movies') || []; 
-            if (sourceItems.length === 0) return null;
-            sourceItems = sourceItems.sort(() => 0.5 - Math.random()).slice(0, 20); */
-        }
-
-        if (queryUrl) {
-            const response = await window.apiHelper.getQuery(queryUrl, { useCache: true, ttl: Config.CACHE.LONG_TTL });
-            // Only check the cached data, ignore the promise
-            sourceItems = response?.data?.Items || response?.data || [];
+            if (queryUrl) {
+                const response = await window.apiHelper.getQuery(queryUrl, { useCache: true, ttl: Config.CACHE.LONG_TTL });
+                sourceItems = response?.data?.Items || response?.data || [];
+            }
         }
 
         if (!sourceItems.length) return null;
@@ -2407,6 +2540,144 @@
             return selected;
         } catch (e) {
             ERR('Failed to get favorite movies:', e);
+            return null;
+        }
+    }
+
+    // ── Series Source Selection ────────────────────────────────────
+
+    async function _fetchWatchedSeries() {
+        if (state.cachedWatchedSeries) return state.cachedWatchedSeries;
+        const userId = ApiClient.getCurrentUserId();
+        try {
+            const resp = await ApiClient.getJSON(
+                ApiClient.getUrl(`Users/${userId}/Items`, {
+                    IncludeItemTypes: 'Episode',
+                    Recursive: true,
+                    Filters: 'IsPlayed',
+                    Fields: 'SeriesId',
+                    SortBy: 'DatePlayed',
+                    SortOrder: 'Descending',
+                    Limit: 200
+                })
+            );
+            const seen = new Set();
+            const seriesIds = [];
+            for (const ep of (resp?.Items || [])) {
+                if (ep.SeriesId && !seen.has(ep.SeriesId)) {
+                    seen.add(ep.SeriesId);
+                    seriesIds.push(ep.SeriesId);
+                }
+            }
+            if (!seriesIds.length) { state.cachedWatchedSeries = []; return []; }
+            const seriesResp = await ApiClient.getJSON(
+                ApiClient.getUrl(`Users/${userId}/Items`, {
+                    Ids: seriesIds.join(','),
+                    Fields: 'PrimaryImageAspectRatio'
+                })
+            );
+            state.cachedWatchedSeries = seriesResp?.Items || [];
+            return state.cachedWatchedSeries;
+        } catch (e) {
+            ERR('Failed to fetch watched series:', e);
+            return [];
+        }
+    }
+
+    async function _fetchRecentSeries() {
+        if (state.cachedRecentSeries) return state.cachedRecentSeries;
+        const userId = ApiClient.getCurrentUserId();
+        try {
+            const [playedResp, resumableResp] = await Promise.all([
+                ApiClient.getJSON(ApiClient.getUrl(`Users/${userId}/Items`, {
+                    IncludeItemTypes: 'Episode',
+                    Recursive: true,
+                    Filters: 'IsPlayed',
+                    Fields: 'SeriesId',
+                    SortBy: 'DatePlayed',
+                    SortOrder: 'Descending',
+                    Limit: 200
+                })),
+                ApiClient.getJSON(ApiClient.getUrl(`Users/${userId}/Items`, {
+                    IncludeItemTypes: 'Episode',
+                    Recursive: true,
+                    Filters: 'IsResumable',
+                    Fields: 'SeriesId',
+                    SortBy: 'DatePlayed',
+                    SortOrder: 'Descending',
+                    Limit: 50
+                }))
+            ]);
+            const allEps = [...(playedResp?.Items || []), ...(resumableResp?.Items || [])];
+            const seen = new Set();
+            const seriesIds = [];
+            for (const ep of allEps) {
+                if (ep.SeriesId && !seen.has(ep.SeriesId)) {
+                    seen.add(ep.SeriesId);
+                    seriesIds.push(ep.SeriesId);
+                }
+            }
+            if (!seriesIds.length) { state.cachedRecentSeries = []; return []; }
+            const seriesResp = await ApiClient.getJSON(
+                ApiClient.getUrl(`Users/${userId}/Items`, {
+                    Ids: seriesIds.join(','),
+                    Fields: 'PrimaryImageAspectRatio'
+                })
+            );
+            state.cachedRecentSeries = seriesResp?.Items || [];
+            return state.cachedRecentSeries;
+        } catch (e) {
+            ERR('Failed to fetch recent series:', e);
+            return [];
+        }
+    }
+
+    async function _getRandomWatchedSeries(dedupSet) {
+        const series = await _fetchWatchedSeries();
+        const valid = series.filter(s => !dedupSet.has(s.Id));
+        if (!valid.length) return null;
+        const selected = valid[Math.floor(Math.random() * Math.min(valid.length, 10))];
+        dedupSet.add(selected.Id);
+        return selected;
+    }
+
+    async function _getRandomRecentSeries(dedupSet) {
+        const series = await _fetchRecentSeries();
+        const valid = series.filter(s => !dedupSet.has(s.Id));
+        if (!valid.length) return null;
+        const selected = valid[Math.floor(Math.random() * Math.min(valid.length, 10))];
+        dedupSet.add(selected.Id);
+        return selected;
+    }
+
+    async function _getRandomFavoriteSeries(dedupSet) {
+        if (state.cachedFavoriteSeries) {
+            const valid = state.cachedFavoriteSeries.filter(s => !dedupSet.has(s.Id));
+            if (valid.length > 0) {
+                const selected = valid[Math.floor(Math.random() * valid.length)];
+                dedupSet.add(selected.Id);
+                return selected;
+            }
+        }
+        const userId = ApiClient.getCurrentUserId();
+        try {
+            const response = await ApiClient.getItems(userId, {
+                IncludeItemTypes: 'Series',
+                Filters: 'IsFavorite',
+                Limit: 50,
+                SortBy: 'Random',
+                Recursive: true
+            });
+            const items = response.Items || [];
+            if (!items.length) return null;
+            state.cachedFavoriteSeries = items;
+            const valid = items.filter(s => !dedupSet.has(s.Id));
+            if (!valid.length) return null;
+            const selected = valid[0];
+            dedupSet.add(selected.Id);
+            return selected;
+        } catch (e) {
+            ERR('Failed to get favorite series:', e);
             return null;
         }
     }

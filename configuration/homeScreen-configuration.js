@@ -3394,78 +3394,85 @@
         const dialog = document.querySelector(`.dialogContainer[data-modal-id="${MAIN_MODAL_ID}"]`);
         if (!dialog) return {};
 
-        const discovery = {
-            enabled: dialog.querySelector('#discovery-enabled')?.checked !== false,
-            infiniteScroll: dialog.querySelector('#discovery-infiniteScroll')?.checked !== false,
-            minPeopleAppearances: parseInt(dialog.querySelector('#discovery-minPeopleAppearances')?.value || '10', 10),
-            minGenreMovieCount: parseInt(dialog.querySelector('#discovery-minGenreMovieCount')?.value || '50', 10),
-            defaultItemLimit: parseInt(dialog.querySelector('#discovery-defaultItemLimit')?.value || '16', 10),
-            defaultSortOrder: dialog.querySelector('#discovery-defaultSortOrder')?.value || 'Random',
-            defaultCardFormat: dialog.querySelector('#discovery-defaultCardFormat')?.value || 'Poster',
-            spotlightDiscoveryChance: parseFloat(dialog.querySelector('#discovery-spotlightDiscoveryChance')?.value || '0.5'),
-            renderSpotlightAboveMatching: dialog.querySelector('#discovery-renderSpotlightAboveMatching')?.checked === true,
-            randomizeOrder: dialog.querySelector('#discovery-randomizeOrder')?.checked === true,
-            fadeInSections: dialog.querySelector('#discovery-fadeInSections')?.checked === true
-        };
+        const result = {};
 
-        const seasonal = {
-            enabled: dialog.querySelector('#seasonal-enabled')?.checked !== false,
-            enableSeasonalAnimations: dialog.querySelector('#seasonal-enableSeasonalAnimations')?.checked !== false,
-            enableSeasonalBackground: dialog.querySelector('#seasonal-enableSeasonalBackground')?.checked !== false,
-            seasonToggles: (window.KefinHomeConfig2?.SEASONAL_THEME_SETTINGS?.seasonToggles || []).map(season => ({
-                ...season,
-                enabled: dialog.querySelector(`#seasonal-${season.id}`)?.checked === true
-            }))
-        };
+        if (dialog.querySelector('#discovery-enabled')) {
+            result.DISCOVERY_SETTINGS = {
+                enabled: dialog.querySelector('#discovery-enabled')?.checked !== false,
+                infiniteScroll: dialog.querySelector('#discovery-infiniteScroll')?.checked !== false,
+                minPeopleAppearances: parseInt(dialog.querySelector('#discovery-minPeopleAppearances')?.value || '10', 10),
+                minGenreMovieCount: parseInt(dialog.querySelector('#discovery-minGenreMovieCount')?.value || '50', 10),
+                defaultItemLimit: parseInt(dialog.querySelector('#discovery-defaultItemLimit')?.value || '16', 10),
+                defaultSortOrder: dialog.querySelector('#discovery-defaultSortOrder')?.value || 'Random',
+                defaultCardFormat: dialog.querySelector('#discovery-defaultCardFormat')?.value || 'Poster',
+                spotlightDiscoveryChance: parseFloat(dialog.querySelector('#discovery-spotlightDiscoveryChance')?.value || '0.5'),
+                renderSpotlightAboveMatching: dialog.querySelector('#discovery-renderSpotlightAboveMatching')?.checked === true,
+                randomizeOrder: dialog.querySelector('#discovery-randomizeOrder')?.checked === true,
+                fadeInSections: dialog.querySelector('#discovery-fadeInSections')?.checked === true
+            };
+        }
 
-        const cache = {
-            DEFAULT_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-DEFAULT_TTL')?.value || '30', 10)),
-            VERY_SHORT_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-VERY_SHORT_TTL')?.value || '1', 10)),
-            SHORT_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-SHORT_TTL')?.value || '5', 10)),
-            LONG_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-LONG_TTL')?.value || '1440', 10)),
-            STATIC_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-STATIC_TTL')?.value || '10080', 10)),
-            DISCOVERY_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-DISCOVERY_TTL')?.value || '60', 10)),
-            FORCE_REFRESH_TTL: 0
-        };
+        if (dialog.querySelector('#seasonal-enabled')) {
+            result.SEASONAL_THEME_SETTINGS = {
+                enabled: dialog.querySelector('#seasonal-enabled')?.checked !== false,
+                enableSeasonalAnimations: dialog.querySelector('#seasonal-enableSeasonalAnimations')?.checked !== false,
+                enableSeasonalBackground: dialog.querySelector('#seasonal-enableSeasonalBackground')?.checked !== false,
+                seasonToggles: (window.KefinHomeConfig2?.SEASONAL_THEME_SETTINGS?.seasonToggles || []).map(season => ({
+                    ...season,
+                    enabled: dialog.querySelector(`#seasonal-${season.id}`)?.checked === true
+                }))
+            };
+        }
 
-        const slideStateVal = dialog.querySelector('#spotlight-slideState')?.value || 'dots';
-        const tileCountVal = parseInt(dialog.querySelector('#spotlight-tileCount')?.value || '1', 10);
-        const spotlight = {
-            spotlightLayout: dialog.querySelector('#spotlight-spotlightLayout')?.value || 'Border',
-            spotlightSize: dialog.querySelector('#spotlight-spotlightSize')?.value || 'normal',
-            tileCount: Math.max(1, Math.min(3, tileCountVal)),
-            autoPlay: dialog.querySelector('#spotlight-autoPlay')?.checked !== false,
-            interval: parseInt(dialog.querySelector('#spotlight-interval')?.value || '10000', 10),
-            showSlideState: slideStateVal !== 'none',
-            showDots: slideStateVal === 'dots',
-            showNavButtons: dialog.querySelector('#spotlight-showNavButtons')?.checked !== false,
-            showClearArt: dialog.querySelector('#spotlight-showClearArt')?.checked === true,
-            panAnimation: dialog.querySelector('#spotlight-panAnimation')?.checked !== false,
-            entranceAnimationFirst: dialog.querySelector('#spotlight-entranceAnimationFirst')?.value || 'fadeIn',
-            entranceAnimationSecond: dialog.querySelector('#spotlight-entranceAnimationSecond')?.value || 'fadeIn',
-            entranceAnimationThird: dialog.querySelector('#spotlight-entranceAnimationThird')?.value || 'fadeIn',
-            slideAnimationFirst: dialog.querySelector('#spotlight-slideAnimationFirst')?.value || 'kenBurnsZoomIn',
-            slideAnimationSecond: dialog.querySelector('#spotlight-slideAnimationSecond')?.value || 'kenBurnsZoomIn',
-            slideAnimationThird: dialog.querySelector('#spotlight-slideAnimationThird')?.value || 'kenBurnsZoomIn',
-            cycleBackdrops: dialog.querySelector('#spotlight-cycleBackdrops')?.checked === true,
-            cycleBackdropsTime: parseInt(dialog.querySelector('#spotlight-cycleBackdropsTime')?.value || '10000', 10)
-        };
+        if (dialog.querySelector('#cache-DEFAULT_TTL')) {
+            result.CACHE = {
+                DEFAULT_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-DEFAULT_TTL')?.value || '30', 10)),
+                VERY_SHORT_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-VERY_SHORT_TTL')?.value || '1', 10)),
+                SHORT_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-SHORT_TTL')?.value || '5', 10)),
+                LONG_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-LONG_TTL')?.value || '1440', 10)),
+                STATIC_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-STATIC_TTL')?.value || '10080', 10)),
+                DISCOVERY_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-DISCOVERY_TTL')?.value || '60', 10)),
+                FORCE_REFRESH_TTL: 0
+            };
+        }
 
-        const homeSettings = {
-            fadeInSections: dialog.querySelector('#home-fadeInSections')?.checked === true,
-            ensureThumbsForPopularTVNetworks: dialog.querySelector('#home-ensureThumbsForPopularTVNetworks')?.checked === true
-        };
+        if (dialog.querySelector('#spotlight-spotlightLayout')) {
+            const slideStateVal = dialog.querySelector('#spotlight-slideState')?.value || 'dots';
+            const tileCountVal = parseInt(dialog.querySelector('#spotlight-tileCount')?.value || '1', 10);
+            result.SPOTLIGHT_SETTINGS = {
+                spotlightLayout: dialog.querySelector('#spotlight-spotlightLayout')?.value || 'Border',
+                spotlightSize: dialog.querySelector('#spotlight-spotlightSize')?.value || 'normal',
+                tileCount: Math.max(1, Math.min(3, tileCountVal)),
+                autoPlay: dialog.querySelector('#spotlight-autoPlay')?.checked !== false,
+                interval: parseInt(dialog.querySelector('#spotlight-interval')?.value || '10000', 10),
+                showSlideState: slideStateVal !== 'none',
+                showDots: slideStateVal === 'dots',
+                showNavButtons: dialog.querySelector('#spotlight-showNavButtons')?.checked !== false,
+                showClearArt: dialog.querySelector('#spotlight-showClearArt')?.checked === true,
+                panAnimation: dialog.querySelector('#spotlight-panAnimation')?.checked !== false,
+                entranceAnimationFirst: dialog.querySelector('#spotlight-entranceAnimationFirst')?.value || 'fadeIn',
+                entranceAnimationSecond: dialog.querySelector('#spotlight-entranceAnimationSecond')?.value || 'fadeIn',
+                entranceAnimationThird: dialog.querySelector('#spotlight-entranceAnimationThird')?.value || 'fadeIn',
+                slideAnimationFirst: dialog.querySelector('#spotlight-slideAnimationFirst')?.value || 'kenBurnsZoomIn',
+                slideAnimationSecond: dialog.querySelector('#spotlight-slideAnimationSecond')?.value || 'kenBurnsZoomIn',
+                slideAnimationThird: dialog.querySelector('#spotlight-slideAnimationThird')?.value || 'kenBurnsZoomIn',
+                cycleBackdrops: dialog.querySelector('#spotlight-cycleBackdrops')?.checked === true,
+                cycleBackdropsTime: parseInt(dialog.querySelector('#spotlight-cycleBackdropsTime')?.value || '10000', 10)
+            };
+        }
 
-        const mergeNextUp = dialog.querySelector('#merge-next-up')?.checked === true;
+        if (dialog.querySelector('#home-fadeInSections')) {
+            result.HOME_SETTINGS = {
+                fadeInSections: dialog.querySelector('#home-fadeInSections')?.checked === true,
+                ensureThumbsForPopularTVNetworks: dialog.querySelector('#home-ensureThumbsForPopularTVNetworks')?.checked === true
+            };
+        }
 
-        return {
-            DISCOVERY_SETTINGS: discovery,
-            SEASONAL_THEME_SETTINGS: seasonal,
-            CACHE: cache,
-            SPOTLIGHT_SETTINGS: spotlight,
-            HOME_SETTINGS: homeSettings,
-            MERGE_NEXT_UP: mergeNextUp
-        };
+        if (dialog.querySelector('#merge-next-up')) {
+            result.MERGE_NEXT_UP = dialog.querySelector('#merge-next-up')?.checked === true;
+        }
+
+        return result;
     }
 
     /**
