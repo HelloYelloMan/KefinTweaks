@@ -2406,11 +2406,15 @@
         if (itemType === 'Series') {
             // For Series: find watched episodes → extract SeriesIds → fetch Series with People
             const userId = ApiClient.getCurrentUserId();
-            const episodeLimit = sourceType === 'watched-recent' ? 30 : 100;
-            const episodeUrl = `${ApiClient.serverAddress()}/Users/${userId}/Items?IncludeItemTypes=Episode&Recursive=true&Filters=IsPlayed&Fields=SeriesId&SortBy=${sourceType === 'watched-recent' ? 'DatePlayed' : 'Random'}&SortOrder=Descending&Limit=${episodeLimit}`;
             try {
-                const epResp = await window.apiHelper.getQuery(episodeUrl, { useCache: true, ttl: Config.CACHE.LONG_TTL });
-                const episodes = epResp?.data?.Items || epResp?.data || [];
+                const epResp = await ApiClient.getItems(userId, {
+                    IncludeItemTypes: 'Episode',
+                    Recursive: true,
+                    Filters: 'IsPlayed',
+                    Fields: 'SeriesId',
+                    Limit: 200
+                });
+                const episodes = epResp?.Items || [];
                 const seen = new Set();
                 const seriesIds = [];
                 for (const ep of episodes) {
@@ -2420,9 +2424,11 @@
                     }
                 }
                 if (seriesIds.length) {
-                    const seriesUrl = `${ApiClient.serverAddress()}/Users/${userId}/Items?Ids=${seriesIds.join(',')}&Fields=People`;
-                    const seriesResp = await window.apiHelper.getQuery(seriesUrl, { useCache: true, ttl: Config.CACHE.LONG_TTL });
-                    sourceItems = seriesResp?.data?.Items || seriesResp?.data || [];
+                    const seriesResp = await ApiClient.getItems(userId, {
+                        Ids: seriesIds.join(','),
+                        Fields: 'People'
+                    });
+                    sourceItems = seriesResp?.Items || [];
                 }
             } catch (e) {
                 ERR('Failed to get series from watched history for Person:', e);
@@ -2554,15 +2560,14 @@
         if (state._cachedInteractedSeries) return state._cachedInteractedSeries;
         const userId = ApiClient.getCurrentUserId();
         try {
-            // Fetch played episodes to find series with at least one watched ep
+            // Fetch played episodes — do NOT sort by DatePlayed as it may be null
+            // for episodes watched before EF Core migration or bulk-marked
             const playedResp = await ApiClient.getItems(userId, {
                 IncludeItemTypes: 'Episode',
                 Recursive: true,
                 Filters: 'IsPlayed',
                 Fields: 'SeriesId',
-                SortBy: 'DatePlayed',
-                SortOrder: 'Descending',
-                Limit: 200
+                Limit: 500
             });
             // Also fetch resumable episodes (in-progress)
             const resumableResp = await ApiClient.getItems(userId, {
@@ -2570,12 +2575,11 @@
                 Recursive: true,
                 Filters: 'IsResumable',
                 Fields: 'SeriesId',
-                SortBy: 'DatePlayed',
-                SortOrder: 'Descending',
                 Limit: 50
             });
 
-            const allEps = [...(playedResp?.Items || []), ...(resumableResp?.Items || [])];
+            // Resumable first (most relevant for "recently watched"), then played
+            const allEps = [...(resumableResp?.Items || []), ...(playedResp?.Items || [])];
             const seen = new Set();
             const seriesIds = [];
             for (const ep of allEps) {
