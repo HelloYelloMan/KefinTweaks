@@ -2549,34 +2549,32 @@
 
     /**
      * Shared fetch: all series the user has interacted with, resolved with UserData.
-     * Returns array of Series items with UserData populated.
      */
     async function _fetchInteractedSeries() {
         if (state._cachedInteractedSeries) return state._cachedInteractedSeries;
         const userId = ApiClient.getCurrentUserId();
         try {
-            // Fetch played + resumable episodes to find all interacted series
-            const [playedResp, resumableResp] = await Promise.all([
-                ApiClient.getJSON(ApiClient.getUrl(`Users/${userId}/Items`, {
-                    IncludeItemTypes: 'Episode',
-                    Recursive: true,
-                    Filters: 'IsPlayed',
-                    Fields: 'SeriesId',
-                    SortBy: 'DatePlayed',
-                    SortOrder: 'Descending',
-                    Limit: 200
-                })),
-                ApiClient.getJSON(ApiClient.getUrl(`Users/${userId}/Items`, {
-                    IncludeItemTypes: 'Episode',
-                    Recursive: true,
-                    Filters: 'IsResumable',
-                    Fields: 'SeriesId',
-                    SortBy: 'DatePlayed',
-                    SortOrder: 'Descending',
-                    Limit: 50
-                }))
-            ]);
-            // Merge preserving order (played sorted by DatePlayed, then resumable)
+            // Fetch played episodes to find series with at least one watched ep
+            const playedResp = await ApiClient.getItems(userId, {
+                IncludeItemTypes: 'Episode',
+                Recursive: true,
+                Filters: 'IsPlayed',
+                Fields: 'SeriesId',
+                SortBy: 'DatePlayed',
+                SortOrder: 'Descending',
+                Limit: 200
+            });
+            // Also fetch resumable episodes (in-progress)
+            const resumableResp = await ApiClient.getItems(userId, {
+                IncludeItemTypes: 'Episode',
+                Recursive: true,
+                Filters: 'IsResumable',
+                Fields: 'SeriesId',
+                SortBy: 'DatePlayed',
+                SortOrder: 'Descending',
+                Limit: 50
+            });
+
             const allEps = [...(playedResp?.Items || []), ...(resumableResp?.Items || [])];
             const seen = new Set();
             const seriesIds = [];
@@ -2586,15 +2584,17 @@
                     seriesIds.push(ep.SeriesId);
                 }
             }
+            LOG(`[SmartSuggest] Found ${seriesIds.length} interacted series from ${allEps.length} episodes`);
             if (!seriesIds.length) { state._cachedInteractedSeries = []; return []; }
-            // Resolve Series items WITH UserData so we can check Played status
-            const seriesResp = await ApiClient.getJSON(
-                ApiClient.getUrl(`Users/${userId}/Items`, {
-                    Ids: seriesIds.join(','),
-                    Fields: 'PrimaryImageAspectRatio,UserData'
-                })
-            );
-            state._cachedInteractedSeries = seriesResp?.Items || [];
+
+            // Resolve Series items WITH UserData to check Played status
+            const seriesResp = await ApiClient.getItems(userId, {
+                Ids: seriesIds.join(','),
+                Fields: 'PrimaryImageAspectRatio,UserData'
+            });
+            const items = seriesResp?.Items || [];
+            LOG(`[SmartSuggest] Resolved ${items.length} series. Played: ${items.filter(s => s.UserData?.Played).length}, In-progress: ${items.filter(s => !s.UserData?.Played).length}`);
+            state._cachedInteractedSeries = items;
             return state._cachedInteractedSeries;
         } catch (e) {
             ERR('Failed to fetch interacted series:', e);
@@ -2609,6 +2609,7 @@
         if (state.cachedWatchedSeries) return state.cachedWatchedSeries;
         const all = await _fetchInteractedSeries();
         state.cachedWatchedSeries = all.filter(s => s.UserData && s.UserData.Played === true);
+        LOG(`[SmartSuggest] Watched series pool: ${state.cachedWatchedSeries.length}`);
         return state.cachedWatchedSeries;
     }
 
@@ -2619,6 +2620,7 @@
         if (state.cachedRecentSeries) return state.cachedRecentSeries;
         const all = await _fetchInteractedSeries();
         state.cachedRecentSeries = all.filter(s => !s.UserData || s.UserData.Played !== true);
+        LOG(`[SmartSuggest] In-progress series pool: ${state.cachedRecentSeries.length}`);
         return state.cachedRecentSeries;
     }
 
@@ -2628,6 +2630,7 @@
         if (!valid.length) return null;
         const selected = valid[Math.floor(Math.random() * Math.min(valid.length, 10))];
         dedupSet.add(selected.Id);
+        LOG(`[SmartSuggest] Selected watched series: ${selected.Name}`);
         return selected;
     }
 
@@ -2637,6 +2640,7 @@
         if (!valid.length) return null;
         const selected = valid[Math.floor(Math.random() * Math.min(valid.length, 10))];
         dedupSet.add(selected.Id);
+        LOG(`[SmartSuggest] Selected in-progress series: ${selected.Name}`);
         return selected;
     }
 
