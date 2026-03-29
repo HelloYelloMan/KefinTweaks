@@ -62,6 +62,7 @@
         cachedFavoriteSeries: null,
         cachedWatchedSeries: null,
         cachedRecentSeries: null,
+        _cachedInteractedSeries: null,
         isPeopleCacheComplete: false,
         discoveryGroupIndex: 0,
         isRenderingDiscovery: false,
@@ -2546,48 +2547,15 @@
 
     // ── Series Source Selection ────────────────────────────────────
 
-    async function _fetchWatchedSeries() {
-        if (state.cachedWatchedSeries) return state.cachedWatchedSeries;
+    /**
+     * Shared fetch: all series the user has interacted with, resolved with UserData.
+     * Returns array of Series items with UserData populated.
+     */
+    async function _fetchInteractedSeries() {
+        if (state._cachedInteractedSeries) return state._cachedInteractedSeries;
         const userId = ApiClient.getCurrentUserId();
         try {
-            const resp = await ApiClient.getJSON(
-                ApiClient.getUrl(`Users/${userId}/Items`, {
-                    IncludeItemTypes: 'Episode',
-                    Recursive: true,
-                    Filters: 'IsPlayed',
-                    Fields: 'SeriesId',
-                    SortBy: 'DatePlayed',
-                    SortOrder: 'Descending',
-                    Limit: 200
-                })
-            );
-            const seen = new Set();
-            const seriesIds = [];
-            for (const ep of (resp?.Items || [])) {
-                if (ep.SeriesId && !seen.has(ep.SeriesId)) {
-                    seen.add(ep.SeriesId);
-                    seriesIds.push(ep.SeriesId);
-                }
-            }
-            if (!seriesIds.length) { state.cachedWatchedSeries = []; return []; }
-            const seriesResp = await ApiClient.getJSON(
-                ApiClient.getUrl(`Users/${userId}/Items`, {
-                    Ids: seriesIds.join(','),
-                    Fields: 'PrimaryImageAspectRatio'
-                })
-            );
-            state.cachedWatchedSeries = seriesResp?.Items || [];
-            return state.cachedWatchedSeries;
-        } catch (e) {
-            ERR('Failed to fetch watched series:', e);
-            return [];
-        }
-    }
-
-    async function _fetchRecentSeries() {
-        if (state.cachedRecentSeries) return state.cachedRecentSeries;
-        const userId = ApiClient.getCurrentUserId();
-        try {
+            // Fetch played + resumable episodes to find all interacted series
             const [playedResp, resumableResp] = await Promise.all([
                 ApiClient.getJSON(ApiClient.getUrl(`Users/${userId}/Items`, {
                     IncludeItemTypes: 'Episode',
@@ -2608,6 +2576,7 @@
                     Limit: 50
                 }))
             ]);
+            // Merge preserving order (played sorted by DatePlayed, then resumable)
             const allEps = [...(playedResp?.Items || []), ...(resumableResp?.Items || [])];
             const seen = new Set();
             const seriesIds = [];
@@ -2617,19 +2586,40 @@
                     seriesIds.push(ep.SeriesId);
                 }
             }
-            if (!seriesIds.length) { state.cachedRecentSeries = []; return []; }
+            if (!seriesIds.length) { state._cachedInteractedSeries = []; return []; }
+            // Resolve Series items WITH UserData so we can check Played status
             const seriesResp = await ApiClient.getJSON(
                 ApiClient.getUrl(`Users/${userId}/Items`, {
                     Ids: seriesIds.join(','),
-                    Fields: 'PrimaryImageAspectRatio'
+                    Fields: 'PrimaryImageAspectRatio,UserData'
                 })
             );
-            state.cachedRecentSeries = seriesResp?.Items || [];
-            return state.cachedRecentSeries;
+            state._cachedInteractedSeries = seriesResp?.Items || [];
+            return state._cachedInteractedSeries;
         } catch (e) {
-            ERR('Failed to fetch recent series:', e);
+            ERR('Failed to fetch interacted series:', e);
             return [];
         }
+    }
+
+    /**
+     * Fully completed series only (Played=true on the Series).
+     */
+    async function _fetchWatchedSeries() {
+        if (state.cachedWatchedSeries) return state.cachedWatchedSeries;
+        const all = await _fetchInteractedSeries();
+        state.cachedWatchedSeries = all.filter(s => s.UserData && s.UserData.Played === true);
+        return state.cachedWatchedSeries;
+    }
+
+    /**
+     * In-progress series only — some episodes watched but NOT fully completed.
+     */
+    async function _fetchRecentSeries() {
+        if (state.cachedRecentSeries) return state.cachedRecentSeries;
+        const all = await _fetchInteractedSeries();
+        state.cachedRecentSeries = all.filter(s => !s.UserData || s.UserData.Played !== true);
+        return state.cachedRecentSeries;
     }
 
     async function _getRandomWatchedSeries(dedupSet) {
