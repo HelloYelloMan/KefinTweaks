@@ -2610,12 +2610,14 @@
             LOG(`[SmartSuggest] Found ${seriesIds.length} interacted series from ${allEps.length} episodes`);
             if (!seriesIds.length) { state._cachedInteractedSeries = []; return []; }
 
-            // Resolve Series items — do NOT specify Fields here.
-            // Explicit Fields disables EnableAllFields on the server, which prevents
-            // Jellyfin from computing PlayedPercentage for Series via FillUserDataDtoValues.
-            const seriesResp = await ApiClient.getItems(userId, {
+            // Resolve Series items — MUST NOT include any Fields parameter.
+            // ApiClient.getItems injects default Fields which disables EnableAllFields,
+            // preventing Jellyfin from computing PlayedPercentage for Series.
+            // Use raw fetch to ensure no Fields are sent.
+            const seriesUrl = ApiClient.getUrl(`Users/${userId}/Items`, {
                 Ids: seriesIds.join(',')
             });
+            const seriesResp = await ApiClient.getJSON(seriesUrl);
             const items = seriesResp?.Items || [];
             LOG(`[SmartSuggest] Resolved ${items.length} series. Played: ${items.filter(s => s.UserData?.Played).length}, In-progress: ${items.filter(s => !s.UserData?.Played).length}`);
             state._cachedInteractedSeries = items;
