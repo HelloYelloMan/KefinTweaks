@@ -2649,13 +2649,19 @@
         const maxDays = settings.recentMaxDays ?? 30;
         const cutoffDate = maxDays > 0 ? new Date(Date.now() - maxDays * 24 * 60 * 60 * 1000) : null;
 
-        state.cachedRecentSeries = all.filter(s => {
-            // Must not be fully completed
-            if (s.UserData && s.UserData.Played === true) return false;
-            // Must meet minimum watch percentage
+        // Diagnostic: log PlayedPercentage for in-progress items
+        const inProgress = all.filter(s => !s.UserData || s.UserData.Played !== true);
+        LOG(`[SmartSuggest] In-progress candidates before filter:`, inProgress.map(s => ({
+            Name: s.Name,
+            Played: s.UserData?.Played,
+            PlayedPercentage: s.UserData?.PlayedPercentage,
+            UnplayedItemCount: s.UserData?.UnplayedItemCount,
+            LastPlayedDate: s.UserData?.LastPlayedDate
+        })));
+
+        state.cachedRecentSeries = inProgress.filter(s => {
             const pct = s.UserData?.PlayedPercentage || 0;
             if (pct < minPercent) return false;
-            // Must have been interacted with within maxDays
             if (cutoffDate && s.UserData?.LastPlayedDate) {
                 const lastPlayed = new Date(s.UserData.LastPlayedDate);
                 if (lastPlayed < cutoffDate) return false;
