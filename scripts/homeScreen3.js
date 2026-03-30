@@ -2573,14 +2573,17 @@
     // ── Series Source Selection ────────────────────────────────────
 
     /**
-     * Shared fetch: all series the user has interacted with, resolved with UserData.
+     * Shared fetch: all series the user has interacted with.
+     * Computes PlayedPercentage client-side since the server's multi-item
+     * endpoint doesn't reliably return it for Series (RecursiveItemCount
+     * must be populated first, which requires EnableAllFields=true in DtoOptions,
+     * and the /Users/{id}/Items?Ids= endpoint doesn't guarantee that).
      */
     async function _fetchInteractedSeries() {
         if (state._cachedInteractedSeries) return state._cachedInteractedSeries;
         const userId = ApiClient.getCurrentUserId();
         try {
-            // Fetch played episodes — do NOT sort by DatePlayed as it may be null
-            // for episodes watched before EF Core migration or bulk-marked
+            // Step 1: Fetch played episodes with SeriesId
             const playedResp = await ApiClient.getItems(userId, {
                 IncludeItemTypes: 'Episode',
                 Recursive: true,
@@ -2588,7 +2591,7 @@
                 Fields: 'SeriesId',
                 Limit: 500
             });
-            // Also fetch resumable episodes (in-progress)
+            // Also fetch resumable episodes
             const resumableResp = await ApiClient.getItems(userId, {
                 IncludeItemTypes: 'Episode',
                 Recursive: true,
@@ -2597,28 +2600,53 @@
                 Limit: 50
             });
 
-            // Resumable first (most relevant for "recently watched"), then played
+            // Build set of unique series IDs and count played episodes per series
+            const playedPerSeries = new Map(); // seriesId → count of played episodes
             const allEps = [...(resumableResp?.Items || []), ...(playedResp?.Items || [])];
-            const seen = new Set();
-            const seriesIds = [];
+            const seriesIdList = [];
             for (const ep of allEps) {
-                if (ep.SeriesId && !seen.has(ep.SeriesId)) {
-                    seen.add(ep.SeriesId);
-                    seriesIds.push(ep.SeriesId);
+                if (!ep.SeriesId) continue;
+                if (!playedPerSeries.has(ep.SeriesId)) {
+                    playedPerSeries.set(ep.SeriesId, 0);
+                    seriesIdList.push(ep.SeriesId);
                 }
             }
-            LOG(`[SmartSuggest] Found ${seriesIds.length} interacted series from ${allEps.length} episodes`);
-            if (!seriesIds.length) { state._cachedInteractedSeries = []; return []; }
+            // Count played episodes (not resumable) per series
+            for (const ep of (playedResp?.Items || [])) {
+                if (ep.SeriesId && playedPerSeries.has(ep.SeriesId)) {
+                    playedPerSeries.set(ep.SeriesId, playedPerSeries.get(ep.SeriesId) + 1);
+                }
+            }
 
-            // Resolve Series items — MUST NOT include any Fields parameter.
-            // ApiClient.getItems injects default Fields which disables EnableAllFields,
-            // preventing Jellyfin from computing PlayedPercentage for Series.
-            // Use raw fetch to ensure no Fields are sent.
-            const seriesUrl = ApiClient.getUrl(`Users/${userId}/Items`, {
-                Ids: seriesIds.join(',')
+            LOG(`[SmartSuggest] Found ${seriesIdList.length} interacted series from ${allEps.length} episodes`);
+            if (!seriesIdList.length) { state._cachedInteractedSeries = []; return []; }
+
+            // Step 2: Fetch total episode count per series
+            // Use RecursiveItemCount from Series items to get total episodes
+            const seriesResp = await ApiClient.getItems(userId, {
+                Ids: seriesIdList.join(','),
+                Fields: 'RecursiveItemCount,UserData'
             });
-            const seriesResp = await ApiClient.getJSON(seriesUrl);
             const items = seriesResp?.Items || [];
+
+            // Step 3: Compute PlayedPercentage client-side
+            for (const series of items) {
+                const totalEps = series.RecursiveItemCount || 0;
+                const playedEps = playedPerSeries.get(series.Id) || 0;
+                const computedPct = totalEps > 0 ? Math.round((playedEps / totalEps) * 100) : 0;
+
+                // Ensure UserData exists
+                if (!series.UserData) series.UserData = {};
+                // Use server PlayedPercentage if available, otherwise use computed
+                if (series.UserData.PlayedPercentage === undefined || series.UserData.PlayedPercentage === null) {
+                    series.UserData.PlayedPercentage = computedPct;
+                }
+                // Also ensure Played flag is set
+                if (series.UserData.Played === undefined) {
+                    series.UserData.Played = computedPct >= 100;
+                }
+            }
+
             LOG(`[SmartSuggest] Resolved ${items.length} series. Played: ${items.filter(s => s.UserData?.Played).length}, In-progress: ${items.filter(s => !s.UserData?.Played).length}`);
             state._cachedInteractedSeries = items;
             return state._cachedInteractedSeries;
