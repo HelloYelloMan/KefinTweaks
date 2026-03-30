@@ -1422,10 +1422,11 @@
                         const userId = ApiClient.getCurrentUserId();
                         const ids = items.map(i => i.Id).filter(Boolean).join(',');
                         if (ids) {
+                            // Do NOT specify Fields — explicit Fields disables EnableAllFields,
+                            // which breaks PlayedPercentage computation for Series items
                             const freshResp = await ApiClient.getJSON(
                                 ApiClient.getUrl(`Users/${userId}/Items`, {
-                                    Ids: ids,
-                                    Fields: 'UserData'
+                                    Ids: ids
                                 })
                             );
                             if (freshResp?.Items) {
@@ -2609,10 +2610,11 @@
             LOG(`[SmartSuggest] Found ${seriesIds.length} interacted series from ${allEps.length} episodes`);
             if (!seriesIds.length) { state._cachedInteractedSeries = []; return []; }
 
-            // Resolve Series items WITH UserData to check Played status
+            // Resolve Series items — do NOT specify Fields here.
+            // Explicit Fields disables EnableAllFields on the server, which prevents
+            // Jellyfin from computing PlayedPercentage for Series via FillUserDataDtoValues.
             const seriesResp = await ApiClient.getItems(userId, {
-                Ids: seriesIds.join(','),
-                Fields: 'PrimaryImageAspectRatio,UserData'
+                Ids: seriesIds.join(',')
             });
             const items = seriesResp?.Items || [];
             LOG(`[SmartSuggest] Resolved ${items.length} series. Played: ${items.filter(s => s.UserData?.Played).length}, In-progress: ${items.filter(s => !s.UserData?.Played).length}`);
