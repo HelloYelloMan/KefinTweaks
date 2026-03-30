@@ -1546,6 +1546,7 @@
                 {
                     id: 'smartBecauseYouWatched',
                     type: 'SmartSuggest',
+                    hideWatched: true,
                     source: 'Dynamic',
                     sourceType: 'watched',
                     name: 'Because you watched {Title}',
@@ -1558,6 +1559,7 @@
                 {
                     id: 'smartBecauseYouRecentlyWatched',
                     type: 'SmartSuggest',
+                    hideWatched: true,
                     source: 'Dynamic',
                     sourceType: 'watched-recent',
                     name: 'Because you recently watched {Title}',
@@ -1570,6 +1572,7 @@
                 {
                     id: 'smartBecauseYouLiked',
                     type: 'SmartSuggest',
+                    hideWatched: true,
                     source: 'Dynamic',
                     sourceType: 'liked',
                     name: 'Because you liked {Title}',
@@ -1589,6 +1592,7 @@
                 {
                     id: 'smartBecauseYouWatchedShow',
                     type: 'SmartSuggest',
+                    hideWatched: true,
                     source: 'Dynamic',
                     sourceType: 'watched',
                     name: 'Because you watched {Title}',
@@ -1601,6 +1605,7 @@
                 {
                     id: 'smartBecauseYouRecentlyWatchedShow',
                     type: 'SmartSuggest',
+                    hideWatched: true,
                     source: 'Dynamic',
                     sourceType: 'watched-recent',
                     name: 'Because you recently watched {Title}',
@@ -1613,6 +1618,7 @@
                 {
                     id: 'smartBecauseYouLikedShow',
                     type: 'SmartSuggest',
+                    hideWatched: true,
                     source: 'Dynamic',
                     sourceType: 'liked',
                     name: 'Because you liked {Title}',
@@ -1639,6 +1645,8 @@
         randomizeOrder: false,
         fadeInSections: false,
         smartWatchThreshold: 0, // -1 = no filtering, 0 = hide Played only, 1-100 = hide at/above this %
+        recentMinPercent: 35, // Minimum PlayedPercentage to qualify as a "recently watched" source
+        recentMaxDays: 30, // Max days since last interaction for "recently watched" sources
     }
 
     const SEASONAL_THEME_SETTINGS = {

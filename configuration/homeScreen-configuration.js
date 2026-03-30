@@ -1952,6 +1952,9 @@
                 ${buildSelect('discovery-defaultSortOrder', SORT_ORDERS, discovery.defaultSortOrder || 'Random', 'Default Sort Order')}
                 ${buildSelect('discovery-defaultCardFormat', CARD_FORMATS, discovery.defaultCardFormat || 'Poster', 'Default Card Format')}
                 ${buildTextInput('discovery-spotlightDiscoveryChance', discovery.spotlightDiscoveryChance || 0.5, 'Spotlight Discovery Chance (0-1)', 'number')}
+                ${buildTextInput('discovery-smartWatchThreshold', discovery.smartWatchThreshold ?? 0, 'Watch Filter Threshold (-1=off, 0=hide played, 1-100=hide at %)', 'number')}
+                ${buildTextInput('discovery-recentMinPercent', discovery.recentMinPercent ?? 35, 'Recently Watched Min Percent', 'number')}
+                ${buildTextInput('discovery-recentMaxDays', discovery.recentMaxDays ?? 30, 'Recently Watched Max Days', 'number')}
             </div>
         `;
     }
@@ -2424,6 +2427,7 @@
                     <div style="padding: 0.75em 0 0 0;">
                         ${buildTextInput('section-ttl', section.ttl !== undefined ? section.ttl : '', 'TTL (ms, leave empty for default)', 'number')}
                         ${buildCheckbox('section-flattenSeries', section.flattenSeries === true, 'Flatten Series')}
+                        ${buildCheckbox('section-hideWatched', section.hideWatched === true, 'Hide Watched Content')}
                         ${buildTextInput('section-minimumItems', section.minimumItems || '', 'Minimum Items', 'number')}
                         ${buildTextInput('section-startDate', section.startDate || '', 'Start Date (MM-DD)', 'text')}
                         ${buildTextInput('section-endDate', section.endDate || '', 'End Date (MM-DD)', 'text')}
@@ -2902,6 +2906,7 @@
                 </div>
                 ${buildTextInput('discovery-name', section.name || '', 'Name Template (use placeholders like {Genre}, {Person}, {Title})')}
                 ${buildCheckbox('discovery-enabled', section.enabled !== false, 'Enabled')}
+                ${buildCheckbox('discovery-hideWatched', section.hideWatched === true, 'Hide Watched Content')}
                 ${buildTextInput('discovery-itemLimit', section.itemLimit || 20, 'Item Limit', 'number')}
                 ${buildSelect('discovery-sortOrder', SORT_ORDERS, section.sortOrder || 'Random', 'Sort Order')}
                 ${section.sortOrderDirection ? buildSelect('discovery-sortOrderDirection', SORT_ORDER_DIRECTIONS, section.sortOrderDirection || 'Ascending', 'Sort Order Direction') : ''}
@@ -2931,6 +2936,7 @@
             const discovery = {
                 name: dialog.querySelector('#discovery-name')?.value || '',
                 enabled: dialog.querySelector('#discovery-enabled')?.checked !== false,
+                hideWatched: dialog.querySelector('#discovery-hideWatched')?.checked === true,
                 renderMode: renderMode,
                 order: parseInt(dialog.querySelector('#discovery-order')?.value || '0', 10),
                 itemLimit: parseInt(dialog.querySelector('#discovery-itemLimit')?.value || '20', 10),
@@ -3334,6 +3340,7 @@
         if (ttl) section.ttl = parseInt(ttl, 10);
 
         section.flattenSeries = dialog.querySelector('#section-flattenSeries')?.checked === true;
+        section.hideWatched = dialog.querySelector('#section-hideWatched')?.checked === true;
 
         const minimumItems = dialog.querySelector('#section-minimumItems')?.value;
         if (minimumItems) section.minimumItems = parseInt(minimumItems, 10);
@@ -3408,7 +3415,10 @@
                 spotlightDiscoveryChance: parseFloat(dialog.querySelector('#discovery-spotlightDiscoveryChance')?.value || '0.5'),
                 renderSpotlightAboveMatching: dialog.querySelector('#discovery-renderSpotlightAboveMatching')?.checked === true,
                 randomizeOrder: dialog.querySelector('#discovery-randomizeOrder')?.checked === true,
-                fadeInSections: dialog.querySelector('#discovery-fadeInSections')?.checked === true
+                fadeInSections: dialog.querySelector('#discovery-fadeInSections')?.checked === true,
+                smartWatchThreshold: parseInt(dialog.querySelector('#discovery-smartWatchThreshold')?.value ?? '0', 10),
+                recentMinPercent: parseInt(dialog.querySelector('#discovery-recentMinPercent')?.value ?? '35', 10),
+                recentMaxDays: parseInt(dialog.querySelector('#discovery-recentMaxDays')?.value ?? '30', 10)
             };
         }
 

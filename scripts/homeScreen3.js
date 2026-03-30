@@ -2094,31 +2094,17 @@
                     } else if (instanceConfig.type === 'SmartSuggest') {
                         // SmartSuggest uses the SmartSuggest plugin (TF-IDF scoring)
                         const smartUserId = ApiClient.getCurrentUserId();
-                        const requestLimit = (instanceConfig.itemLimit || 20) * 2; // Over-request for client-side filtering
+                        const baseLimit = instanceConfig.itemLimit || 20;
+                        // Always over-request — plugin returns unfiltered results
                         instanceConfig.queries = [{
                             path: `/SmartSuggest/${resolvedSource}`,
                             queryOptions: {
                                 userId: smartUserId,
-                                limit: requestLimit,
+                                limit: baseLimit * 2,
                             }
                         }];
 
-                        // Attach client-side watch filter
-                        const threshold = getDiscoverySettings().smartWatchThreshold ?? 0;
-                        const finalLimit = instanceConfig.itemLimit || 20;
-                        if (threshold >= 0) {
-                            instanceConfig.postFetchFilter = (items) => {
-                                let filtered = items.filter(item => {
-                                    if (!item.UserData) return true;
-                                    if (threshold === 0) return !item.UserData.Played;
-                                    return (item.UserData.PlayedPercentage || 0) < threshold;
-                                });
-                                if (filtered.length < 3) return null;
-                                return filtered.slice(0, finalLimit);
-                            };
-                        }
-
-                        // Mark for UserData refresh on cached responses
+                        // Always refresh UserData for SmartSuggest (cached responses go stale)
                         instanceConfig.refreshUserData = true;
                     } else {
                         // Standard query types
@@ -2175,6 +2161,38 @@
                     instanceConfig.queries = [{
                         queryOptions: queryOptions
                     }];
+                }
+
+                // Generic hideWatched support — applies to any section type
+                if (instanceConfig.hideWatched === true && !instanceConfig.postFetchFilter) {
+                    const threshold = getDiscoverySettings().smartWatchThreshold ?? 0;
+                    const finalLimit = instanceConfig.itemLimit || 20;
+
+                    // Over-request to account for items removed by filtering
+                    // (SmartSuggest already over-requests, skip for those)
+                    if (instanceConfig.type !== 'SmartSuggest' && instanceConfig.queries) {
+                        for (const q of instanceConfig.queries) {
+                            if (q.queryOptions && q.queryOptions.Limit) {
+                                q.queryOptions.Limit = q.queryOptions.Limit * 2;
+                            } else if (q.queryOptions) {
+                                q.queryOptions.Limit = finalLimit * 2;
+                            }
+                        }
+                    }
+
+                    if (threshold >= 0) {
+                        instanceConfig.postFetchFilter = (items) => {
+                            let filtered = items.filter(item => {
+                                if (!item.UserData) return true;
+                                if (threshold === 0) return !item.UserData.Played;
+                                return (item.UserData.PlayedPercentage || 0) < threshold;
+                            });
+                            if (filtered.length < 3) return null;
+                            return filtered.slice(0, finalLimit);
+                        };
+                    }
+
+                    instanceConfig.refreshUserData = true;
                 }
 
                 const sectionName = fillTemplate(instanceConfig.name, dynamicResult.metadata);
@@ -2619,12 +2637,30 @@
 
     /**
      * In-progress series only — some episodes watched but NOT fully completed.
+     * Filtered by recentMinPercent and recentMaxDays from discovery settings.
      */
     async function _fetchRecentSeries() {
         if (state.cachedRecentSeries) return state.cachedRecentSeries;
         const all = await _fetchInteractedSeries();
-        state.cachedRecentSeries = all.filter(s => !s.UserData || s.UserData.Played !== true);
-        LOG(`[SmartSuggest] In-progress series pool: ${state.cachedRecentSeries.length}`);
+        const settings = getDiscoverySettings();
+        const minPercent = settings.recentMinPercent ?? 35;
+        const maxDays = settings.recentMaxDays ?? 30;
+        const cutoffDate = maxDays > 0 ? new Date(Date.now() - maxDays * 24 * 60 * 60 * 1000) : null;
+
+        state.cachedRecentSeries = all.filter(s => {
+            // Must not be fully completed
+            if (s.UserData && s.UserData.Played === true) return false;
+            // Must meet minimum watch percentage
+            const pct = s.UserData?.PlayedPercentage || 0;
+            if (pct < minPercent) return false;
+            // Must have been interacted with within maxDays
+            if (cutoffDate && s.UserData?.LastPlayedDate) {
+                const lastPlayed = new Date(s.UserData.LastPlayedDate);
+                if (lastPlayed < cutoffDate) return false;
+            }
+            return true;
+        });
+        LOG(`[SmartSuggest] In-progress series pool: ${state.cachedRecentSeries.length} (minPct=${minPercent}, maxDays=${maxDays})`);
         return state.cachedRecentSeries;
     }
 
