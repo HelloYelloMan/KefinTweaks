@@ -2618,7 +2618,6 @@
                 }
             }
 
-            LOG(`[SmartSuggest] Found ${seriesIdList.length} interacted series from ${allEps.length} episodes`);
             if (!seriesIdList.length) { state._cachedInteractedSeries = []; return []; }
 
             // Step 2: Fetch total episode count per series
@@ -2647,7 +2646,6 @@
                 }
             }
 
-            LOG(`[SmartSuggest] Resolved ${items.length} series. Played: ${items.filter(s => s.UserData?.Played).length}, In-progress: ${items.filter(s => !s.UserData?.Played).length}`);
             state._cachedInteractedSeries = items;
             return state._cachedInteractedSeries;
         } catch (e) {
@@ -2663,7 +2661,6 @@
         if (state.cachedWatchedSeries) return state.cachedWatchedSeries;
         const all = await _fetchInteractedSeries();
         state.cachedWatchedSeries = all.filter(s => s.UserData && s.UserData.Played === true);
-        LOG(`[SmartSuggest] Watched series pool: ${state.cachedWatchedSeries.length}`);
         return state.cachedWatchedSeries;
     }
 
@@ -2679,15 +2676,7 @@
         const maxDays = settings.recentMaxDays ?? 30;
         const cutoffDate = maxDays > 0 ? new Date(Date.now() - maxDays * 24 * 60 * 60 * 1000) : null;
 
-        // Diagnostic: log PlayedPercentage for in-progress items
         const inProgress = all.filter(s => !s.UserData || s.UserData.Played !== true);
-        LOG(`[SmartSuggest] In-progress candidates before filter:`, inProgress.map(s => ({
-            Name: s.Name,
-            Played: s.UserData?.Played,
-            PlayedPercentage: s.UserData?.PlayedPercentage,
-            UnplayedItemCount: s.UserData?.UnplayedItemCount,
-            LastPlayedDate: s.UserData?.LastPlayedDate
-        })));
 
         state.cachedRecentSeries = inProgress.filter(s => {
             const pct = s.UserData?.PlayedPercentage || 0;
@@ -2698,7 +2687,6 @@
             }
             return true;
         });
-        LOG(`[SmartSuggest] In-progress series pool: ${state.cachedRecentSeries.length} (minPct=${minPercent}, maxDays=${maxDays})`);
         return state.cachedRecentSeries;
     }
 
@@ -2708,7 +2696,6 @@
         if (!valid.length) return null;
         const selected = valid[Math.floor(Math.random() * Math.min(valid.length, 10))];
         dedupSet.add(selected.Id);
-        LOG(`[SmartSuggest] Selected watched series: ${selected.Name}`);
         return selected;
     }
 
@@ -2718,7 +2705,6 @@
         if (!valid.length) return null;
         const selected = valid[Math.floor(Math.random() * Math.min(valid.length, 10))];
         dedupSet.add(selected.Id);
-        LOG(`[SmartSuggest] Selected in-progress series: ${selected.Name}`);
         return selected;
     }
 
