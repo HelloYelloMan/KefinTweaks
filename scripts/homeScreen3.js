@@ -731,17 +731,8 @@
                         cardFormat: libConfig.cardFormat || 'Poster',
                         viewMoreUrl: viewMoreUrl,
                         queries: [{
-                            path: (library.CollectionType === 'tvshows') ? null : `/Items/Latest`,
-                            queryOptions: (library.CollectionType === 'tvshows') ? {
-                                IncludeItemTypes: 'Series',
-                                SortBy: 'DateLastContentAdded',
-                                SortOrder: 'Descending',
-                                ParentId: libId,
-                                Recursive: true,
-                                Limit: libConfig.itemLimit || 16,
-                                ImageTypeLimit: 1,
-                                EnableImageTypes: 'Primary,Backdrop,Thumb'
-                            } : {
+                            path: `/Items/Latest`,
+                            queryOptions: {
                                 ParentId: libId,
                                 SortBy: 'DateCreated',
                                 SortOrder: 'Descending',

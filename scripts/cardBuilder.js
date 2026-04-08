@@ -1501,7 +1501,7 @@
 
         if (cardFormat) {
             // Use specified cardFormat
-            if (cardFormat === 'backdrop' || cardFormat === 'thumb' || cardFormat === 'logo' || cardFormat === 'clear art' || forcedImageType) {
+            if (cardFormat === 'backdrop' || cardFormat === 'thumb' || cardFormat === 'logo' || cardFormat === 'clear art') {
                 cardClass = overflowCard ? 'overflowBackdropCard' : 'backdropCard';
                 padderClass = 'cardPadder-backdrop';
                 imageParams = 'fillHeight=267&fillWidth=474';
