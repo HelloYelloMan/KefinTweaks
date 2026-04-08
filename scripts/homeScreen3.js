@@ -736,7 +736,8 @@
                                 ParentId: libId,
                                 SortBy: 'DateCreated',
                                 SortOrder: 'Descending',
-                                Limit: libConfig.itemLimit || 16
+                                Limit: libConfig.itemLimit || 16,
+                                GroupItems: true
                             }
                         }]
                     }
