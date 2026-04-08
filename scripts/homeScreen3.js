@@ -737,7 +737,7 @@
                                 SortBy: 'DateCreated',
                                 SortOrder: 'Descending',
                                 Limit: libConfig.itemLimit || 16,
-                                GroupItems: true
+                                IncludeItemTypes: 'Series'
                             }
                         }]
                     }
