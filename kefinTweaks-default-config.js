@@ -1,5 +1,6 @@
 window.KefinTweaksDefaultConfig = {
   "kefinTweaksRoot": "",
+  "disableOnConsoles": true,
   "scripts": {
     "homeScreen": true,
     "search": true,

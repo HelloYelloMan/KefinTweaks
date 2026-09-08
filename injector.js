@@ -5,6 +5,44 @@
 (function() {
     'use strict';
 
+    // ---- Console client gate ----------------------------------------------
+    // Game consoles run the Jellyfin web client inside a locked-down WebView on
+    // hardware with a fraction of a desktop browser's CPU and memory, driven by a
+    // gamepad rather than a pointer. The KefinTweaks payload -- dozens of scripts,
+    // a skin, observers and caches -- is more than that hardware carries well, and
+    // several features assume hover. So load nothing at all there and leave the
+    // stock client in place.
+    //
+    // Escape hatches, in precedence order:
+    //   localStorage 'kefinTweaks.allowConsole' = '1'  -- per device, for testing
+    //   config `disableOnConsoles: false`              -- server-wide opt-in
+    function isConsoleClient() {
+        // Xbox (UWP WebView), PlayStation 3/4/5/Vita, Nintendo Switch/Wii U.
+        const CONSOLE_UA = /\bXbox\b|PlayStation|PLAYSTATION|\bNintendo\b|WiiU|NintendoBrowser/i;
+        if (CONSOLE_UA.test(navigator.userAgent || '')) {
+            return true;
+        }
+        // Fall back to the device name Jellyfin itself reports, which covers
+        // wrappers whose UA says nothing useful ("Xbox One", "PlayStation 5", ...).
+        try {
+            const device = (window.ApiClient && typeof ApiClient.deviceName === 'function')
+                ? ApiClient.deviceName() : '';
+            if (/xbox|playstation|nintendo/i.test(device || '')) {
+                return true;
+            }
+        } catch (e) { /* ApiClient not ready; the UA test above is the answer */ }
+        return false;
+    }
+
+    try {
+        if (localStorage.getItem('kefinTweaks.allowConsole') !== '1'
+            && window.KefinTweaksConfig?.disableOnConsoles !== false
+            && isConsoleClient()) {
+            console.log('[KefinTweaks Injector] Console client detected - KefinTweaks will not load.');
+            return;
+        }
+    } catch (e) { /* localStorage can throw in a sandboxed WebView; carry on */ }
+
     console.log('[KefinTweaks Injector] Initializing...');    
     // Cache for resolved root URL (to avoid multiple API calls)
     let resolvedRootCache = null;

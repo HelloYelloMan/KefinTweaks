@@ -10,6 +10,35 @@
     const MODAL_ID = 'kefinTweaksSourceModal';
     let versionsCache = null;
 
+    // Whether this is a game console's WebView. See the matching gate in
+    // injector.js for why KefinTweaks skips these clients entirely.
+    function isConsoleClient() {
+        const CONSOLE_UA = /\bXbox\b|PlayStation|PLAYSTATION|\bNintendo\b|WiiU|NintendoBrowser/i;
+        if (CONSOLE_UA.test(navigator.userAgent || '')) {
+            return true;
+        }
+        try {
+            const device = (window.ApiClient && typeof ApiClient.deviceName === 'function')
+                ? ApiClient.deviceName() : '';
+            if (/xbox|playstation|nintendo/i.test(device || '')) {
+                return true;
+            }
+        } catch (e) { /* ApiClient not ready; the UA test above is the answer */ }
+        return false;
+    }
+
+    function consoleGateApplies(config) {
+        try {
+            if (localStorage.getItem('kefinTweaks.allowConsole') === '1') {
+                return false;
+            }
+        } catch (e) { /* localStorage can throw in a sandboxed WebView */ }
+        return config?.disableOnConsoles !== false && isConsoleClient();
+    }
+
+    // checkAndLoadInjector runs on every login poll; only say this once.
+    let consoleGateLogged = false;
+
     function getAuthHeader() {
         const token = ApiClient.accessToken();
         const client = typeof ApiClient.applicationName === 'function' ? ApiClient.applicationName() : 'Jellyfin Web';
@@ -1485,6 +1514,14 @@ window.KefinTweaksConfig = ${JSON.stringify(config, null, 2)};`;
         try {
             const config = await getKefinTweaksConfig();
             const root = config?.kefinTweaksRoot || '';
+            
+            if (consoleGateApplies(config)) {
+                if (!consoleGateLogged) {
+                    consoleGateLogged = true;
+                    console.log('[KefinTweaks Installer] Console client detected - not loading KefinTweaks.');
+                }
+                return;
+            }
             
             if (root && root !== '') {
                 await loadInjectorFromRoot(root);

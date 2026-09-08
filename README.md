@@ -541,6 +541,27 @@ These third party clients support the same Watchlist as KefinTweaks:
 - [AFinity by MakD](https://github.com/MakD/AFinity)
 - [Streamyfin](https://github.com/streamyfin/streamyfin)
 - [Pelagica](https://github.com/KartoffelChipss/pelagica)
+
+### Game consoles
+
+KefinTweaks does **not** load on game consoles. The Xbox app and the console
+browsers (PlayStation 3/4/5 and Vita, Nintendo Switch and Wii U) run the Jellyfin
+Web UI in a locked-down WebView on hardware with a small fraction of a desktop
+browser's CPU and memory, driven by a gamepad rather than a pointer -- so those
+clients get stock Jellyfin instead, and nothing is downloaded or run on them.
+
+The check happens before any script or skin loads, so there is no cost on those
+clients beyond the installer script itself. To change it:
+
+- Set `disableOnConsoles` to `false` in the KefinTweaks config to load on consoles
+  server-wide.
+- Run `localStorage.setItem('kefinTweaks.allowConsole', '1')` in that device's
+  console to override the gate on one device, for testing. It takes precedence over
+  the config value.
+
+See [docs/console-gating.md](docs/console-gating.md) for the detection details and why
+smart TVs are deliberately left on the load side.
+
 <hr style="background: #b4c5fb !important;">
 
 ## Changes to default Jellyfin functionality
