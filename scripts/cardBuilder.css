@@ -1176,7 +1176,10 @@
     display: none;
 }
 
-:has(.spotlight-section[data-layout="Borderless"]) .homeSectionsContainer > *:not(.spotlight-section) {
+/* Was: `:has(.spotlight-section[data-layout="Borderless"]) ...` with NO subject,
+   which the CSS parser reads as `*:has(...)` — making every element in the document
+   a :has() invalidation subject. Marker maintained by elegantfin-haspatch.js. */
+body.kefin-borderless-spotlight .homeSectionsContainer > *:not(.spotlight-section) {
     z-index: 1;
 }
 

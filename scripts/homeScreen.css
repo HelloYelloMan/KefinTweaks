@@ -7,7 +7,13 @@
     gap: 1rem;
 }
 
-body[data-seasonal-background="true"]:has(.homePage:not(.hide)) #reactRoot:has(.libraryPage:not(.hide) .pageTabContent.is-active[data-index="0"])>.backgroundContainer::after {
+/* Was: body[data-seasonal-background]:has(.homePage:not(.hide)) #reactRoot:has(...)
+   Two nested :has() with `.hide` / `.is-active` arguments on <body> and #reactRoot.
+   Jellyfin flips those classes on every route change, so this made each navigation
+   invalidate style document-wide in Chromium. `.kefin-home-active` is maintained by
+   elegantfin-haspatch.js; the inner :has() is kept because #reactRoot is a single
+   element (a narrow subject), not a document-scope one. */
+body[data-seasonal-background="true"].kefin-home-active #reactRoot:has(.libraryPage:not(.hide) .pageTabContent.is-active[data-index="0"])>.backgroundContainer::after {
     content: '';
     position: absolute;
     top: 0;
@@ -23,12 +29,22 @@ body[data-seasonal-background="true"]:has(.homePage:not(.hide)) #reactRoot:has(.
     display: none;
 }
 
-body[data-seasonal-animations="true"]:has(.homePage:not(.hide)) .snowverlay {
+body[data-seasonal-animations="true"].kefin-home-active .snowverlay {
     display: block;
 }
 
-body:has(.homePage:not(.hide)) [data-section-id] h2.sectionTitle,
-body:has(.homePage:not(.hide)) [data-section-id] .sectionTitleTextButton>.material-icons {
+/* Scoped by ANCESTOR, not by a body marker class. This rule changes margins, so
+   it must apply on the very first paint. Both the original
+   `body:has(.homePage:not(.hide))` and the `.kefin-home-active` marker that
+   replaced it are wrong here for different reasons: :has() was document-scope
+   invalidation on a class Jellyfin flips every route change, and the marker is
+   applied by JS on a 100ms debounce — so titles rendered with their default
+   margins and then snapped to zero, visibly shifting the gap between a section
+   title and its card row. .homeSectionsContainer only exists on the home page,
+   so it gives the same scoping as static CSS with no timing dependency and no
+   :has() cost. */
+.homeSectionsContainer [data-section-id] h2.sectionTitle,
+.homeSectionsContainer [data-section-id] .sectionTitleTextButton>.material-icons {
     margin-bottom: 0 !important;
     margin-top: 0 !important;
 }

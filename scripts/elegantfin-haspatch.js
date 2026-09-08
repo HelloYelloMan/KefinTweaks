@@ -9,6 +9,18 @@
 //   .layout-mobile:has(#itemDetailPage:not(.hide))      -> .ef-detail-open (on <html>)
 //   .detailImageContainer:has(.card:not(.portraitCard)) -> .ef-has-nonportrait
 //
+// It also maintains two KefinTweaks-owned markers on <body>, replacing the
+// document-scope :has() selectors in homeScreen.css and cardBuilder.css:
+//
+//   body:has(.homePage:not(.hide))                      -> body.kefin-home-active
+//   :has(.spotlight-section[data-layout=Borderless])    -> body.kefin-borderless-spotlight
+//
+// Those two were the worst-shaped selectors left in the tree. `.hide` is toggled
+// by Jellyfin on essentially every route change, so registering it as a :has()
+// argument on <body> made every navigation invalidate style document-wide; and
+// the cardBuilder one had NO subject at all (`:has(...)` == `*:has(...)`), which
+// makes every element in the document a :has() invalidation subject.
+//
 // Why: a :has() selector registered in CSS pays style-invalidation cost on
 // EVERY DOM mutation whose nodes match its argument features — in Chromium
 // this made each card insertion (buttons, .card, footers) trigger ancestor
@@ -43,6 +55,20 @@
                 'ef-detail-open',
                 !!document.querySelector('#itemDetailPage:not(.hide)')
             );
+
+            // KefinTweaks markers (see header). Class flips are invisible to the
+            // childList observer, so these rely on the view hook below as well.
+            const body = document.body;
+            if (body) {
+                body.classList.toggle(
+                    'kefin-home-active',
+                    !!document.querySelector('.homePage:not(.hide)')
+                );
+                body.classList.toggle(
+                    'kefin-borderless-spotlight',
+                    !!document.querySelector('.spotlight-section[data-layout="Borderless"]')
+                );
+            }
         } catch (e) {
             // :has() unsupported in querySelector — leave markers unset.
         }

@@ -1857,8 +1857,25 @@ div[data-tab="watchlist"] .loading-message {
     -webkit-tap-highlight-color: #fff0;
 }
 
-.card:has(button[data-played="true"]) .watchlist-button, 
-.card:not(:has(button[data-played])) .watchlist-button,
+/* Was `.card:has(button[data-played="true"])` / `.card:not(:has(button[data-played]))`.
+   Those registered every .card as a :has() invalidation subject keyed on content
+   inserted per card, so each card insertion cost an ancestor invalidation walk in
+   Chromium.
+
+   The played state CHANGES at runtime (Jellyfin's playstatebutton rewrites
+   data-played when you mark something watched), so a build-time class cannot
+   express it — that was a real regression. The watchlist button is appended to the
+   same .cardOverlayButton-br container as the played button, immediately after it,
+   so a sibling combinator says the same thing, stays live, and costs nothing: no
+   :has(), no ancestor invalidation.
+
+   Whether a card HAS a playstate button at all is fixed when the card is built, so
+   that half stays a static class (.kefin-has-playstate, set in cardBuilder.js).
+
+   The .mainDetailButtons rules below keep :has(): that subject is a single element
+   per page, so its invalidation cost is negligible. */
+button[data-played="true"] ~ .watchlist-button,
+.card:not(.kefin-has-playstate) .watchlist-button,
 .mainDetailButtons:has(button[data-played="true"]) .watchlist-icon, 
 .mainDetailButtons:not(:has(button[data-played])) .watchlist-icon,
 .mainDetailButtons:not(:has(button[data-played])) .btnRecommend {

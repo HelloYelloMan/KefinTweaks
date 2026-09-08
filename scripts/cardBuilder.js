@@ -12,7 +12,28 @@
     // The stylesheet advertises itself by setting a custom property on :root
     // (--kefin-force-border-spotlights: 1); we read it at render time so
     // toggling the theme/CSS on or off takes effect without touching this file.
+    // getComputedStyle() forces a synchronous style flush of the whole document.
+    // Profiling a home-screen scroll in Chromium attributed ~52ms of Recalculate
+    // Style to this function alone, because it is called once per spotlight render
+    // while cards are streaming in. The answer only changes when the user toggles
+    // a theme, so memoise it briefly: still picks a toggle up within a second,
+    // but collapses a render burst down to one flush.
+    let _forceBorderCache = null;
+    let _forceBorderCacheAt = 0;
+    const FORCE_BORDER_TTL_MS = 1000;
+
     function shouldForceBorderSpotlights() {
+        const now = Date.now();
+        if (_forceBorderCache !== null && (now - _forceBorderCacheAt) < FORCE_BORDER_TTL_MS) {
+            return _forceBorderCache;
+        }
+        const result = computeShouldForceBorderSpotlights();
+        _forceBorderCache = result;
+        _forceBorderCacheAt = now;
+        return result;
+    }
+
+    function computeShouldForceBorderSpotlights() {
         try {
             const prop = getComputedStyle(document.documentElement)
                 .getPropertyValue('--kefin-force-border-spotlights')
@@ -25,6 +46,13 @@
         } catch (e) {
             return false;
         }
+    }
+
+    // Set by injector.js before any script loads. Falls back to a live check on the
+    // <html> class so this module still behaves correctly if loaded standalone.
+    function isBlink() {
+        if (typeof window.KefinTweaksIsBlink === 'boolean') return window.KefinTweaksIsBlink;
+        return !!(document.documentElement && document.documentElement.classList.contains('kefin-blink'));
     }
 
     const state = {
@@ -2057,6 +2085,16 @@
                 watchedButton.setAttribute('data-itemtype', itemType);
                 watchedButton.setAttribute('data-played', item.UserData?.Played || 'false');
                 watchedButton.title = 'Mark played';
+
+                // Replaces `.card:not(:has(button[data-played]))` in watchlist.css.
+                // That :has() registered EVERY .card as an invalidation subject keyed
+                // on content inserted per card, so each card insertion made Chromium
+                // walk ancestors — the trap elegantfin-haspatch.js was written for.
+                // Whether a card has a playstate button is fixed at build time, so a
+                // class is equivalent here. The played STATE is deliberately not a
+                // class: it changes at runtime, and watchlist.css matches it with a
+                // sibling combinator instead.
+                card.classList.add('kefin-has-playstate');
 
                 const watchedIcon = document.createElement('span');
                 watchedIcon.className = 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover check playstatebutton-icon-unplayed';
@@ -4135,7 +4173,7 @@
         // Listen for window resize events
         window.addEventListener('resize', handleWindowResize); */
 
-        // Initial overflow check is done when section is detected in the DOM by overflowMutationObserver
+        // (Overflow checking is inert: checkSectionOverflow() returns immediately.)
 
         // Assemble the section
         verticalSection.appendChild(sectionTitleContainer);
@@ -4409,8 +4447,11 @@
     let lazyImageObserver = null;
     let lazyMutationObserver = null;
 
-    // Overflow check: run checkSectionOverflow when .emby-scroller-container with .itemsContainer appears in DOM
-    let overflowMutationObserver = null;
+    // NOTE: the body-wide overflow MutationObserver that used to live here was removed.
+    // checkSectionOverflow() has been a no-op (`return;` on its first line) for some
+    // time, so the observer was walking every added node with querySelectorAll and
+    // scheduling a rAF + a 150ms setTimeout per section found — on every DOM insertion
+    // in the whole app — purely to call a function that returns immediately.
 
     // Run updateScrollButtonStateForSection once when a section becomes visible (so --max-scroll is computed after layout)
     let scrollSectionVisibilityObserver = null;
@@ -4424,7 +4465,18 @@
         
         const observerOptions = {
             threshold: 0.1, // Trigger when 10% of element is visible
-            rootMargin: '800px' // Start loading well before element enters viewport to avoid grey flash
+            // IntersectionObserver callbacks are delivered during the rendering
+            // lifecycle, so a busy main thread delays them — and with it the start of
+            // every image request. Tracing a home scroll in Chromium showed the main
+            // thread 92.6% busy with 61 tasks over 50ms, producing gaps of up to
+            // 600ms between consecutive image requests. The images themselves are
+            // cheap (mostly cache hits, ~2.6ms to decode, off-thread); they simply
+            // start late. A deeper margin buys lead time to absorb those stalls.
+            //
+            // Blink only: it costs more concurrent in-flight requests, and Gecko does
+            // not have the stall to absorb — its style recalc runs in parallel, so the
+            // observer fires on time and the stock margin is already enough.
+            rootMargin: isBlink() ? '2000px' : '800px'
         };
         
         lazyImageObserver = new IntersectionObserver((entries) => {
@@ -4437,7 +4489,21 @@
 
                 cardImageContainer.setAttribute('data-loading', 'true');
                 const img = new Image();
-                img.onload = () => {
+                // An Image() that is never inserted into the document is treated as a
+                // speculative load by Chromium and gets Low network priority: in a
+                // profiled home-screen scroll ALL 238 card-image requests came back
+                // Low while every API call was High, so artwork queued behind
+                // everything else (median 62ms wait against a server that answers in
+                // under 1ms). Firefox does not deprioritise these the same way, which
+                // is why images visibly land faster there. These are only requested
+                // once the card is within 800px of the viewport, so they deserve the
+                // same priority an in-viewport <img> would get.
+                // Blink only: Firefox does not deprioritise an Image() that is never
+                // inserted into the document, so its requests are already competitive.
+                if (isBlink()) {
+                    try { img.fetchPriority = 'high'; } catch (e) { /* older engines */ }
+                }
+                const applyLoaded = () => {
                     cardImageContainer.style.backgroundImage = `url("${imageUrl}")`;
                     cardImageContainer.classList.remove('lazy');
                     cardImageContainer.classList.add('lazy-loaded');
@@ -4449,6 +4515,18 @@
                         canvas.classList.add('lazy-hidden');
                     }
                     lazyImageObserver.unobserve(cardImageContainer);
+                };
+                img.onload = () => {
+                    // `load` only means the bytes arrived — the bitmap is still
+                    // undecoded, so assigning it straight to background-image makes the
+                    // decode happen on the main thread during the next paint. That is
+                    // what stutters while a screenful of card art arrives. decode()
+                    // resolves once the frame is ready, so the paint is just a blit.
+                    if (typeof img.decode === 'function') {
+                        img.decode().then(applyLoaded, applyLoaded);
+                    } else {
+                        applyLoaded();
+                    }
                 };
                 img.onerror = () => {
                     cardImageContainer.removeAttribute('data-loading');
@@ -4527,18 +4605,75 @@
         applyScrollButtonState(verticalSection);
     }
 
+    // ---- Publish the real home-row height for content-visibility ------------
+    // skins/optional/global/... uses `contain-intrinsic-size` to give skipped rows
+    // a placeholder height. A hard-coded guess is wrong for most layouts (card size
+    // depends on viewport width and card format), and every wrong placeholder
+    // shifts the rows below it — which shows up as the spacing between rows
+    // subtly changing as you scroll.
+    //
+    // Measure a real row instead and publish it as a custom property. A
+    // ResizeObserver reports the size the browser already computed, so this costs
+    // no forced layout (unlike getBoundingClientRect). It re-publishes on viewport
+    // resize, since row height is viewport-dependent.
+    let homeRowSizeObserver = null;
+    let observedHomeRow = null;
+
+    function publishHomeRowHeight(verticalSection) {
+        if (!window.ResizeObserver) return;
+        const container = verticalSection.closest('.homeSectionsContainer');
+        if (!container) return;                       // home rows only
+        if (observedHomeRow && observedHomeRow.isConnected) return;
+
+        observedHomeRow = verticalSection;
+        if (!homeRowSizeObserver) {
+            homeRowSizeObserver = new ResizeObserver((entries) => {
+                for (const entry of entries) {
+                    const h = entry.borderBoxSize && entry.borderBoxSize[0]
+                        ? entry.borderBoxSize[0].blockSize
+                        : entry.contentRect.height;
+                    if (!h) continue;                 // skipped/!rendered: keep last good value
+                    const target = entry.target.closest('.homeSectionsContainer');
+                    if (target) target.style.setProperty('--kefin-home-row-height', Math.round(h) + 'px');
+                }
+            });
+        }
+        homeRowSizeObserver.observe(verticalSection);
+    }
+
     /**
      * Ensure scroll section visibility observer exists. When a section becomes visible, runs updateScrollButtonStateForSection once then unobserves.
      */
     function getScrollSectionVisibilityObserver() {
         if (scrollSectionVisibilityObserver) return scrollSectionVisibilityObserver;
         scrollSectionVisibilityObserver = new IntersectionObserver((entries) => {
+            // updateScrollButtonStateForSection() reads scrollWidth/clientWidth and
+            // then WRITES --max-scroll. Doing that per section interleaves read/write,
+            // so each section's read has to flush the style+layout the previous
+            // section's write just invalidated. Tracing a home scroll measured 603ms
+            // of Recalculate Style across 22 such calls. Reading every section first
+            // and only then writing collapses that to a single flush.
+            const visible = [];
             entries.forEach(entry => {
                 if (!entry.isIntersecting) return;
                 const verticalSection = entry.target;
                 scrollSectionVisibilityObserver.unobserve(verticalSection);
-                updateScrollButtonStateForSection(verticalSection);
+                visible.push(verticalSection);
             });
+            if (!visible.length) return;
+
+            const measured = [];
+            for (const verticalSection of visible) {          // READ phase
+                const scroller = verticalSection.querySelector('.emby-scroller');
+                if (!scroller) continue;
+                measured.push([verticalSection, scroller,
+                    Math.max(0, (scroller.scrollWidth - scroller.clientWidth) || 0)]);
+            }
+            for (const [verticalSection, scroller, maxScroll] of measured) {  // WRITE phase
+                scroller.style.setProperty('--max-scroll', String(maxScroll));
+                applyScrollButtonState(verticalSection);
+                publishHomeRowHeight(verticalSection);
+            }
         }, { root: null, threshold: 0.01 });
         return scrollSectionVisibilityObserver;
     }
@@ -4561,44 +4696,6 @@
         getScrollSectionVisibilityObserver().observe(verticalSection);
     }
 
-    /**
-     * Collect section elements (.emby-scroller-container containing .itemsContainer) from an added node
-     * @param {Node} node - Added node (element or fragment)
-     * @returns {HTMLElement[]} - Deduplicated section elements to run overflow check on
-     */
-    function getScrollerSectionsForOverflowCheck(node) {
-        if (!node || node.nodeType !== 1 || !node.querySelectorAll) return [];
-        const sections = [];
-        const selfMatch = node.classList && node.classList.contains('emby-scroller-container') && node.querySelector('.itemsContainer');
-        if (selfMatch) sections.push(node);
-        const inner = node.querySelectorAll('.emby-scroller-container');
-        inner.forEach(el => {
-            if (el !== node && el.querySelector('.itemsContainer')) sections.push(el);
-        });
-        return sections;
-    }
-
-    /**
-     * Initialize the MutationObserver that runs checkSectionOverflow when sections appear in the DOM
-     */
-    function initOverflowMutationObserver() {
-        if (overflowMutationObserver) return;
-        overflowMutationObserver = new MutationObserver((mutations) => {
-            const sectionsToCheck = new Set();
-            mutations.forEach(mutation => {
-                mutation.addedNodes.forEach(node => {
-                    getScrollerSectionsForOverflowCheck(node).forEach(section => sectionsToCheck.add(section));
-                });
-            });
-            sectionsToCheck.forEach(section => {
-                requestAnimationFrame(() => {
-                    checkSectionOverflow(section, false);
-                    // Re-check after a short delay so images/layout can affect dimensions
-                    setTimeout(() => checkSectionOverflow(section, true), 150);
-                });
-            });
-        });
-    }
 
     /**
      * Initialize the smart lazy loading system
@@ -4612,19 +4709,11 @@
         // Initialize observers
         initLazyImageObserver();
         initLazyMutationObserver();
-        initOverflowMutationObserver();
         
         // Scan existing elements with data-src
         const existingLazyImages = document.querySelectorAll('.cardImageContainer[data-src]');
         existingLazyImages.forEach(img => {
             lazyImageObserver.observe(img);
-        });
-        
-        // Run overflow check on any sections already in the DOM
-        document.querySelectorAll('.emby-scroller-container').forEach(section => {
-            if (section.querySelector('.itemsContainer')) {
-                requestAnimationFrame(() => checkSectionOverflow(section, false));
-            }
         });
         
         // Start watching for new elements
@@ -4633,21 +4722,11 @@
                 childList: true,
                 subtree: true
             });
-            overflowMutationObserver.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
         } else {
             // If body isn't ready, wait for DOMContentLoaded
             document.addEventListener('DOMContentLoaded', () => {
                 if (lazyMutationObserver && document.body) {
                     lazyMutationObserver.observe(document.body, {
-                        childList: true,
-                        subtree: true
-                    });
-                }
-                if (overflowMutationObserver && document.body) {
-                    overflowMutationObserver.observe(document.body, {
                         childList: true,
                         subtree: true
                     });
