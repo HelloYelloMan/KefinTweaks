@@ -20,9 +20,15 @@
         // Step 2: prune children as needed
         const pruneObserver = new MutationObserver(() => {
             LOG('Mutation detected, checking children count:', container.children.length);
-            while (container.children.length > 2) {
-                LOG('Too many children (' + container.children.length + '), removing oldest');
-                container.removeChild(container.firstElementChild);
+            // Only count/remove Jellyfin's own backdrop children — never other
+            // scripts' mounts (e.g. themeMediaCastFix's video container).
+            const prunable = () => Array.from(container.children)
+                .filter((c) => !c.classList.contains('kefin-theme-video-container'));
+            let victims = prunable();
+            while (victims.length > 2) {
+                LOG('Too many children (' + victims.length + '), removing oldest');
+                container.removeChild(victims[0]);
+                victims = prunable();
             }
         });
 

@@ -81,6 +81,12 @@
         collections: true,         // Collection sorting functionality
         skinManager: true,        // Skin selection and management
         thumbnailScrubber: false,  // Trickplay thumbnail scrub on hover (bottom 20px of video cards)
+        themeMediaCastFix: true,  // Theme media playback while a remote/cast target is connected
+        pauseScreen: true,        // Rich pause screen overlay (logo, plot, artwork, progress)
+        osdLogo: true,            // Media logo/ClearArt on the video OSD
+        elegantfinHaspatch: true, // ElegantFin :has() hotfix marker classes (needs the local ElegantFin build)
+        mediaTags: true,          // Add a Tags row to the item-details metadata table
+        episodeSeasonTitle: true, // Season title/logo on episode headers + season-page logo links to series
         
         // Note: Core functionality scripts (utils, cardBuilder, localStorageCache, modal) 
         // are automatically enabled when needed by other scripts
@@ -325,6 +331,13 @@
             description: 'Fixes issue that causes backdrop images to be continuously added to the page if the tab isn\'t focused.'
         },
         {
+            name: 'elegantfinHaspatch',
+            script: 'elegantfin-haspatch.js',
+            css: null,
+            dependencies: ['utils'],
+            description: 'Maintains the .ef-* marker classes that replace the Chromium-hot :has() selectors in the local ElegantFin build.'
+        },
+        {
             name: 'updoot',
             script: 'updoot.js',
             css: null,
@@ -395,6 +408,20 @@
             description: 'Adds related collections to item details pages showing which collections contain the current item'
         },
         {
+            name: 'mediaTags',
+            script: 'mediaTags.js',
+            css: null,
+            dependencies: ['utils'],
+            description: 'Adds a Tags row to the item-details metadata table, matching the Genres/Studios rows.'
+        },
+        {
+            name: 'episodeSeasonTitle',
+            script: 'episodeSeasonTitle.js',
+            css: null,
+            dependencies: ['utils'],
+            description: "Season title/logo on episode headers, and a season-page logo that links to the series."
+        },
+        {
             name: 'flattenSingleSeasonShows',
             script: 'seriesEpisodes.js',
             css: 'seriesEpisodes.css',
@@ -414,6 +441,27 @@
             css: null,
             dependencies: ['utils', 'modal'],
             description: 'Adds sorting functionality to collection pages'
+        },
+        {
+            name: 'themeMediaCastFix',
+            script: 'themeMediaCastFix.js',
+            css: null,
+            dependencies: [],
+            description: 'Restores theme song/video playback in the web client while a remote/cast player (e.g. mpv-shim) is the selected target.'
+        },
+        {
+            name: 'pauseScreen',
+            script: 'pauseScreen.js',
+            css: null,
+            dependencies: [],
+            description: 'Shows a rich overlay (logo, plot, details, disc/clear art, progress) when playback is paused for a few seconds. Supports the HTML5 player and external players (mpv-shim etc.).'
+        },
+        {
+            name: 'osdLogo',
+            script: 'osdLogo.js',
+            css: null,
+            dependencies: [],
+            description: 'Shows the media\'s logo (or ClearArt) on the video OSD while playback controls are visible, with optional transparency trimming and OSD shadows.'
         },
     ];
 

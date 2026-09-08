@@ -66,6 +66,7 @@
     let isRequestInProgress = false; // Blocking flag to prevent multiple simultaneous requests
     let hasInitialized = false; // Prevent multiple initializations
     let isInitializing = false; // Prevent concurrent initializations
+    let lastQuerySignature = null; // Detects mid-view sort/filter changes
 
     // Create loading indicator element
     function createLoadingIndicator() {
@@ -267,9 +268,16 @@
         }
         
         // Map page to media type
+        // Keys must cover both the legacy .html page names and the extensionless
+        // routes modern Jellyfin uses (10.9+). Missing the extensionless keys made
+        // this return null on current servers, which silently dropped the user's
+        // sort AND filter settings — infinite scroll then appended UNFILTERED pages
+        // after Jellyfin's filtered first page.
         const mediaTypeMap = {
             'movies.html': 'movies',
-            'tv.html': 'series'
+            'tv.html': 'series',
+            'movies': 'movies',
+            'tv': 'series'
         };
         
         const mediaType = mediaTypeMap[page];
@@ -520,6 +528,26 @@
             apiParams.NameStartsWith = alphaPicker;
             LOG('Added alpha picker filter:', alphaPicker);
         }
+
+        // If the effective query (sort/filters/alpha) changed since the last load —
+        // the user applied a filter without navigating — stale hasMore/total state
+        // from the previous query must not block or miscount the new one.
+        const querySignature = JSON.stringify({
+            SortBy: apiParams.SortBy,
+            SortOrder: apiParams.SortOrder,
+            Filters: apiParams.Filters || '',
+            Years: apiParams.Years || '',
+            Genres: apiParams.Genres || '',
+            Tags: apiParams.Tags || '',
+            NameStartsWith: apiParams.NameStartsWith || '',
+            ParentId: apiParams.ParentId
+        });
+        if (lastQuerySignature !== null && querySignature !== lastQuerySignature) {
+            LOG('Query settings changed since last load, resetting paging state');
+            hasMore = true;
+            totalRecordCount = null;
+        }
+        lastQuerySignature = querySignature;
 
         const url = ApiClient.getUrl("Users/" + userId + "/Items", apiParams);
 
@@ -798,20 +826,64 @@
     
     // Scroll state loading removed - not needed
     
-    // Wait for page to mount
-    const observer = new MutationObserver(() => {
-        if (shouldInitialize()) {
-            initialize().catch(err => ERR('Initialization failed:', err));
+    // Navigation-gated activation (replaces the permanent document.body observer).
+    // The old observer ran shouldInitialize() on every DOM mutation in the app for
+    // the whole session — and because reset() clears hasInitialized, it re-ran the
+    // full initialize/reset/scroll-watcher path continuously while browsing a
+    // library. Only navigation (view show, hash change, tab switch) can change the
+    // answer, so activate there instead, with a short bounded poll to wait out the
+    // library page's async mount.
+    const ACTIVATION_POLL_MS = 250;
+    const ACTIVATION_TIMEOUT_MS = 10000;
+    let activationPollTimer = null;
+
+    function activateForCurrentView() {
+        if (activationPollTimer) {
+            clearTimeout(activationPollTimer);
+            activationPollTimer = null;
         }
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-    
-    // Also try to initialize immediately if page is already loaded
-    if (document.readyState === 'complete') {
-        setTimeout(() => {
-            initialize().catch(err => ERR('Initial initialization failed:', err));
-        }, 100);
+
+        if (!getCurrentPage()) {
+            // Not a supported library page: drop the scroll listener and stand down.
+            window.removeEventListener("scroll", handleScroll);
+            return;
+        }
+
+        hasInitialized = false; // new navigation context — allow one fresh init
+        const startedAt = Date.now();
+
+        const poll = () => {
+            activationPollTimer = null;
+            if (!getCurrentPage()) return; // navigated away mid-poll
+            if (shouldInitialize()) {
+                initialize().catch(err => ERR('Initialization failed:', err));
+                return;
+            }
+            if (Date.now() - startedAt >= ACTIVATION_TIMEOUT_MS) {
+                LOG('Activation timed out waiting for library page to mount');
+                return;
+            }
+            activationPollTimer = setTimeout(poll, ACTIVATION_POLL_MS);
+        };
+        poll();
     }
+
+    // Hook navigation: utils view engine when available (with the usual retry
+    // wait), plus hashchange for tab switches that don't remount the view.
+    function hookNavigation(attempt = 0) {
+        if (window.KefinTweaksUtils?.onViewPage) {
+            window.KefinTweaksUtils.onViewPage(() => activateForCurrentView(), { pages: [] });
+            LOG('Registered activation with KefinTweaksUtils view engine');
+        } else if (attempt < 40) {
+            setTimeout(() => hookNavigation(attempt + 1), 250);
+            return;
+        } else {
+            WARN('KefinTweaksUtils unavailable; relying on hashchange only');
+        }
+        activateForCurrentView();
+    }
+    window.addEventListener('hashchange', activateForCurrentView);
+    hookNavigation();
     
     // Cleanup function
     function cleanup() {

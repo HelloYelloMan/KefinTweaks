@@ -50,11 +50,18 @@
             writers: new Set(),
             watchedMovies: new Set(),
             likedMovies: new Set(),
+            watchedSeries: new Set(),
+            likedSeries: new Set(),
             customDiscoverySections: new Set()
         },
         currentDiscoveryGenre: null,
         currentDiscoveryStudio: null,
         cachedFavorites: null,
+        cachedRecentMovies: null,
+        cachedFavoriteSeries: null,
+        cachedWatchedSeries: null,
+        cachedRecentSeries: null,
+        _cachedInteractedSeries: null,
         isPeopleCacheComplete: false,
         discoveryGroupIndex: 0,
         isRenderingDiscovery: false,
@@ -399,6 +406,18 @@
             return;
         }
 
+        // Re-entrancy guard, set synchronously before any await. Multiple
+        // triggers can fire near-simultaneously (view event, visibilitychange,
+        // DOM poller); without this they race into overlapping builds that
+        // duplicate or clobber sections. Cleared on the container if a rebuild
+        // is ever needed (the container is replaced by Jellyfin on full
+        // navigation away, which naturally resets this).
+        if (container.dataset.kefinHomeScreenBuilding === 'true' || container.dataset.kefinHomeScreen === 'true') {
+            LOG('Home screen build already in progress or complete; skipping');
+            return;
+        }
+        container.dataset.kefinHomeScreenBuilding = 'true';
+
         // Create Kefin home sections container as a sibling of the Jellyfin sections container
 /*         let kefinHomeSectionsContainer = document.querySelector('.homePage:not(.hide) #homeTab .kefinHomeSectionsContainer');
         if (!kefinHomeSectionsContainer) {
@@ -412,11 +431,9 @@
             }
         } */
 
-        // If we've already initialized and Jellyfin has completed its render, avoid re-running
-        if (container.dataset.kefinHomeScreen) {
-            LOG('Home screen already initialized and Jellyfin has rendered');
-            return;
-        }
+        // (Completion/re-entrancy is handled by the single guard above, which
+        // sets kefinHomeScreenBuilding. A second early-return here would exit
+        // while that latch is held and permanently block rebuilds.)
 
         let performanceStartTime = performance.now();
         
@@ -531,18 +548,49 @@
         // Initial render directly into Kefin container (no waiting for Jellyfin)
         performanceStartTime = performance.now();
         LOG('Rendering Standard/Seasonal Sections (initial render)...');
-        await renderHomeSections(filteredHomeSections, container, false);
-        performanceEndTime = performance.now();
-        performanceDuration = performanceEndTime - performanceStartTime;
-        LOG(`Home Screen v3 Render home sections (initial) initialization time: ${performanceDuration.toFixed(2)}ms`);
+        try {
+            await renderHomeSections(filteredHomeSections, container, false);
+            performanceEndTime = performance.now();
+            performanceDuration = performanceEndTime - performanceStartTime;
+            LOG(`Home Screen v3 Render home sections (initial) initialization time: ${performanceDuration.toFixed(2)}ms`);
 
-        performanceMetrics.initialRenderEnd = performanceEndTime;
+            performanceMetrics.initialRenderEnd = performanceEndTime;
 
-        performanceTimer.loadTimeEnd = performance.now();
-        LOG(`Home Screen v3 load time initialization: ${(performanceTimer.loadTimeEnd - performanceTimer.loadTimeStart).toFixed(2)}ms`);
-        
-        LOG('Initializing Discovery Sections...');
-        setupDiscoveryInteraction(container);
+            performanceTimer.loadTimeEnd = performance.now();
+            LOG(`Home Screen v3 load time initialization: ${(performanceTimer.loadTimeEnd - performanceTimer.loadTimeStart).toFixed(2)}ms`);
+
+            LOG('Initializing Discovery Sections...');
+            setupDiscoveryInteraction(container);
+
+            // Mark the build complete only after sections actually rendered.
+            // tryEnhanceHomeScreen treats this flag as authoritative "built and
+            // intact" and clears it on a warm reopen when the sections are gone,
+            // so a completed build here won't block later recovery.
+            container.dataset.kefinHomeScreen = 'true';
+            const scope = container.closest('#homeTab') || document;
+            container.dataset.kefinRenderedEmpty =
+                (!container.querySelector('[data-section-id]')
+                    && !scope.querySelector('.homeSectionsContainer [data-section-id]'))
+                ? 'true' : 'false';
+        } catch (err) {
+            // A mid-render failure can leave partial sections in the DOM with no
+            // completion flag; the next trigger would then render again on top of
+            // them. Clear whatever this attempt rendered so the retry starts from
+            // a clean slate, then rethrow for the caller's error handling.
+            try {
+                const scope = container.closest('#homeTab') || document;
+                scope.querySelectorAll('[data-section-id]').forEach(el => el.remove());
+            } catch (cleanupErr) {
+                WARN('Failed to clear partial sections after render error:', cleanupErr);
+            }
+            throw err;
+        } finally {
+            // Always release the re-entrancy latch, even if the build threw.
+            // Leaving it set would permanently block every future trigger
+            // (view event, visibilitychange, poller) from rebuilding — which
+            // is exactly what stranded the home screen on warm reopen.
+            delete container.dataset.kefinHomeScreenBuilding;
+        }
 
         /* // If Jellyfin hasn't rendered after 5 seconds, assume it won't and clean up the observer
         setTimeout(() => {
@@ -1260,6 +1308,20 @@
     async function loadSectionForRendering(sectionConfig) {
         LOG(`Loading Section for Rendering: ${sectionConfig.id} (${sectionConfig.name})`);  
 
+        // Forcefully disable play, more, mark played, and favorite buttons for the My Media section
+        if (sectionConfig.id === 'myMedia' || sectionConfig.id === 'smallBackdrops' || (sectionConfig.name && sectionConfig.name.toLowerCase() === 'my media') || sectionConfig.type === 'UserViews') {
+            sectionConfig.showPlayButton = false;
+            sectionConfig.showMoreButton = false;
+            sectionConfig.showMarkPlayedButton = false;
+            sectionConfig.showFavoriteButton = false;
+            sectionConfig.enablePlayButton = false;
+            sectionConfig.enableMoreButton = false;
+            sectionConfig.enableMarkPlayedButton = false;
+            sectionConfig.enableMarkFavoriteButton = false;
+            sectionConfig.overlayPlayButton = false;
+            sectionConfig.overlayMoreButton = false;
+        }
+
         const loadSectionTimerStart = performance.now();
 
         // Prepare section (template replacements, view more URL, etc.)
@@ -1399,6 +1461,70 @@
         const loadSectionTimerEnd = performance.now();
         const loadSectionDuration = loadSectionTimerEnd - loadSectionTimerStart;
         LOG(`Section ${sectionConfig.id} loaded for rendering in time: ${loadSectionDuration.toFixed(2)}ms`);
+
+        // SmartSimilar: refresh UserData on cached items and apply watch filter
+        if (sectionConfig.refreshUserData || sectionConfig.postFetchFilter) {
+            const applySmartFilter = async (data) => {
+                if (!data) return data;
+
+                let items = data.Items || data;
+                if (!Array.isArray(items) || items.length === 0) return data;
+
+                // Refresh UserData from server if this is cached data
+                if (sectionConfig.refreshUserData) {
+                    try {
+                        const userId = ApiClient.getCurrentUserId();
+                        const ids = items.map(i => i.Id).filter(Boolean).join(',');
+                        if (ids) {
+                            // RecursiveItemCount is required: Folder.FillUserDataDtoValues
+                            // only computes UserData.PlayedPercentage for Series when the
+                            // request includes that field. Without it, in-progress series
+                            // come back with a null percentage and pass any threshold.
+                            const freshResp = await ApiClient.getJSON(
+                                ApiClient.getUrl(`Users/${userId}/Items`, {
+                                    Ids: ids,
+                                    Fields: 'RecursiveItemCount'
+                                })
+                            );
+                            if (freshResp?.Items) {
+                                const freshMap = new Map(freshResp.Items.map(i => [i.Id, i.UserData]));
+                                for (const item of items) {
+                                    const freshUd = freshMap.get(item.Id);
+                                    if (freshUd) item.UserData = freshUd;
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        WARN('SmartSimilar: Failed to refresh UserData:', e);
+                    }
+                }
+
+                // Apply watch filter
+                if (sectionConfig.postFetchFilter) {
+                    const filtered = sectionConfig.postFetchFilter(items);
+                    if (filtered === null) return null; // Section should be skipped
+                    if (data.Items) {
+                        data.Items = filtered;
+                        data.TotalRecordCount = filtered.length;
+                    } else {
+                        data = filtered;
+                    }
+                }
+
+                return data;
+            };
+
+            for (const result of results) {
+                if (result.data) {
+                    result.data = await applySmartFilter(result.data);
+                    if (result.data === null) return null;
+                }
+                if (result.dataPromise) {
+                    const origPromise = result.dataPromise;
+                    result.dataPromise = origPromise.then(d => applySmartFilter(d));
+                }
+            }
+        }
 
         const postProcess = (sectionConfig, items) => {
             let postProcessedItems = items;
@@ -1575,6 +1701,13 @@
                 if (firstQuery.path.includes('Upcoming')) {
                     return `#/tv.html?collectionType=tvshows&tab=2`;
                 }
+                // SmartSimilar: /SmartSimilar/Items/{itemId}/Similar → details page
+                // Must be checked before the generic Similar handler below,
+                // since 'SmartSimilar' substring-matches 'Similar'.
+                if (firstQuery.path.includes('/SmartSimilar/')) {
+                    const itemId = firstQuery.path.split('/')[3];
+                    return `#/details?id=${itemId}&serverId=${serverId}`;
+                }
                 // If query path is Items/itemid/Similar then return the details page for the item
                 if (firstQuery.path.includes('Similar')) {
                     const itemId = firstQuery.path.split('/')[2];
@@ -1643,7 +1776,8 @@
 
             case 'Person':
                 if (config.sourceType && config.sourceType.includes('watched')) {
-                    const result = await getRandomPersonFromHistory(config.personType, config.sourceType);
+                    const itemType = (config.includeItemTypes && config.includeItemTypes[0]) || 'Movie';
+                    const result = await getRandomPersonFromHistory(config.personType, config.sourceType, itemType);
                     if (!result) return null;
                     
                     return {
@@ -1656,7 +1790,8 @@
                             Director: result.person.name,
                             Writer: result.person.name,
                             Title: result.sourceItem.Name,
-                            Movie: result.sourceItem.Name
+                            Movie: result.sourceItem.Name,
+                            Show: result.sourceItem.Name
                         }
                     };
                 }
@@ -1680,37 +1815,43 @@
                 return { id: network.Id, name: network.Name, metadata: { Studio: network.Name } };
                 
             case 'Similar':
-                if (config.sourceType === 'watched') {
-                    const m = getRandomWatchedMovie();
-                    return m ? { 
-                        id: m.Id,
-                        metadata: { 
-                            Title: m.Name,
-                            Movie: m.Name
-                        } 
-                    } : null;
-                }
+            case 'SmartSimilar': {
+                const isSeries = config.includeItemTypes && config.includeItemTypes.includes('Series');
+                // Similar and SmartSimilar share one dedup pool per interaction
+                // type, mirroring how the movie pickers already dedup internally
+                // via watchedMovies/likedMovies. This keeps a native-Similar
+                // section and a SmartSimilar section from spotlighting the same
+                // source title in one render pass.
+                const dedupSet = isSeries ? state.renderedDiscoveryIds.watchedSeries : state.renderedDiscoveryIds.watchedMovies;
+                const likedSet = isSeries ? state.renderedDiscoveryIds.likedSeries : state.renderedDiscoveryIds.likedMovies;
+
+                let sourceItem = null;
+
                 if (config.sourceType === 'liked') {
-                    const m = await getRandomFavoriteMovie();
-                    return m ? {
-                        id: m.Id,
-                        metadata: {
-                            Title: m.Name,
-                            Movie: m.Name
-                        }
-                    } : null;
+                    sourceItem = isSeries
+                        ? await _getRandomFavoriteSeries(likedSet)
+                        : await getRandomFavoriteMovie();
+                } else if (config.sourceType === 'watched-recent') {
+                    sourceItem = isSeries
+                        ? await _getRandomRecentSeries(dedupSet)
+                        : await _getRandomRecentMovie();
+                } else {
+                    sourceItem = isSeries
+                        ? await _getRandomWatchedSeries(dedupSet)
+                        : getRandomWatchedMovie();
                 }
-                if (config.sourceType === 'watched-recent') {
-                     const m = getRandomWatchedMovie();
-                     return m ? { 
-                        id: m.Id, 
-                        metadata: { 
-                            Title: m.Name,
-                            Movie: m.Name 
-                        } 
-                    } : null;
-                }
-                return null;
+
+                if (!sourceItem) return null;
+
+                return {
+                    id: sourceItem.Id,
+                    metadata: {
+                        Title: sourceItem.Name,
+                        Movie: sourceItem.Name,
+                        Show: sourceItem.Name
+                    }
+                };
+            }
                 
             case 'Collection':
                  const selectedCollection = await getRandomCollectionForDiscovery(config.minimumItems || 3);
@@ -1998,7 +2139,7 @@
                     // Handle type-specific query options
                     const resolvedSource = instanceConfig.source;
                     if (instanceConfig.type === 'Similar') {
-                        // Similar type uses custom path
+                        // Similar type uses Jellyfin's built-in Similar API
                         instanceConfig.queries = [{
                             path: `/Items/${resolvedSource}/Similar`,
                             queryOptions: {
@@ -2006,6 +2147,31 @@
                                 Fields: 'PrimaryImageAspectRatio,DateCreated,Overview,Taglines,ProductionYear,RecursiveItemCount,ChildCount,UserData'
                             }
                         }];
+                    } else if (instanceConfig.type === 'SmartSimilar') {
+                        // SmartSimilar uses the SmartSimilar plugin (IDF-weighted scoring).
+                        // Endpoint mirrors the native Similar contract:
+                        // /SmartSimilar/Items/{id}/Similar → QueryResult<BaseItemDto>
+                        const baseLimit = instanceConfig.itemLimit || 20;
+                        const smartThreshold = getDiscoverySettings().smartWatchThreshold ?? 0;
+                        // Always over-request — the client-side watch filter below
+                        // still prunes items that were watched after the response
+                        // was cached.
+                        instanceConfig.queries = [{
+                            path: `/SmartSimilar/Items/${resolvedSource}/Similar`,
+                            queryOptions: {
+                                Limit: baseLimit * 2,
+                                Fields: 'PrimaryImageAspectRatio,DateCreated,Overview,Taglines,ProductionYear,RecursiveItemCount,ChildCount,UserData',
+                                // Server pre-filters with the same threshold the
+                                // client filter uses (0 = fully played only), so
+                                // the over-request yields mostly usable items.
+                                // The client filter still runs to catch items
+                                // watched after the response was cached.
+                                ...(smartThreshold >= 0 ? { filterWatched: true, watchedThreshold: smartThreshold } : {})
+                            }
+                        }];
+
+                        // Always refresh UserData for SmartSimilar (cached responses go stale)
+                        instanceConfig.refreshUserData = true;
                     } else {
                         // Standard query types
                         switch (instanceConfig.type) {
@@ -2061,6 +2227,48 @@
                     instanceConfig.queries = [{
                         queryOptions: queryOptions
                     }];
+                }
+
+                // Generic hideWatched support — applies to any section type
+                if (instanceConfig.hideWatched === true && !instanceConfig.postFetchFilter) {
+                    const threshold = getDiscoverySettings().smartWatchThreshold ?? 0;
+                    const finalLimit = instanceConfig.itemLimit || 20;
+
+                    // Over-request to account for items removed by filtering
+                    // (SmartSimilar already over-requests, skip for those)
+                    if (instanceConfig.type !== 'SmartSimilar' && instanceConfig.queries) {
+                        for (const q of instanceConfig.queries) {
+                            if (q.queryOptions && q.queryOptions.Limit) {
+                                q.queryOptions.Limit = q.queryOptions.Limit * 2;
+                            } else if (q.queryOptions) {
+                                q.queryOptions.Limit = finalLimit * 2;
+                            }
+                        }
+                    }
+
+                    if (threshold >= 0) {
+                        instanceConfig.postFetchFilter = (items) => {
+                            let filtered = items.filter(item => {
+                                if (!item.UserData) return true;
+                                // Fully played is always excluded — Played and
+                                // PlayedPercentage are independent signals (a
+                                // completed movie has Played=true but a reset
+                                // playback position, i.e. no percentage).
+                                if (item.UserData.Played) return false;
+                                // threshold > 0 additionally excludes partial
+                                // progress at/above the threshold (playback
+                                // position for movies, watched episodes for series).
+                                if (threshold > 0) {
+                                    return (item.UserData.PlayedPercentage || 0) < threshold;
+                                }
+                                return true;
+                            });
+                            if (filtered.length < 3) return null;
+                            return filtered.slice(0, finalLimit);
+                        };
+                    }
+
+                    instanceConfig.refreshUserData = true;
                 }
 
                 const sectionName = fillTemplate(instanceConfig.name, dynamicResult.metadata);
@@ -2284,27 +2492,73 @@
         }
     }
 
-    async function getRandomPersonFromHistory(personType, sourceType) {
-        let sourceItems = [];//window.apiHelper.getQuery(`${ApiClient.serverAddress()}/Items?IncludeItemTypes=Movie&Recursive=true&Filters=IsPlayed&Fields=UserData,People&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1&SortBy=DatePlayed&SortOrder=Descending`, { useCache: true, ttl: Config.CACHE.LONG_TTL });
+    async function getRandomPersonFromHistory(personType, sourceType, itemType) {
+        itemType = itemType || 'Movie';
+        let sourceItems = [];
         let queryUrl = null;
 
-        if (sourceType === 'watched-recent') {
-            queryUrl = `${ApiClient.serverAddress()}/Items?IncludeItemTypes=Movie&Recursive=true&Filters=IsPlayed&Fields=UserData,People&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1&SortBy=DatePlayed&SortOrder=Descending&Limit=5`;
-            /* sourceItems = localCache.get('movies') || [];
-            if (sourceItems.length === 0) return null; */
+        const recentMaxDays = getDiscoverySettings().recentMaxDays ?? 30;
+        const recentCutoff = recentMaxDays > 0 ? Date.now() - (recentMaxDays * 24 * 60 * 60 * 1000) : null;
 
-            sourceItems = sourceItems.sort((a, b) => new Date(b.UserData.LastPlayedDate) - new Date(a.UserData.LastPlayedDate)).slice(0, 5);
-        } else if (sourceType === 'watched') {
-            queryUrl = `${ApiClient.serverAddress()}/Items?IncludeItemTypes=Movie&Recursive=true&Filters=IsPlayed&Fields=UserData,People&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1&SortBy=Random&SortOrder=Descending`;
-            /* sourceItems = localCache.get('movies') || []; 
-            if (sourceItems.length === 0) return null;
-            sourceItems = sourceItems.sort(() => 0.5 - Math.random()).slice(0, 20); */
-        }
+        if (itemType === 'Series') {
+            // For Series: find watched episodes → extract SeriesIds → fetch Series with People
+            const userId = ApiClient.getCurrentUserId();
+            try {
+                const epResp = await ApiClient.getItems(userId, {
+                    IncludeItemTypes: 'Episode',
+                    Recursive: true,
+                    Filters: 'IsPlayed',
+                    Fields: 'SeriesId',
+                    SortBy: 'DatePlayed',
+                    SortOrder: 'Descending',
+                    Limit: 200
+                });
+                let episodes = epResp?.Items || [];
+                // Recently watched: only episodes played within the cutoff window
+                if (sourceType === 'watched-recent' && recentCutoff) {
+                    episodes = episodes.filter(ep => {
+                        const lastPlayed = ep.UserData?.LastPlayedDate ? new Date(ep.UserData.LastPlayedDate).getTime() : 0;
+                        return lastPlayed >= recentCutoff;
+                    });
+                }
+                const seen = new Set();
+                const seriesIds = [];
+                for (const ep of episodes) {
+                    if (ep.SeriesId && !seen.has(ep.SeriesId)) {
+                        seen.add(ep.SeriesId);
+                        seriesIds.push(ep.SeriesId);
+                    }
+                }
+                if (seriesIds.length) {
+                    const seriesResp = await ApiClient.getItems(userId, {
+                        Ids: seriesIds.join(','),
+                        Fields: 'People'
+                    });
+                    sourceItems = seriesResp?.Items || [];
+                }
+            } catch (e) {
+                ERR('Failed to get series from watched history for Person:', e);
+                return null;
+            }
+        } else {
+            if (sourceType === 'watched-recent') {
+                queryUrl = `${ApiClient.serverAddress()}/Items?IncludeItemTypes=Movie&Recursive=true&Filters=IsPlayed&Fields=UserData,People&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1&SortBy=DatePlayed&SortOrder=Descending&Limit=5`;
+            } else if (sourceType === 'watched') {
+                queryUrl = `${ApiClient.serverAddress()}/Items?IncludeItemTypes=Movie&Recursive=true&Filters=IsPlayed&Fields=UserData,People&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1&SortBy=Random&SortOrder=Descending`;
+            }
 
-        if (queryUrl) {
-            const response = await window.apiHelper.getQuery(queryUrl, { useCache: true, ttl: Config.CACHE.LONG_TTL });
-            // Only check the cached data, ignore the promise
-            sourceItems = response?.data?.Items || response?.data || [];
+            if (queryUrl) {
+                const response = await window.apiHelper.getQuery(queryUrl, { useCache: true, ttl: Config.CACHE.LONG_TTL });
+                sourceItems = response?.data?.Items || response?.data || [];
+            }
+
+            // Recently watched: enforce the cutoff window on movies too
+            if (sourceType === 'watched-recent' && recentCutoff) {
+                sourceItems = sourceItems.filter(m => {
+                    const lastPlayed = m.UserData?.LastPlayedDate ? new Date(m.UserData.LastPlayedDate).getTime() : 0;
+                    return lastPlayed >= recentCutoff;
+                });
+            }
         }
 
         if (!sourceItems.length) return null;
@@ -2411,6 +2665,224 @@
         }
     }
 
+    // ── Series Source Selection ────────────────────────────────────
+
+    /**
+     * Shared fetch: all series the user has interacted with.
+     * Computes PlayedPercentage client-side since the server's multi-item
+     * endpoint doesn't reliably return it for Series (RecursiveItemCount
+     * must be populated first, which requires EnableAllFields=true in DtoOptions,
+     * and the /Users/{id}/Items?Ids= endpoint doesn't guarantee that).
+     */
+    async function _fetchInteractedSeries() {
+        if (state._cachedInteractedSeries) return state._cachedInteractedSeries;
+        const userId = ApiClient.getCurrentUserId();
+        try {
+            // Step 1: Fetch played episodes with SeriesId
+            const playedResp = await ApiClient.getItems(userId, {
+                IncludeItemTypes: 'Episode',
+                Recursive: true,
+                Filters: 'IsPlayed',
+                Fields: 'SeriesId',
+                Limit: 500
+            });
+            // Also fetch resumable episodes
+            const resumableResp = await ApiClient.getItems(userId, {
+                IncludeItemTypes: 'Episode',
+                Recursive: true,
+                Filters: 'IsResumable',
+                Fields: 'SeriesId',
+                Limit: 50
+            });
+
+            // Build set of unique series IDs and count played episodes per series
+            const playedPerSeries = new Map(); // seriesId → count of played episodes
+            const allEps = [...(resumableResp?.Items || []), ...(playedResp?.Items || [])];
+            const seriesIdList = [];
+            for (const ep of allEps) {
+                if (!ep.SeriesId) continue;
+                if (!playedPerSeries.has(ep.SeriesId)) {
+                    playedPerSeries.set(ep.SeriesId, 0);
+                    seriesIdList.push(ep.SeriesId);
+                }
+            }
+            // Count played episodes (not resumable) per series
+            for (const ep of (playedResp?.Items || [])) {
+                if (ep.SeriesId && playedPerSeries.has(ep.SeriesId)) {
+                    playedPerSeries.set(ep.SeriesId, playedPerSeries.get(ep.SeriesId) + 1);
+                }
+            }
+
+            if (!seriesIdList.length) { state._cachedInteractedSeries = []; return []; }
+
+            // Step 2: Fetch total episode count per series
+            // Use RecursiveItemCount from Series items to get total episodes.
+            // Chunked: seriesIdList can reach hundreds of GUIDs (500 episodes'
+            // worth), and a single Ids= join at that size risks URL-length
+            // limits on some servers/proxies.
+            const items = [];
+            const IDS_CHUNK_SIZE = 100;
+            for (let i = 0; i < seriesIdList.length; i += IDS_CHUNK_SIZE) {
+                const chunk = seriesIdList.slice(i, i + IDS_CHUNK_SIZE);
+                const seriesResp = await ApiClient.getItems(userId, {
+                    Ids: chunk.join(','),
+                    Fields: 'RecursiveItemCount,UserData'
+                });
+                items.push(...(seriesResp?.Items || []));
+            }
+
+            // Step 3: Compute PlayedPercentage client-side
+            for (const series of items) {
+                const totalEps = series.RecursiveItemCount || 0;
+                const playedEps = playedPerSeries.get(series.Id) || 0;
+                const computedPct = totalEps > 0 ? Math.round((playedEps / totalEps) * 100) : 0;
+
+                // Ensure UserData exists
+                if (!series.UserData) series.UserData = {};
+                // Use server PlayedPercentage if available, otherwise use computed
+                if (series.UserData.PlayedPercentage === undefined || series.UserData.PlayedPercentage === null) {
+                    series.UserData.PlayedPercentage = computedPct;
+                }
+                // Also ensure Played flag is set
+                if (series.UserData.Played === undefined) {
+                    series.UserData.Played = computedPct >= 100;
+                }
+            }
+
+            state._cachedInteractedSeries = items;
+            return state._cachedInteractedSeries;
+        } catch (e) {
+            ERR('Failed to fetch interacted series:', e);
+            return [];
+        }
+    }
+
+    /**
+     * Fully completed series only (Played=true on the Series).
+     */
+    async function _fetchWatchedSeries() {
+        if (state.cachedWatchedSeries) return state.cachedWatchedSeries;
+        const all = await _fetchInteractedSeries();
+        state.cachedWatchedSeries = all.filter(s => s.UserData && s.UserData.Played === true);
+        return state.cachedWatchedSeries;
+    }
+
+    /**
+     * In-progress series only — some episodes watched but NOT fully completed.
+     * Filtered by recentMinPercent and recentMaxDays from discovery settings.
+     */
+    async function _fetchRecentSeries() {
+        if (state.cachedRecentSeries) return state.cachedRecentSeries;
+        const all = await _fetchInteractedSeries();
+        const settings = getDiscoverySettings();
+        const minPercent = settings.recentMinPercent ?? 35;
+        const maxDays = settings.recentMaxDays ?? 30;
+        const cutoffDate = maxDays > 0 ? new Date(Date.now() - maxDays * 24 * 60 * 60 * 1000) : null;
+
+        const inProgress = all.filter(s => !s.UserData || s.UserData.Played !== true);
+
+        state.cachedRecentSeries = inProgress.filter(s => {
+            const pct = s.UserData?.PlayedPercentage || 0;
+            if (pct < minPercent) return false;
+            if (cutoffDate && s.UserData?.LastPlayedDate) {
+                const lastPlayed = new Date(s.UserData.LastPlayedDate);
+                if (lastPlayed < cutoffDate) return false;
+            }
+            return true;
+        });
+        return state.cachedRecentSeries;
+    }
+
+    /**
+     * Recently watched movie: played, last played within recentMaxDays.
+     * recentMaxDays <= 0 disables the time limit. Shares the watchedMovies
+     * dedup pool with the other movie pickers.
+     */
+    async function _getRandomRecentMovie() {
+        if (!state.cachedRecentMovies) {
+            const userId = ApiClient.getCurrentUserId();
+            try {
+                const response = await ApiClient.getItems(userId, {
+                    IncludeItemTypes: 'Movie',
+                    Recursive: true,
+                    Filters: 'IsPlayed',
+                    SortBy: 'DatePlayed',
+                    SortOrder: 'Descending',
+                    Limit: 50
+                });
+                state.cachedRecentMovies = response?.Items || [];
+            } catch (e) {
+                ERR('Failed to fetch recently watched movies:', e);
+                state.cachedRecentMovies = [];
+            }
+        }
+
+        const maxDays = getDiscoverySettings().recentMaxDays ?? 30;
+        const cutoff = maxDays > 0 ? Date.now() - (maxDays * 24 * 60 * 60 * 1000) : null;
+
+        const candidates = state.cachedRecentMovies.filter(m => {
+            if (state.renderedDiscoveryIds.watchedMovies.has(m.Id)) return false;
+            if (!cutoff) return true;
+            const lastPlayed = m.UserData?.LastPlayedDate ? new Date(m.UserData.LastPlayedDate).getTime() : 0;
+            return lastPlayed >= cutoff;
+        });
+
+        if (!candidates.length) return null;
+        const selected = candidates[Math.floor(Math.random() * Math.min(candidates.length, 10))];
+        state.renderedDiscoveryIds.watchedMovies.add(selected.Id);
+        return selected;
+    }
+
+    async function _getRandomWatchedSeries(dedupSet) {
+        const series = await _fetchWatchedSeries();
+        const valid = series.filter(s => !dedupSet.has(s.Id));
+        if (!valid.length) return null;
+        const selected = valid[Math.floor(Math.random() * Math.min(valid.length, 10))];
+        dedupSet.add(selected.Id);
+        return selected;
+    }
+
+    async function _getRandomRecentSeries(dedupSet) {
+        const series = await _fetchRecentSeries();
+        const valid = series.filter(s => !dedupSet.has(s.Id));
+        if (!valid.length) return null;
+        const selected = valid[Math.floor(Math.random() * Math.min(valid.length, 10))];
+        dedupSet.add(selected.Id);
+        return selected;
+    }
+
+    async function _getRandomFavoriteSeries(dedupSet) {
+        if (state.cachedFavoriteSeries) {
+            const valid = state.cachedFavoriteSeries.filter(s => !dedupSet.has(s.Id));
+            if (valid.length > 0) {
+                const selected = valid[Math.floor(Math.random() * valid.length)];
+                dedupSet.add(selected.Id);
+                return selected;
+            }
+        }
+        const userId = ApiClient.getCurrentUserId();
+        try {
+            const response = await ApiClient.getItems(userId, {
+                IncludeItemTypes: 'Series',
+                Filters: 'IsFavorite',
+                Limit: 50,
+                SortBy: 'Random',
+                Recursive: true
+            });
+            const items = response.Items || [];
+            if (!items.length) return null;
+            state.cachedFavoriteSeries = items;
+            const valid = items.filter(s => !dedupSet.has(s.Id));
+            if (!valid.length) return null;
+            const selected = valid[0];
+            dedupSet.add(selected.Id);
+            return selected;
+        } catch (e) {
+            ERR('Failed to get favorite series:', e);
+            return null;
+        }
+    }
+
     async function getPopularTVNetworks() {
         if (!StudiosCache) return [];
 
@@ -2423,6 +2895,96 @@
     window.homeScreen3 = { init: enhanceHomeScreen };
 
     //enhanceHomeScreen();
+
+    // True when the home tab is the active view. On the Android WebView the
+    // restored hash after a warm reopen is often bare (#/, #/home, or
+    // #/home.html with the tab in a query param), so match generously rather
+    // than relying on a parsed view-name segment.
+    function isHomeViewActive() {
+        const hash = window.location.hash || '';
+        const path = hash.split('?')[0];
+        const onHomePath = path === '#' || path === '#/' || /#\/home(\.html)?$/.test(path) || path === '#/home';
+        if (!onHomePath) return false;
+        const hashParams = hash.includes('?') ? hash.split('?')[1] : '';
+        const tab = new URLSearchParams(hashParams).get('tab');
+        // Home tab is index 0 (or unspecified).
+        return !tab || parseInt(tab, 10) === 0;
+    }
+
+    // True when KefinTweaks sections are actually present in the DOM right now.
+    // Rendered sections carry data-section-id (see the render observer). This is
+    // the authoritative "is the home screen actually built" check — distinct
+    // from the dataset.kefinHomeScreen flag, which only records that init ran
+    // once and persists across a warm WebView reopen even after the restored
+    // DOM has lost the sections.
+    function kefinSectionsPresent(container) {
+        if (!container) return false;
+        // A completed build that legitimately produced zero sections (nothing
+        // enabled) marks itself; treat that as present so warm reopens don't
+        // re-run the whole build just to render nothing again.
+        if (container.dataset.kefinRenderedEmpty === 'true') return true;
+        if (container.querySelector('[data-section-id]')) return true;
+        // Discovery/home sections may live in a sibling homeSectionsContainer.
+        const scope = container.closest('#homeTab') || document;
+        return !!scope.querySelector('.homeSectionsContainer [data-section-id]');
+    }
+
+    // Media-bar layout sync, exposed by setupMediaBarLayoutSync() below. The home
+    // can be rebuilt on back-navigation without the bar/header resizing, so the
+    // ResizeObserver alone won't re-fire; we re-run the sync after each enhance,
+    // staggered to catch progressive section rendering.
+    let requestMediaBarSync = null;
+    function scheduleMediaBarSync() {
+        if (!requestMediaBarSync) return;
+        requestMediaBarSync();
+        [150, 500, 1200].forEach(d => setTimeout(() => { if (requestMediaBarSync) requestMediaBarSync(); }, d));
+    }
+
+    // Kick off enhancement, retrying until the home DOM is actually present.
+    // The onViewPage replay only fires once at registration and only when
+    // getCurrentView() resolves a matching segment; on a warm WebView reopen
+    // the home view is often already shown with a bare hash and the sections
+    // container not yet restored, so that one-shot call is missed and the home
+    // screen never builds (only the native media bar shows). This bounded
+    // poller closes that gap without depending on the view event.
+    function tryEnhanceHomeScreen(attempt = 0) {
+        const MAX_ATTEMPTS = 40; // ~10s at 250ms
+        const container = document.querySelector('.homePage:not(.hide) #homeTab .sections');
+        if (container) {
+            // Only skip when sections are genuinely on screen. On a warm reopen
+            // the init flag persists but the sections are gone; clear the stale
+            // flag so enhanceHomeScreen (which also guards on it) will re-run.
+            if (container.dataset.kefinHomeScreen) {
+                if (kefinSectionsPresent(container)) return; // already built and intact
+                delete container.dataset.kefinHomeScreen;
+                LOG('Stale kefin init flag with no rendered sections; re-enhancing after warm reopen');
+            }
+            try {
+                manageBodyClasses();
+                enhanceHomeScreen();
+                scheduleMediaBarSync();
+            } catch (err) {
+                ERR('Home screen init failed:', err);
+            }
+            return;
+        }
+        if (!isHomeViewActive()) {
+            // An empty hash means Jellyfin's router hasn't produced a route
+            // yet (early cached-load execution). That's undetermined, not
+            // "another page" — keep waiting instead of exiting, otherwise this
+            // poller dies before the app has even decided where it's going.
+            const routerUndetermined = !(window.location.hash || '');
+            if (!routerUndetermined) return; // genuinely on another page; view event handles it
+            if (attempt >= MAX_ATTEMPTS) return;
+            setTimeout(() => tryEnhanceHomeScreen(attempt + 1), 250);
+            return;
+        }
+        if (attempt >= MAX_ATTEMPTS) {
+            LOG('Home sections container did not appear; giving up warm-reopen retry');
+            return;
+        }
+        setTimeout(() => tryEnhanceHomeScreen(attempt + 1), 250);
+    }
 
     if (window.KefinTweaksUtils && typeof window.KefinTweaksUtils.onViewPage === 'function') {
         window.KefinTweaksUtils.onViewPage((view, element, hash) => {
@@ -2440,13 +3002,138 @@
             try { 
                 manageBodyClasses();
                 enhanceHomeScreen();
+                scheduleMediaBarSync();
             } catch (err) { ERR('Home screen page change handler failed:', err); }
         }, { pages: ['home', 'home.html'] });
     }
 
-    /* if (window.KefinTweaksUtils && typeof window.KefinTweaksUtils.onViewPage === 'function') {
-        window.KefinTweaksUtils.onViewPage(manageBodyClasses, { pages: [] });
-    } */
+    // ===== Media Bar plugin layout sync =====
+    // The Media Bar plugin appends #slides-container to <body> and leaves its
+    // placement to CSS. Two stylesheets fight over it: the plugin's stock
+    // sheet (position: relative) and theme add-ons like ElegantFin's
+    // (position: absolute; top: calc(var(--appBarHeight) * N + 1.25em)) —
+    // same specificity, so document order decides, and the add-on's
+    // breakpoints hard-code assumptions about how many header rows exist.
+    // When either guess is wrong the bar sits partially behind the header
+    // while .homeSectionsContainer keeps its fixed offset, leaving a dead gap.
+    // Measure reality instead: pin the bar directly below the actual header,
+    // then pin the visible sections container directly below the actual bar.
+    let mediaBarSyncInstalled = false;
+    function setupMediaBarLayoutSync() {
+        if (mediaBarSyncInstalled) return;
+        mediaBarSyncInstalled = true;
+
+        let rafPending = false;
+        let barResizeObserver = null;
+
+        const sync = () => {
+            if (rafPending) return;
+            rafPending = true;
+            requestAnimationFrame(() => {
+                rafPending = false;
+                const bar = document.getElementById('slides-container');
+                if (!bar || bar.offsetParent === null) return; // absent or display:none
+
+                const containers = [...document.querySelectorAll('.homePage:not(.hide) #homeTab .homeSectionsContainer')]
+                    .filter(el => el.offsetParent !== null);
+
+                // Measure the CSS-intended layout: drop any override we
+                // applied on a previous pass first, so we always correct the
+                // stylesheet's placement rather than compounding our own.
+                const clearBarOverride = el => {
+                    el.style.removeProperty('top');
+                    el.style.removeProperty('position');
+                };
+                const clearContainerOverride = el => {
+                    el.style.removeProperty('margin-top');
+                    // clean up overrides written by older versions of this sync
+                    el.style.removeProperty('top');
+                    el.style.removeProperty('position');
+                };
+                clearBarOverride(bar);
+                containers.forEach(clearContainerOverride);
+
+                const barStyle = getComputedStyle(bar);
+
+                // Stock plugin layout (position: relative): a full-bleed hero
+                // where the sections intentionally overlay the bar's lower
+                // third and the header overlays its top. That arrangement is
+                // by design — leave it entirely alone.
+                if (barStyle.position !== 'absolute') return;
+
+
+                // Themed layout (e.g. ElegantFin's add-on): a contained bar
+                // meant to clear the actual header element's position.
+                const header = document.querySelector('.skinHeader');
+                if (!header) return;
+
+                const headerRect = header.getBoundingClientRect();
+
+                // Mobile: headroom retracts the header with translateY(-100%)
+                // while scrolling, and mobile browsers fire resize (URL bar
+                // collapse) mid-scroll — so this sync can run while the header
+                // is translated off-screen. A rect taken then reports
+                // bottom ≈ 0 and pins the bar underneath the header. The header
+                // is fixed to the viewport top, so its layout bottom is just
+                // its height; offsetHeight ignores transforms.
+                const headerBottom = Math.max(headerRect.bottom, header.offsetHeight);
+                if (headerBottom <= 0) return; // not laid out yet (cold start); staggered re-syncs will retry
+
+                // Pin the bar directly below the bottom edge of the header
+                bar.style.top = `${headerBottom}px`;
+                bar.style.position = 'absolute';
+
+                // With the bar corrected, measure it to push the sections down.
+                const barRect = bar.getBoundingClientRect();
+
+                // Push the sections below the bar by ADDING TOP MARGIN, keeping
+                // them in normal flow. The previous approach set them to
+                // position:absolute with no width/left/right, which dropped those
+                // to `auto` and collapsed the container width — that is what
+                // scaled the cards down on desktop and broke the mobile layout
+                // (content-driven width + static-position left padding). Margins
+                // leave width/left resolution untouched. Measure every natural
+                // top first (margins already cleared above) so applying one
+                // container's margin can't skew another's measurement.
+                const naturalTops = containers.map(c => c.getBoundingClientRect().top);
+                containers.forEach((container, i) => {
+                    const delta = (barRect.bottom + 20) - naturalTops[i];
+                    container.style.marginTop = delta > 0 ? `${delta}px` : '0px';
+                });
+            });
+        };
+
+        // Use ResizeObserver to detect layout shifts dynamically
+        if (typeof ResizeObserver !== 'undefined') {
+            barResizeObserver = new ResizeObserver(() => sync());
+            
+            const observeElements = () => {
+                const header = document.querySelector('.skinHeader');
+                const bar = document.getElementById('slides-container');
+                
+                if (header) barResizeObserver.observe(header);
+                if (bar) barResizeObserver.observe(bar);
+            };
+            
+            observeElements();
+            // Try again shortly in case the DOM elements are delayed
+            setTimeout(observeElements, 1000);
+        }
+
+        // Fallback for standard window resizing
+        window.addEventListener('resize', sync, { passive: true });
+        
+        // Expose for re-triggering when the home is (re)built (e.g. back nav).
+        requestMediaBarSync = sync;
+
+        // Run initial synchronization
+        sync();
+    }
+
+    // Trigger media bar layout synchronization
+    setupMediaBarLayoutSync();
+
+    // Start the bounded retry loop to enhance the home screen
+    tryEnhanceHomeScreen();
 
 })();
-

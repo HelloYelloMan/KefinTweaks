@@ -545,6 +545,34 @@
     }
 
     /**
+     * Drop saved groups that are stale copies of removed/renamed default groups.
+     * The HOME/SEASONAL/DISCOVERY categories are default-managed: users cannot
+     * create groups in them (user-created groups live in CUSTOM_SECTION_GROUPS),
+     * so a saved group whose id no longer exists in the defaults can only be a
+     * leftover from an older defaults file (e.g. the removed SmartSuggest
+     * groups). Without this, mergeGroupDefaults resurrects them as "custom"
+     * groups, duplicating sections in the config UI — and because the stale
+     * copies can share section ids with their replacements, section toggles
+     * end up updating one copy while the UI reflects the other.
+     * Groups without an id are kept for backward compatibility (pre-id saves
+     * are matched by name/_originalName in mergeGroupDefaults).
+     * @param {Array} defaultGroups - Default groups for the category
+     * @param {Array} savedGroups - Saved/override groups for the category
+     * @returns {Array} Saved groups with stale default leftovers removed
+     */
+    function pruneStaleDefaultGroups(defaultGroups, savedGroups) {
+        if (!Array.isArray(savedGroups) || savedGroups.length === 0) {
+            return savedGroups || [];
+        }
+        const defaultIds = new Set((defaultGroups || []).map(g => g.id).filter(Boolean));
+        const pruned = savedGroups.filter(g => !g.id || defaultIds.has(g.id));
+        if (pruned.length !== savedGroups.length) {
+            LOG(`Pruned ${savedGroups.length - pruned.length} stale default group(s) from saved config`);
+        }
+        return pruned;
+    }
+
+    /**
      * Load configuration from JS Injector and merge with defaults
      */
     function loadConfig() {
@@ -562,17 +590,17 @@
             const mergedConfig = {
                 HOME_SECTION_GROUPS: mergeGroupDefaults(
                     defaults.HOME_SECTION_GROUPS || [],
-                    existingConfig.HOME_SECTION_GROUPS || [],
+                    pruneStaleDefaultGroups(defaults.HOME_SECTION_GROUPS, existingConfig.HOME_SECTION_GROUPS),
                     'home'
                 ),
                 SEASONAL_SECTION_GROUPS: mergeGroupDefaults(
                     defaults.SEASONAL_SECTION_GROUPS || [],
-                    existingConfig.SEASONAL_SECTION_GROUPS || [],
+                    pruneStaleDefaultGroups(defaults.SEASONAL_SECTION_GROUPS, existingConfig.SEASONAL_SECTION_GROUPS),
                     'seasonal'
                 ),
                 DISCOVERY_SECTION_GROUPS: mergeGroupDefaults(
                     defaults.DISCOVERY_SECTION_GROUPS || [],
-                    existingConfig.DISCOVERY_SECTION_GROUPS || [],
+                    pruneStaleDefaultGroups(defaults.DISCOVERY_SECTION_GROUPS, existingConfig.DISCOVERY_SECTION_GROUPS),
                     'discovery'
                 ),
                 CUSTOM_SECTION_GROUPS: mergeGroupDefaults(
@@ -1133,19 +1161,23 @@
             const savedHomeScreenConfig = savedConfig.homeScreenConfig || {};
             
             // Create merged config
+            const defaults = window.KefinHomeConfig2 || {};
             const mergedHomeScreenConfig = {
-                // Merge default groups (HOME, SEASONAL, DISCOVERY) using deep merge
+                // Merge default groups (HOME, SEASONAL, DISCOVERY) using deep merge.
+                // Both sides are pruned of stale default leftovers so removed
+                // default groups (e.g. the old SmartSuggest groups) don't get
+                // "preserved" back into the saved config forever.
                 HOME_SECTION_GROUPS: mergeHomeScreenGroupConfig(
-                    config.HOME_SECTION_GROUPS || [],
-                    savedHomeScreenConfig.HOME_SECTION_GROUPS || []
+                    pruneStaleDefaultGroups(defaults.HOME_SECTION_GROUPS, config.HOME_SECTION_GROUPS),
+                    pruneStaleDefaultGroups(defaults.HOME_SECTION_GROUPS, savedHomeScreenConfig.HOME_SECTION_GROUPS)
                 ),
                 SEASONAL_SECTION_GROUPS: mergeHomeScreenGroupConfig(
-                    config.SEASONAL_SECTION_GROUPS || [],
-                    savedHomeScreenConfig.SEASONAL_SECTION_GROUPS || []
+                    pruneStaleDefaultGroups(defaults.SEASONAL_SECTION_GROUPS, config.SEASONAL_SECTION_GROUPS),
+                    pruneStaleDefaultGroups(defaults.SEASONAL_SECTION_GROUPS, savedHomeScreenConfig.SEASONAL_SECTION_GROUPS)
                 ),
                 DISCOVERY_SECTION_GROUPS: mergeHomeScreenGroupConfig(
-                    config.DISCOVERY_SECTION_GROUPS || [],
-                    savedHomeScreenConfig.DISCOVERY_SECTION_GROUPS || []
+                    pruneStaleDefaultGroups(defaults.DISCOVERY_SECTION_GROUPS, config.DISCOVERY_SECTION_GROUPS),
+                    pruneStaleDefaultGroups(defaults.DISCOVERY_SECTION_GROUPS, savedHomeScreenConfig.DISCOVERY_SECTION_GROUPS)
                 ),
                 // Custom groups are replaced entirely (UI is source of truth)
                 CUSTOM_SECTION_GROUPS: config.CUSTOM_SECTION_GROUPS || [],
@@ -1952,6 +1984,9 @@
                 ${buildSelect('discovery-defaultSortOrder', SORT_ORDERS, discovery.defaultSortOrder || 'Random', 'Default Sort Order')}
                 ${buildSelect('discovery-defaultCardFormat', CARD_FORMATS, discovery.defaultCardFormat || 'Poster', 'Default Card Format')}
                 ${buildTextInput('discovery-spotlightDiscoveryChance', discovery.spotlightDiscoveryChance || 0.5, 'Spotlight Discovery Chance (0-1)', 'number')}
+                ${buildTextInput('discovery-smartWatchThreshold', discovery.smartWatchThreshold ?? 0, 'Hide Watched Threshold % (-1 off, 0 played only)', 'number')}
+                ${buildTextInput('discovery-recentMinPercent', discovery.recentMinPercent ?? 35, 'Recently Watched: Min % Watched', 'number')}
+                ${buildTextInput('discovery-recentMaxDays', discovery.recentMaxDays ?? 30, 'Recently Watched: Max Days Since Played', 'number')}
             </div>
         `;
     }
@@ -2322,7 +2357,20 @@
                     </div>
                 `;
             }
+        }
 
+        // Weighted random ordering: available for every section type. Perturbs
+        // the section's sorted order at render time (top-biased), reshuffling
+        // on each render of the cached payload.
+        additionalFieldsHTML += `
+            <div style="border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 0.75em; margin-bottom: 1em;">
+                <div class="listItemBodyText" style="font-weight: 500; margin-bottom: 0.75em;">Ordering</div>
+                ${buildCheckbox('section-weightedRandom', section.weightedRandom === true, 'Weighted Random Order')}
+                ${buildTextInput('section-weightedRandomStrength', section.weightedRandomStrength !== undefined ? section.weightedRandomStrength : '', 'Weighted Random Strength (higher = top stays put, default 12)', 'number')}
+            </div>
+        `;
+
+        if (isDefaultSection) {
             if (defaultFields.includeSortOrder) {
                 const sortBy = section.queries?.[0]?.queryOptions?.SortBy || 'Random';
                 const sortOrder = section.queries?.[0]?.queryOptions?.SortOrder || 'Ascending';
@@ -2905,6 +2953,8 @@
                 ${buildTextInput('discovery-itemLimit', section.itemLimit || 20, 'Item Limit', 'number')}
                 ${buildSelect('discovery-sortOrder', SORT_ORDERS, section.sortOrder || 'Random', 'Sort Order')}
                 ${section.sortOrderDirection ? buildSelect('discovery-sortOrderDirection', SORT_ORDER_DIRECTIONS, section.sortOrderDirection || 'Ascending', 'Sort Order Direction') : ''}
+                ${buildCheckbox('discovery-weightedRandom', section.weightedRandom === true, 'Weighted Random Order')}
+                ${buildTextInput('discovery-weightedRandomStrength', section.weightedRandomStrength !== undefined ? section.weightedRandomStrength : '', 'Weighted Random Strength (higher = top stays put, default 12)', 'number')}
                 ${buildSelect('discovery-cardFormat', CARD_FORMATS, section.cardFormat || 'Poster', 'Card Format')}
                 ${buildTextInput('discovery-ttl', section.ttl !== undefined ? section.ttl : '', 'TTL (ms)', 'number')}
                 ${buildSelect('discovery-renderMode', RENDER_MODE_OPTIONS, section.renderMode || 'Normal', 'Render Mode')}
@@ -2936,6 +2986,11 @@
                 itemLimit: parseInt(dialog.querySelector('#discovery-itemLimit')?.value || '20', 10),
                 sortOrder: dialog.querySelector('#discovery-sortOrder')?.value || 'Random',
                 sortOrderDirection: dialog.querySelector('#discovery-sortOrderDirection')?.value || undefined,
+                weightedRandom: dialog.querySelector('#discovery-weightedRandom')?.checked === true,
+                weightedRandomStrength: (() => {
+                    const v = dialog.querySelector('#discovery-weightedRandomStrength')?.value;
+                    return v ? parseFloat(v) : undefined;
+                })(),
                 ttl: dialog.querySelector('#discovery-ttl')?.value ? parseInt(dialog.querySelector('#discovery-ttl').value, 10) : undefined
             };
             
@@ -3335,6 +3390,14 @@
 
         section.flattenSeries = dialog.querySelector('#section-flattenSeries')?.checked === true;
 
+        section.weightedRandom = dialog.querySelector('#section-weightedRandom')?.checked === true;
+        const weightedRandomStrength = dialog.querySelector('#section-weightedRandomStrength')?.value;
+        if (weightedRandomStrength !== undefined && weightedRandomStrength !== '') {
+            section.weightedRandomStrength = parseFloat(weightedRandomStrength);
+        } else {
+            delete section.weightedRandomStrength;
+        }
+
         const minimumItems = dialog.querySelector('#section-minimumItems')?.value;
         if (minimumItems) section.minimumItems = parseInt(minimumItems, 10);
 
@@ -3388,84 +3451,122 @@
     }
 
     /**
-     * Collect all settings from form
+     * Collect all settings from form.
+     *
+     * IMPORTANT: The Global Settings tab renders only the active sub-tab's
+     * panel into #global-settings-content, so most inputs are absent from the
+     * DOM at any given time. Each settings block is therefore collected ONLY
+     * when its panel is actually rendered (detected via a sentinel element);
+     * otherwise the optional-chained reads would silently reset every
+     * off-screen setting to its fallback (e.g. `?.checked !== false` resolves
+     * to true for a missing element, `?.checked === true` to false).
+     * Collected blocks are also spread over the existing config values so
+     * settings without UI inputs survive a save.
      */
     function collectGlobalSettings() {
         const dialog = document.querySelector(`.dialogContainer[data-modal-id="${MAIN_MODAL_ID}"]`);
         if (!dialog) return {};
 
-        const discovery = {
-            enabled: dialog.querySelector('#discovery-enabled')?.checked !== false,
-            infiniteScroll: dialog.querySelector('#discovery-infiniteScroll')?.checked !== false,
-            minPeopleAppearances: parseInt(dialog.querySelector('#discovery-minPeopleAppearances')?.value || '10', 10),
-            minGenreMovieCount: parseInt(dialog.querySelector('#discovery-minGenreMovieCount')?.value || '50', 10),
-            defaultItemLimit: parseInt(dialog.querySelector('#discovery-defaultItemLimit')?.value || '16', 10),
-            defaultSortOrder: dialog.querySelector('#discovery-defaultSortOrder')?.value || 'Random',
-            defaultCardFormat: dialog.querySelector('#discovery-defaultCardFormat')?.value || 'Poster',
-            spotlightDiscoveryChance: parseFloat(dialog.querySelector('#discovery-spotlightDiscoveryChance')?.value || '0.5'),
-            renderSpotlightAboveMatching: dialog.querySelector('#discovery-renderSpotlightAboveMatching')?.checked === true,
-            randomizeOrder: dialog.querySelector('#discovery-randomizeOrder')?.checked === true,
-            fadeInSections: dialog.querySelector('#discovery-fadeInSections')?.checked === true
-        };
+        const collected = {};
 
-        const seasonal = {
-            enabled: dialog.querySelector('#seasonal-enabled')?.checked !== false,
-            enableSeasonalAnimations: dialog.querySelector('#seasonal-enableSeasonalAnimations')?.checked !== false,
-            enableSeasonalBackground: dialog.querySelector('#seasonal-enableSeasonalBackground')?.checked !== false,
-            seasonToggles: (window.KefinHomeConfig2?.SEASONAL_THEME_SETTINGS?.seasonToggles || []).map(season => ({
-                ...season,
-                enabled: dialog.querySelector(`#seasonal-${season.id}`)?.checked === true
-            }))
-        };
+        // ---- Discovery panel ----
+        if (dialog.querySelector('#discovery-enabled')) {
+            collected.DISCOVERY_SETTINGS = {
+                ...(currentConfig?.DISCOVERY_SETTINGS || {}),
+                enabled: dialog.querySelector('#discovery-enabled')?.checked !== false,
+                infiniteScroll: dialog.querySelector('#discovery-infiniteScroll')?.checked !== false,
+                minPeopleAppearances: parseInt(dialog.querySelector('#discovery-minPeopleAppearances')?.value || '10', 10),
+                minGenreMovieCount: parseInt(dialog.querySelector('#discovery-minGenreMovieCount')?.value || '50', 10),
+                defaultItemLimit: parseInt(dialog.querySelector('#discovery-defaultItemLimit')?.value || '16', 10),
+                defaultSortOrder: dialog.querySelector('#discovery-defaultSortOrder')?.value || 'Random',
+                defaultCardFormat: dialog.querySelector('#discovery-defaultCardFormat')?.value || 'Poster',
+                spotlightDiscoveryChance: parseFloat(dialog.querySelector('#discovery-spotlightDiscoveryChance')?.value || '0.5'),
+                renderSpotlightAboveMatching: dialog.querySelector('#discovery-renderSpotlightAboveMatching')?.checked === true,
+                randomizeOrder: dialog.querySelector('#discovery-randomizeOrder')?.checked === true,
+                fadeInSections: dialog.querySelector('#discovery-fadeInSections')?.checked === true,
+                smartWatchThreshold: parseInt(dialog.querySelector('#discovery-smartWatchThreshold')?.value ?? (currentConfig?.DISCOVERY_SETTINGS?.smartWatchThreshold ?? 0), 10),
+                recentMinPercent: parseInt(dialog.querySelector('#discovery-recentMinPercent')?.value ?? (currentConfig?.DISCOVERY_SETTINGS?.recentMinPercent ?? 35), 10),
+                recentMaxDays: parseInt(dialog.querySelector('#discovery-recentMaxDays')?.value ?? (currentConfig?.DISCOVERY_SETTINGS?.recentMaxDays ?? 30), 10)
+            };
+        }
 
-        const cache = {
-            DEFAULT_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-DEFAULT_TTL')?.value || '30', 10)),
-            VERY_SHORT_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-VERY_SHORT_TTL')?.value || '1', 10)),
-            SHORT_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-SHORT_TTL')?.value || '5', 10)),
-            LONG_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-LONG_TTL')?.value || '1440', 10)),
-            STATIC_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-STATIC_TTL')?.value || '10080', 10)),
-            DISCOVERY_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-DISCOVERY_TTL')?.value || '60', 10)),
-            FORCE_REFRESH_TTL: 0
-        };
+        // ---- General panel (seasonal, home, merge next up) ----
+        if (dialog.querySelector('#seasonal-enableSeasonalAnimations')) {
+            const existingSeasonal = currentConfig?.SEASONAL_THEME_SETTINGS || {};
+            collected.SEASONAL_THEME_SETTINGS = {
+                ...existingSeasonal,
+                // #seasonal-enabled and per-season toggles have no UI inputs;
+                // only read them from the DOM when they actually exist,
+                // otherwise keep the stored values.
+                enabled: dialog.querySelector('#seasonal-enabled')
+                    ? dialog.querySelector('#seasonal-enabled').checked !== false
+                    : (existingSeasonal.enabled !== false),
+                enableSeasonalAnimations: dialog.querySelector('#seasonal-enableSeasonalAnimations')?.checked !== false,
+                enableSeasonalBackground: dialog.querySelector('#seasonal-enableSeasonalBackground')?.checked !== false,
+                seasonToggles: (existingSeasonal.seasonToggles || window.KefinHomeConfig2?.SEASONAL_THEME_SETTINGS?.seasonToggles || []).map(season => {
+                    const toggle = dialog.querySelector(`#seasonal-${season.id}`);
+                    return {
+                        ...season,
+                        enabled: toggle ? toggle.checked === true : season.enabled
+                    };
+                })
+            };
+        }
 
-        const slideStateVal = dialog.querySelector('#spotlight-slideState')?.value || 'dots';
-        const tileCountVal = parseInt(dialog.querySelector('#spotlight-tileCount')?.value || '1', 10);
-        const spotlight = {
-            spotlightLayout: dialog.querySelector('#spotlight-spotlightLayout')?.value || 'Border',
-            spotlightSize: dialog.querySelector('#spotlight-spotlightSize')?.value || 'normal',
-            tileCount: Math.max(1, Math.min(3, tileCountVal)),
-            autoPlay: dialog.querySelector('#spotlight-autoPlay')?.checked !== false,
-            interval: parseInt(dialog.querySelector('#spotlight-interval')?.value || '10000', 10),
-            showSlideState: slideStateVal !== 'none',
-            showDots: slideStateVal === 'dots',
-            showNavButtons: dialog.querySelector('#spotlight-showNavButtons')?.checked !== false,
-            showClearArt: dialog.querySelector('#spotlight-showClearArt')?.checked === true,
-            panAnimation: dialog.querySelector('#spotlight-panAnimation')?.checked !== false,
-            entranceAnimationFirst: dialog.querySelector('#spotlight-entranceAnimationFirst')?.value || 'fadeIn',
-            entranceAnimationSecond: dialog.querySelector('#spotlight-entranceAnimationSecond')?.value || 'fadeIn',
-            entranceAnimationThird: dialog.querySelector('#spotlight-entranceAnimationThird')?.value || 'fadeIn',
-            slideAnimationFirst: dialog.querySelector('#spotlight-slideAnimationFirst')?.value || 'kenBurnsZoomIn',
-            slideAnimationSecond: dialog.querySelector('#spotlight-slideAnimationSecond')?.value || 'kenBurnsZoomIn',
-            slideAnimationThird: dialog.querySelector('#spotlight-slideAnimationThird')?.value || 'kenBurnsZoomIn',
-            cycleBackdrops: dialog.querySelector('#spotlight-cycleBackdrops')?.checked === true,
-            cycleBackdropsTime: parseInt(dialog.querySelector('#spotlight-cycleBackdropsTime')?.value || '10000', 10)
-        };
+        if (dialog.querySelector('#home-fadeInSections')) {
+            collected.HOME_SETTINGS = {
+                ...(currentConfig?.HOME_SETTINGS || {}),
+                fadeInSections: dialog.querySelector('#home-fadeInSections')?.checked === true,
+                ensureThumbsForPopularTVNetworks: dialog.querySelector('#home-ensureThumbsForPopularTVNetworks')?.checked === true
+            };
+        }
 
-        const homeSettings = {
-            fadeInSections: dialog.querySelector('#home-fadeInSections')?.checked === true,
-            ensureThumbsForPopularTVNetworks: dialog.querySelector('#home-ensureThumbsForPopularTVNetworks')?.checked === true
-        };
+        if (dialog.querySelector('#merge-next-up')) {
+            collected.MERGE_NEXT_UP = dialog.querySelector('#merge-next-up')?.checked === true;
+        }
 
-        const mergeNextUp = dialog.querySelector('#merge-next-up')?.checked === true;
+        // ---- Cache panel ----
+        if (dialog.querySelector('#cache-DEFAULT_TTL')) {
+            collected.CACHE = {
+                ...(currentConfig?.CACHE || {}),
+                DEFAULT_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-DEFAULT_TTL')?.value || '30', 10)),
+                VERY_SHORT_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-VERY_SHORT_TTL')?.value || '1', 10)),
+                SHORT_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-SHORT_TTL')?.value || '5', 10)),
+                LONG_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-LONG_TTL')?.value || '1440', 10)),
+                STATIC_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-STATIC_TTL')?.value || '10080', 10)),
+                DISCOVERY_TTL: minutesToMs(parseInt(dialog.querySelector('#cache-DISCOVERY_TTL')?.value || '60', 10)),
+                FORCE_REFRESH_TTL: 0
+            };
+        }
 
-        return {
-            DISCOVERY_SETTINGS: discovery,
-            SEASONAL_THEME_SETTINGS: seasonal,
-            CACHE: cache,
-            SPOTLIGHT_SETTINGS: spotlight,
-            HOME_SETTINGS: homeSettings,
-            MERGE_NEXT_UP: mergeNextUp
-        };
+        // ---- Spotlight panel ----
+        if (dialog.querySelector('#spotlight-spotlightLayout')) {
+            const slideStateVal = dialog.querySelector('#spotlight-slideState')?.value || 'dots';
+            const tileCountVal = parseInt(dialog.querySelector('#spotlight-tileCount')?.value || '1', 10);
+            collected.SPOTLIGHT_SETTINGS = {
+                ...(currentConfig?.SPOTLIGHT_SETTINGS || {}),
+                spotlightLayout: dialog.querySelector('#spotlight-spotlightLayout')?.value || 'Border',
+                spotlightSize: dialog.querySelector('#spotlight-spotlightSize')?.value || 'normal',
+                tileCount: Math.max(1, Math.min(3, tileCountVal)),
+                autoPlay: dialog.querySelector('#spotlight-autoPlay')?.checked !== false,
+                interval: parseInt(dialog.querySelector('#spotlight-interval')?.value || '10000', 10),
+                showSlideState: slideStateVal !== 'none',
+                showDots: slideStateVal === 'dots',
+                showNavButtons: dialog.querySelector('#spotlight-showNavButtons')?.checked !== false,
+                showClearArt: dialog.querySelector('#spotlight-showClearArt')?.checked === true,
+                panAnimation: dialog.querySelector('#spotlight-panAnimation')?.checked !== false,
+                entranceAnimationFirst: dialog.querySelector('#spotlight-entranceAnimationFirst')?.value || 'fadeIn',
+                entranceAnimationSecond: dialog.querySelector('#spotlight-entranceAnimationSecond')?.value || 'fadeIn',
+                entranceAnimationThird: dialog.querySelector('#spotlight-entranceAnimationThird')?.value || 'fadeIn',
+                slideAnimationFirst: dialog.querySelector('#spotlight-slideAnimationFirst')?.value || 'kenBurnsZoomIn',
+                slideAnimationSecond: dialog.querySelector('#spotlight-slideAnimationSecond')?.value || 'kenBurnsZoomIn',
+                slideAnimationThird: dialog.querySelector('#spotlight-slideAnimationThird')?.value || 'kenBurnsZoomIn',
+                cycleBackdrops: dialog.querySelector('#spotlight-cycleBackdrops')?.checked === true,
+                cycleBackdropsTime: parseInt(dialog.querySelector('#spotlight-cycleBackdropsTime')?.value || '10000', 10)
+            };
+        }
+
+        return collected;
     }
 
     /**
@@ -4505,6 +4606,11 @@
             if (!subTab) return;
 
             currentGlobalSettingsSubTab = subTab;
+
+            // Persist the outgoing panel's values before its inputs are
+            // destroyed, otherwise edits are lost the moment you switch
+            // sub-tabs (the panel re-renders from currentConfig).
+            Object.assign(currentConfig, collectGlobalSettings());
 
             dialog.querySelectorAll('.global-settings-nav-btn').forEach(b => {
                 b.classList.remove('active');

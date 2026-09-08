@@ -135,6 +135,11 @@
                 name: 'Left Aligned Card Footer Text',
                 url: `${getKefinTweaksRoot()}skins/optional/global/leftAlignCardFooterText.css`,
                 enabled: false
+            },
+            {
+                name: 'Hide Media Tags Row',
+                url: `${getKefinTweaksRoot()}skins/optional/global/hideMediaTags.css`,
+                enabled: false
             }
         ],
         
@@ -162,7 +167,7 @@
                     {
                         majorServerVersions: [10],
                         urls: [
-                            'https://cdn.jsdelivr.net/gh/lscambo13/ElegantFin@main/Theme/ElegantFin-jellyfin-theme-build-latest-minified.css',
+                            `${getKefinTweaksRoot()}skins/ElegantFin-jellyfin-theme-build-latest-minified.css`,
                             `${getKefinTweaksRoot()}skins/elegant-kefin.css`,
                             `${getKefinTweaksRoot()}skins/fin-kefin-10.10.css`
                         ]
@@ -170,8 +175,8 @@
                     {
                         majorServerVersions: [11],
                         urls: [
-                            'https://cdn.jsdelivr.net/gh/lscambo13/ElegantFin@main/Theme/ElegantFin-jellyfin-theme-build-latest-minified.css',
-                            `${getKefinTweaksRoot()}skins/elegant-kefin.css`,,
+                            `${getKefinTweaksRoot()}skins/ElegantFin-jellyfin-theme-build-latest-minified.css`,
+                            `${getKefinTweaksRoot()}skins/elegant-kefin.css`,
                             `${getKefinTweaksRoot()}skins/elegant-kefin-10.11.css`,
                             `${getKefinTweaksRoot()}skins/fin-kefin-10.11.css`
                         ]
@@ -181,7 +186,7 @@
                 optionalIncludes: [
                     {
                         name: 'Media Bar Support',
-                        url: 'https://cdn.jsdelivr.net/gh/lscambo13/ElegantFin@main/Theme/assets/add-ons/media-bar-plugin-support-latest-min.css',
+                        url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/mediaBarSupport.css`,
                         enabled: true
                     },
                     {
@@ -212,6 +217,11 @@
                     {
                         name: 'Solid App Bar',
                         url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/solidAppBar.css`,
+                        enabled: false
+                    },
+                    {
+                        name: 'OLED Dark Theme',
+                        url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/OLEDTheme.css`,
                         enabled: false
                     }
                 ]
@@ -241,7 +251,7 @@
                 optionalIncludes: [
                     {
                         name: 'Media Bar Support',
-                        url: 'https://cdn.jsdelivr.net/gh/lscambo13/ElegantFin@main/Theme/assets/add-ons/media-bar-plugin-support-latest-min.css',
+                        url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/mediaBarSupport.css`,
                         enabled: true
                     },
                     {
@@ -272,6 +282,11 @@
                     {
                         name: 'Solid App Bar',
                         url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/solidAppBar.css`,
+                        enabled: false
+                    },
+                    {
+                        name: 'OLED Dark Theme',
+                        url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/OLEDTheme.css`,
                         enabled: false
                     },
                     {
@@ -374,6 +389,11 @@
                         name: 'Solid App Bar',
                         url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/solidAppBar.css`,
                         enabled: false
+                    },
+                    {
+                        name: 'OLED Dark Theme',
+                        url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/OLEDTheme.css`,
+                        enabled: false
                     }
                 ]
             },
@@ -418,6 +438,11 @@
                     {
                         name: 'Solid App Bar',
                         url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/solidAppBar.css`,
+                        enabled: false
+                    },
+                    {
+                        name: 'OLED Dark Theme',
+                        url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/OLEDTheme.css`,
                         enabled: false
                     }
                 ]

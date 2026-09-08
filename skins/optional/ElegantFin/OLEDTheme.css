@@ -1,0 +1,36 @@
+:root {
+    /* Gradient points */
+    --darkerGradientPoint: hsla(0, 0%, 0%, 1);
+    --darkerGradientPointAlpha: hsla(0, 0%, 0%, 0.85);
+
+    --lighterGradientPoint: hsla(0, 0%, 7%, 1);
+    --lighterGradientPointAlpha: hsla(0, 0%, 7%, 0.85);
+
+    /* Header / drawer */
+    --headerColor: hsla(0, 0%, 7%, 0.8);
+    --drawerColor: hsla(0, 0%, 7%, 0.9);
+
+    --headerColorGradient:
+        linear-gradient(
+            180deg,
+            hsla(0, 0%, 7%, 0.95) 30%,
+            55%,
+            transparent 90%
+        );
+
+    /* Borders */
+    --borderColor: hsla(0, 0%, 32%, 1);
+    --darkerBorderColor: hsla(0, 0%, 22%, 1);
+    --lighterBorderColor: hsla(0, 0%, 100%, 0.2);
+
+    /* Selectors */
+    --selectorBackgroundColor: hsla(0, 0%, 27%, 1);
+    --selectorBackgroundColorAlpha: hsla(0, 0%, 27%, 0.5);
+
+    /* Buttons */
+    --btnMiniPlayColor: hsla(0, 0%, 0%, 0.8);
+    --btnMiniPlayBorderColor: hsla(0, 0%, 30%, 0.8);
+
+}
+/* Media bar transistion fix */
+.slide { transition: opacity 0.5s ease-in-out, border 0s !important; }

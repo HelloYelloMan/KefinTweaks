@@ -6,6 +6,14 @@
     grid-column: 1 / 5;
 }
 
-#slides-container {
+/* Media bar: this top override matches the ElegantFin "Media Bar Support"
+   add-on's absolute layout (NeutralFin keeps a two-row header, so the add-on's
+   single-row breakpoint math needs correcting). It must ONLY apply while that
+   add-on is loaded — without it, the stock media bar is position:relative and
+   NeutralFin's own hero offsets (negative top/margin pulling it under the
+   header) are the intended layout; forcing a large positive top onto that
+   pushes the bar way down the page. The add-on is injected by the KefinTweaks
+   skin manager as a <link>, so its presence is detectable via :has(). */
+html:has(link[href*="media-bar-plugin-support"]) #slides-container {
     top: calc(var(--appBarHeight) * 2 + 1.25em) !important;
 }

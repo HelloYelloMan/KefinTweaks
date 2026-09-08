@@ -6925,36 +6925,22 @@ In the Custom Tabs plugin, add a new tab with the following HTML content:
 			renderWatchlist();
 		} */
 		
-		// Create a MutationObserver to watch for empty watchlist containers
-		const observer = new MutationObserver((mutations) => {
-			mutations.forEach((mutation) => {
-				// Check for added nodes
-				if (mutation.type === 'childList') {
-					mutation.addedNodes.forEach((node) => {
-						if (node.nodeType === Node.ELEMENT_NODE) {
-							// Check if this is a library page that became visible
-							if (node.classList && node.classList.contains('homePage') && !node.classList.contains('hide')) {
-								checkForEmptyWatchlist();
-							}
-							
-							// Also check any library pages within the added node
-							const libraryPages = node.querySelectorAll ? node.querySelectorAll('.homePage:not(.hide)') : [];
-							libraryPages.forEach(libraryPage => {
-								checkForEmptyWatchlist();
-							});
-						}
-					});
-				}
-				
-				// Check for attribute changes (like removing 'hide' class)
-				if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-					const target = mutation.target;
-					if (target.classList && target.classList.contains('homePage') && !target.classList.contains('hide')) {
-						checkForEmptyWatchlist();
-					}
-				}
-			});
-		});
+		// Create a MutationObserver to watch for empty watchlist containers.
+		// Debounced: this observer sees every childList mutation and every class
+		// flip in the app (attributeFilter can't narrow WHICH elements), and the
+		// old callback ran a per-added-node querySelectorAll and could invoke
+		// checkForEmptyWatchlist many times per batch. checkForEmptyWatchlist is
+		// itself one cheap document query, so the right shape is: schedule at most
+		// one check per DOM settle and skip mutation-record inspection entirely.
+		let emptyCheckTimer = null;
+		const scheduleEmptyCheck = () => {
+			if (emptyCheckTimer) clearTimeout(emptyCheckTimer);
+			emptyCheckTimer = setTimeout(() => {
+				emptyCheckTimer = null;
+				checkForEmptyWatchlist();
+			}, 150);
+		};
+		const observer = new MutationObserver(scheduleEmptyCheck);
 		
 		// Start observing
 		observer.observe(document.body, {
@@ -7467,44 +7453,50 @@ In the Custom Tabs plugin, add a new tab with the following HTML content:
 		});
 	}
 
-	// Set up MutationObserver to watch for new overlay containers
+	// Register with the shared card-overlay watcher. watchlist and removeContinue
+	// previously each ran their own document.body observer doing an identical
+	// subtree walk for .cardOverlayContainer on every insertion; the shared
+	// watcher (created by whichever enabled feature loads first, reused by the
+	// rest) walks once per batch and fans the found containers out to every
+	// registered processor. Feature toggling is preserved: a disabled script
+	// never loads, so it never registers a processor.
 	function setupWatchlistButtonObserver() {
-		const observer = new MutationObserver((mutations) => {
-			mutations.forEach((mutation) => {
-				if (mutation.type === 'childList') {
-					// Check for added nodes
-					mutation.addedNodes.forEach((node) => {
-						if (node.nodeType === Node.ELEMENT_NODE) {
-							// Check if the added node is an overlay container
-							if (node.classList && node.classList.contains('cardOverlayContainer')) {
-								const buttonContainer = node.querySelector('.cardOverlayButton-br');
-								if (buttonContainer) {
-									addWatchlistButton(node);
-								}
-							}
-							
-							// Check for overlay containers within the added node
-							const overlayContainers = node.querySelectorAll && node.querySelectorAll('.cardOverlayContainer');
-							if (overlayContainers && overlayContainers.length > 0) {
-								overlayContainers.forEach((overlayContainer) => {
-									const buttonContainer = overlayContainer.querySelector('.cardOverlayButton-br');
-									if (buttonContainer) {
-										addWatchlistButton(overlayContainer);
-									}
-								});
+		if (!window.KefinTweaksCardOverlayWatcher) {
+			const processors = [];
+			const observer = new MutationObserver((mutations) => {
+				for (const mutation of mutations) {
+					if (mutation.type !== 'childList') continue;
+					for (const node of mutation.addedNodes) {
+						if (node.nodeType !== Node.ELEMENT_NODE) continue;
+						if (node.classList && node.classList.contains('cardOverlayContainer')) {
+							for (const process of processors) {
+								try { process(node); } catch (e) { console.error('[KefinTweaks OverlayWatcher]', e); }
 							}
 						}
-					});
+						if (!node.querySelectorAll) continue;
+						const overlayContainers = node.querySelectorAll('.cardOverlayContainer');
+						for (const overlayContainer of overlayContainers) {
+							for (const process of processors) {
+								try { process(overlayContainer); } catch (e) { console.error('[KefinTweaks OverlayWatcher]', e); }
+							}
+						}
+					}
 				}
 			});
+			observer.observe(document.body, {
+				childList: true,
+				subtree: true
+			});
+			window.KefinTweaksCardOverlayWatcher = { processors, observer };
+		}
+
+		window.KefinTweaksCardOverlayWatcher.processors.push((overlayContainer) => {
+			const buttonContainer = overlayContainer.querySelector('.cardOverlayButton-br');
+			if (buttonContainer) {
+				addWatchlistButton(overlayContainer);
+			}
 		});
-		
-		// Start observing
-		observer.observe(document.body, {
-			childList: true,
-			subtree: true
-		});
-		
+
 		// Process any existing overlay containers
 		processExistingOverlayContainers();
 	}
@@ -7797,6 +7789,13 @@ In the Custom Tabs plugin, add a new tab with the following HTML content:
 			childList: true,
 			subtree: true
 		});
+
+		// Bounded: if the media bar plugin isn't installed the slides container
+		// never appears, and without a timeout this body-wide observer would run
+		// for the whole session waiting for it.
+		setTimeout(() => {
+			containerObserver.disconnect();
+		}, 60000);
 	}
 
 	// Initialize the slides container observer

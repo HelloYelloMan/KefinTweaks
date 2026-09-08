@@ -237,44 +237,50 @@
         });
     }
 
-    // Set up MutationObserver to watch for new overlay containers
+    // Register with the shared card-overlay watcher (see watchlist.js for the
+    // same pattern): one document.body observer walks each mutation batch for
+    // .cardOverlayContainer once and fans the containers out to every registered
+    // processor, instead of watchlist and removeContinue each duplicating the
+    // walk. Whichever enabled feature loads first creates the watcher; the rest
+    // reuse it. Feature toggling is preserved: a disabled script never loads, so
+    // it never registers a processor.
     function setupRemoveContinueButtonObserver() {
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                if (mutation.type === 'childList') {
-                    // Check for added nodes
-                    mutation.addedNodes.forEach((node) => {
-                        if (node.nodeType === Node.ELEMENT_NODE) {
-                            // Check if the added node is an overlay container
-                            if (node.classList && node.classList.contains('cardOverlayContainer')) {
-                                const buttonContainer = node.querySelector('.cardOverlayButton-br');
-                                if (buttonContainer) {
-                                    addRemoveContinueButton(node);
-                                }
-                            }
-                            
-                            // Check for overlay containers within the added node
-                            const overlayContainers = node.querySelectorAll && node.querySelectorAll('.cardOverlayContainer');
-                            if (overlayContainers && overlayContainers.length > 0) {
-                                overlayContainers.forEach((overlayContainer) => {
-                                    const buttonContainer = overlayContainer.querySelector('.cardOverlayButton-br');
-                                    if (buttonContainer) {
-                                        addRemoveContinueButton(overlayContainer);
-                                    }
-                                });
+        if (!window.KefinTweaksCardOverlayWatcher) {
+            const processors = [];
+            const observer = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    if (mutation.type !== 'childList') continue;
+                    for (const node of mutation.addedNodes) {
+                        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                        if (node.classList && node.classList.contains('cardOverlayContainer')) {
+                            for (const process of processors) {
+                                try { process(node); } catch (e) { console.error('[KefinTweaks OverlayWatcher]', e); }
                             }
                         }
-                    });
+                        if (!node.querySelectorAll) continue;
+                        const overlayContainers = node.querySelectorAll('.cardOverlayContainer');
+                        for (const overlayContainer of overlayContainers) {
+                            for (const process of processors) {
+                                try { process(overlayContainer); } catch (e) { console.error('[KefinTweaks OverlayWatcher]', e); }
+                            }
+                        }
+                    }
                 }
             });
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+            window.KefinTweaksCardOverlayWatcher = { processors, observer };
+        }
+
+        window.KefinTweaksCardOverlayWatcher.processors.push((overlayContainer) => {
+            const buttonContainer = overlayContainer.querySelector('.cardOverlayButton-br');
+            if (buttonContainer) {
+                addRemoveContinueButton(overlayContainer);
+            }
         });
-        
-        // Start observing
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-        
+
         // Process any existing overlay containers
         processExistingOverlayContainers();
     }

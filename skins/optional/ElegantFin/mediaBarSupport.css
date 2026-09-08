@@ -1,0 +1,57 @@
+/*! Add-on: Media Bar Plugin Support v26.06.06 for the ElegantFin Theme for Jellyfin by lscambo13 */
+/* Local copy. Changes from upstream. In the `.slide` rule:
+   - removed `transition:border 0s` so it no longer clobbers the media bar
+     plugin's `transition: opacity 0.5s` crossfade
+   - border replaced with an inset box-shadow so it draws ON TOP of the clipped
+     backdrop, covering the subpixel corner fringe that `overflow:hidden` +
+     border-radius leaves. Doubled so the antialiased inner edge stays opaque
+     through the corners (a single inset shadow thins at the radius). Width
+     kept at --borderWidth (0.06em) to match the theme's default border.
+
+   And in the `.backdrop-overlay` rule:
+   - the colour interpolation hint (the bare `40%,`) was replaced with a plain
+     two-stop ramp. Gecko approximates a hint by subdividing it into a fixed
+     number of linear segments; on some Firefox compositing paths the segment
+     boundaries show as ~9 evenly spaced dark lines across the bar, worst in
+     the upper part where the overlay is nearly clear. A two-stop gradient has
+     no internal boundaries, so it cannot band that way. The 0.85 bottom anchor
+     is preserved for text contrast; the 90% end stop is the closest linear fit
+     to the old hinted curve (max deviation 0.065 alpha, all of it in the top
+     fifth where the overlay is almost transparent). */
+.detail-button:before,.favorite-button.favorited:before,.favorite-button:before,.play-button:before{font-weight:400}.play-button{font-family:Inter;font-size:1em;font-weight:500;order:1}.detail-button,.favorite-button{order:2}.backdrop,.backdrop-container,.backdrop-overlay{background-color:transparent;mask-image:linear-gradient(180deg,rgba(0,0,0,.85),70%,transparent);-webkit-mask-image:linear-gradient(180deg,rgba(0,0,0,.85),70%,transparent)}.backdrop{transform-origin:center left}.rating-value{flex-wrap:wrap;justify-content:center}.age-rating{color:unset;font-family:Archivo Narrow,sans-serif;font-size:.8em}#slides-container{height:62%;left:var(--sidePadding);overflow:visible;position:absolute;top:calc(var(--appBarHeight)*2 + 1.25em);user-select:none;width:calc(100vw - var(--sidePadding)*2)}.slide{border:1px solid var(--borderColor);border-radius:var(--largerRadius);overflow:hidden}.slide .backdrop-container{border-radius:var(--largerRadius);overflow:hidden}.logo-container{top:10vh}.backdrop,.backdrop-container,.backdrop-overlay{mask-image:none;-webkit-mask-image:none}.backdrop-overlay{background:linear-gradient(0deg,rgba(0,0,0,.85) 0%,rgba(0,0,0,0) 90%)}.pause-button,.volume-toggle{top:1em!important}.separator-icon{color:var(--dimTextColor);font-size:5px}.dot{background-color:var(--textColor)!important;border-radius:.25em;height:.375em;opacity:.5;transition:width .5s;width:.375em}.dot.active{transform:none;width:2em}@media only screen and (orientation:landscape){.button-container,.dots-container,.genre,.info-container,.plot-container{top:unset}.button-container{bottom:3em}.dots-container{bottom:4.5em}.plot-container{bottom:7em;height:4em}.genre{bottom:12em}.info-container{bottom:14em}.logo-container{align-items:flex-end;max-width:35vw;top:3%}.gradient-overlay{background:linear-gradient(37deg,rgba(0,0,0,.2) 32%,rgb(29 29 29/7%) 47%,rgba(29,29,29,0));mask:none;-webkit-mask:none}}@media only screen and (max-width:767px) and (orientation:portrait){.button-container{bottom:3em}.genre,.tomato-rating{display:none}.dots-container{bottom:6em}.info-container{bottom:5em}.logo-container{top:calc(100% - 15em)}.backdrop{transform-origin:center}.left-arrow,.right-arrow{display:none!important}.play-button{order:2}}@media (min-width:75em){#slides-container{top:calc(var(--appBarHeight) + 1.25em)}.layout-tv #slides-container{top:calc(var(--appBarHeight)*2 + 1.25em)}}@media (min-width:100em){.layout-tv #slides-container{top:calc(var(--appBarHeight) + 1.25em)}}@media only screen and (max-height:767px) and (orientation:landscape){#slides-container{height:57%}.logo-container{top:3%}}
+
+/* :root {
+    --kefin-force-border-spotlights: 1;
+}
+
+.spotlight-section {
+    box-sizing: border-box !important;
+    width: calc(100% - var(--sidePadding) * 2) !important;
+    margin: 1em 0 1em var(--sidePadding) !important;
+    padding: 0 !important;
+}
+.layout-mobile .spotlight-section[data-layout="Borderless"] {
+    margin-top: 1em !important;
+    margin-bottom: 1em !important;
+}
+
+.spotlight-section .spotlight-banner-container {
+    border: 1px solid var(--borderColor) !important;
+    border-radius: var(--largerRadius) !important;
+    overflow: hidden !important;
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+}
+
+.spotlight-section .spotlight-item {
+    contain: none !important;
+    isolation: auto !important;
+}
+
+.spotlight-section .spotlight-background-single,
+.spotlight-section .spotlight-background-dual,
+.spotlight-section .spotlight-background-layer,
+.spotlight-section .skeleton-spotlight-item {
+    border-radius: var(--largerRadius) !important;
+    overflow: hidden;
+} */

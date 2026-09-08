@@ -5,9 +5,71 @@
 (function() {
     'use strict';
 
+    // Force spotlights to the "Border" layout ONLY when the ElegantFin
+    // media-bar-support CSS is active. That stylesheet styles spotlights to
+    // match the media bar, which requires Border layout; other themes should
+    // keep whatever layout the user configured (including Borderless).
+    // The stylesheet advertises itself by setting a custom property on :root
+    // (--kefin-force-border-spotlights: 1); we read it at render time so
+    // toggling the theme/CSS on or off takes effect without touching this file.
+    function shouldForceBorderSpotlights() {
+        try {
+            const prop = getComputedStyle(document.documentElement)
+                .getPropertyValue('--kefin-force-border-spotlights')
+                .trim();
+            if (prop === '1') return true;
+            // Fallback for the window where the stylesheet <link> exists but
+            // its custom property hasn't been applied yet (slow/cached CSS
+            // load racing the first spotlight render): detect the file itself.
+            return !!document.querySelector('link[href*="media-bar-plugin-support"]');
+        } catch (e) {
+            return false;
+        }
+    }
+
     const state = {
         useEpisodeImages: false,
     };
+
+    // Jellyfin overviews contain limited HTML markup (<i>, <br>, etc.). Render
+    // that as formatting rather than literal text, but never inject server
+    // strings as raw innerHTML — parse into a detached document and copy across
+    // only a whitelist of inline formatting tags, dropping everything else
+    // (scripts, attributes, event handlers, unknown elements) to text.
+    const OVERVIEW_ALLOWED_TAGS = new Set(['I', 'EM', 'B', 'STRONG', 'BR', 'P', 'U', 'SPAN']);
+    function setSanitizedOverview(target, html) {
+        target.textContent = '';
+        if (!html) return;
+        const parsed = new DOMParser().parseFromString(html, 'text/html');
+        const sanitizeNode = (node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                return document.createTextNode(node.textContent);
+            }
+            if (node.nodeType !== Node.ELEMENT_NODE) {
+                return null;
+            }
+            // Disallowed element: keep its text content, drop the tag/attributes.
+            if (!OVERVIEW_ALLOWED_TAGS.has(node.tagName)) {
+                const frag = document.createDocumentFragment();
+                node.childNodes.forEach(child => {
+                    const clean = sanitizeNode(child);
+                    if (clean) frag.appendChild(clean);
+                });
+                return frag;
+            }
+            // Allowed element: recreate with NO attributes, recurse into children.
+            const el = document.createElement(node.tagName);
+            node.childNodes.forEach(child => {
+                const clean = sanitizeNode(child);
+                if (clean) el.appendChild(clean);
+            });
+            return el;
+        };
+        parsed.body.childNodes.forEach(child => {
+            const clean = sanitizeNode(child);
+            if (clean) target.appendChild(clean);
+        });
+    }
 
     // Global toggle for progressive section fade-in.
     // Developers can set this to false to disable the behavior.
@@ -39,6 +101,38 @@
             [arr[i], arr[j]] = [arr[j], arr[i]];
         }
         return arr;
+    }
+
+    /**
+     * Weighted shuffle biased by list position: items already near the front of
+     * `array` tend to stay near the front, while items further down reorder more
+     * freely. Order-preserving-ish randomization for sections that have a
+     * meaningful sort (rating, date, etc.) but should still vary each render.
+     *
+     * Uses the Efraimidis–Spirakis one-pass weighted-sampling method: each item
+     * gets sort key u^(1/w) with u uniform in (0,1) and w the item's weight.
+     * Weight is derived from position via a linear ramp from `topWeight` (first
+     * item) down to 1 (last), so `topWeight` alone controls how strongly the
+     * head resists being displaced.
+     *
+     * @param {Array} array - Items in their current (sorted) order
+     * @param {number} topWeight - Weight of the first item relative to the last.
+     *   Higher = stronger bias toward preserving the existing order. Default 12.
+     * @returns {Array} A new, reordered array
+     */
+    function weightedPositionShuffle(array, topWeight = 12) {
+        const n = array.length;
+        if (n < 2) return [...array];
+        const maxW = Math.max(topWeight, 1);
+        return array
+            .map((item, index) => {
+                // Linear weight ramp: index 0 -> maxW, index n-1 -> 1
+                const w = maxW - (maxW - 1) * (index / (n - 1));
+                const u = Math.random() || 1e-9;
+                return { item, key: Math.pow(u, 1 / w) };
+            })
+            .sort((a, b) => b.key - a.key)
+            .map(entry => entry.item);
     }
 
     /**
@@ -340,6 +434,20 @@
                 processed = processed.slice(0, limit);
             }
             processed = shuffle(processed);
+        }
+
+        // Weighted random by list position: perturb the current (sorted) order
+        // so the section still varies each render while keeping higher-ranked
+        // items near the front. Applied after all sorting but before the final
+        // limit, and skipped when the section is already fully random (the
+        // Random SortBy above handles that case). Runs at render time on the
+        // cached payload, so it re-randomizes every display.
+        const isRandomSort = sectionConfig.queries?.[0]?.queryOptions?.SortBy === 'Random' || sectionConfig.sortBy === 'Random';
+        if (sectionConfig.weightedRandom === true && !isRandomSort && processed.length > 1) {
+            const topWeight = typeof sectionConfig.weightedRandomStrength === 'number'
+                ? sectionConfig.weightedRandomStrength
+                : 12;
+            processed = weightedPositionShuffle(processed, topWeight);
         }
 
         // Apply local limits for non-API sources
@@ -1482,6 +1590,7 @@
         const itemId = item.Id || '';
         const itemType = item.Type || 'Folder';
         const isCustomCard = !!(item.cardUrl || item.posterUrl || item.thumbUrl || item.squareUrl || item.imageUrl);
+        const isLibraryCard = itemType === 'CollectionFolder' || itemType === 'UserView';
         let parentItem = null;
 
         if (item.Type === 'Timer') {
@@ -1501,7 +1610,7 @@
 
         if (cardFormat) {
             // Use specified cardFormat
-            if (cardFormat === 'backdrop' || cardFormat === 'thumb' || cardFormat === 'logo' || cardFormat === 'clear art' || forcedImageType) {
+            if (cardFormat === 'backdrop' || cardFormat === 'thumb' || cardFormat === 'logo' || cardFormat === 'clear art') {
                 cardClass = overflowCard ? 'overflowBackdropCard' : 'backdropCard';
                 padderClass = 'cardPadder-backdrop';
                 imageParams = 'fillHeight=267&fillWidth=474';
@@ -1799,7 +1908,7 @@
             cardImageContainer.appendChild(iconSpan);
         }
 
-        const blurhashStr = !item.imageUrl ? getBlurhashForCard(item, cardFormat, forcedImageType) : null;
+        const blurhashStr = (!item.imageUrl && !isLibraryCard) ? getBlurhashForCard(item, cardFormat, forcedImageType) : null;
         if (!blurhashStr || cardFormat === 'logo' || cardFormat === 'clear art' || cardFormat === 'disc') {
             blurhashCanvas.classList.add('lazy-hidden');
         } else {
@@ -1860,7 +1969,22 @@
                 cardImageContainer.appendChild(cardIndicators);
             }
 
-            if (item.UserData?.PlayedPercentage && item.UserData?.PlayedPercentage > 0) {
+            // Series progress bars: Jellyfin computes a Series' PlayedPercentage
+            // from two counts that disagree when episodes have grouped alternate
+            // versions (the recursive count includes hidden version rows, the
+            // unplayed count doesn't), producing a small phantom percentage on
+            // fully-unwatched shows that no amount of unmarking clears. It only
+            // shows up here because KefinTweaks requests RecursiveItemCount by
+            // default, which is what triggers the computation. Guard: only draw
+            // a Series/Season bar at or above this percentage. Movies/episodes
+            // use playback position and are unaffected. Set to 0 to always show,
+            // 101 to never show series bars.
+            const SERIES_PROGRESS_MIN_PERCENT = 15;
+            const playedPct = item.UserData?.PlayedPercentage || 0;
+            const isSeriesLike = item.Type === 'Series' || item.Type === 'Season';
+            const showProgressBar = playedPct > 0 && (!isSeriesLike || playedPct >= SERIES_PROGRESS_MIN_PERCENT);
+
+            if (showProgressBar) {
                 const innerCardFooter = document.createElement('div');
                 innerCardFooter.className = 'innerCardFooter fullInnerCardFooter innerCardFooterClear';
                 cardBox.appendChild(innerCardFooter);
@@ -1893,84 +2017,87 @@
             }
         }
 
-        // Card overlay container
-        const cardOverlayContainer = document.createElement('div');
-        cardOverlayContainer.className = 'cardOverlayContainer itemAction';
-        cardOverlayContainer.setAttribute('data-action', 'link');
+        // Card overlay container - skip for library cards (no buttons, no blur)
+        let cardOverlayContainer = null;
+        if (!isLibraryCard) {
+            cardOverlayContainer = document.createElement('div');
+            cardOverlayContainer.className = 'cardOverlayContainer itemAction';
+            cardOverlayContainer.setAttribute('data-action', 'link');
 
-        // Overlay link (first so it sits under buttons)
-        const overlayLink = document.createElement('a');
-        overlayLink.href = cardUrl;
-        overlayLink.className = 'cardImageContainer';
-        cardOverlayContainer.appendChild(overlayLink);
+            // Overlay link (first so it sits under buttons)
+            const overlayLink = document.createElement('a');
+            overlayLink.href = cardUrl;
+            overlayLink.className = 'cardImageContainer';
+            cardOverlayContainer.appendChild(overlayLink);
 
-        if (!isCustomCard) {
-            // Play button
-            const playButton = document.createElement('button');
-            playButton.setAttribute('is', 'paper-icon-button-light');
-            playButton.className = 'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light cardOverlayFab-primary';
-            playButton.setAttribute('data-action', 'resume');
+            if (!isCustomCard) {
+                // Play button
+                const playButton = document.createElement('button');
+                playButton.setAttribute('is', 'paper-icon-button-light');
+                playButton.className = 'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light cardOverlayFab-primary';
+                playButton.setAttribute('data-action', 'resume');
 
-            const playIcon = document.createElement('span');
-            playIcon.className = 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover play_arrow';
-            playIcon.setAttribute('aria-hidden', 'true');
-            playButton.appendChild(playIcon);
+                const playIcon = document.createElement('span');
+                playIcon.className = 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover play_arrow';
+                playIcon.setAttribute('aria-hidden', 'true');
+                playButton.appendChild(playIcon);
 
-            // Button container for additional overlay buttons (watchlist, etc.)
-            const buttonContainer = document.createElement('div');
-            buttonContainer.className = 'cardOverlayButton-br flex';
+                // Button container for additional overlay buttons (watchlist, etc.)
+                const buttonContainer = document.createElement('div');
+                buttonContainer.className = 'cardOverlayButton-br flex';
 
-            // Watched button
-            const watchedButton = document.createElement('button');
-            watchedButton.setAttribute('is', 'emby-playstatebutton');
-            watchedButton.type = 'button';
-            watchedButton.setAttribute('data-action', 'none');
-            watchedButton.className = 'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light emby-button';
-            watchedButton.setAttribute('data-id', itemId);
-            watchedButton.setAttribute('data-serverid', serverId);
-            watchedButton.setAttribute('data-itemtype', itemType);
-            watchedButton.setAttribute('data-played', item.UserData?.Played || 'false');
-            watchedButton.title = 'Mark played';
+                // Watched button
+                const watchedButton = document.createElement('button');
+                watchedButton.setAttribute('is', 'emby-playstatebutton');
+                watchedButton.type = 'button';
+                watchedButton.setAttribute('data-action', 'none');
+                watchedButton.className = 'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light emby-button';
+                watchedButton.setAttribute('data-id', itemId);
+                watchedButton.setAttribute('data-serverid', serverId);
+                watchedButton.setAttribute('data-itemtype', itemType);
+                watchedButton.setAttribute('data-played', item.UserData?.Played || 'false');
+                watchedButton.title = 'Mark played';
 
-            const watchedIcon = document.createElement('span');
-            watchedIcon.className = 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover check playstatebutton-icon-unplayed';
-            watchedIcon.setAttribute('aria-hidden', 'true');
-            watchedButton.appendChild(watchedIcon);
-            buttonContainer.appendChild(watchedButton);
+                const watchedIcon = document.createElement('span');
+                watchedIcon.className = 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover check playstatebutton-icon-unplayed';
+                watchedIcon.setAttribute('aria-hidden', 'true');
+                watchedButton.appendChild(watchedIcon);
+                buttonContainer.appendChild(watchedButton);
 
-            // Favorite button
-            const favoriteButton = document.createElement('button');
-            favoriteButton.setAttribute('is', 'emby-ratingbutton');
-            favoriteButton.type = 'button';
-            favoriteButton.setAttribute('data-action', 'none');
-            favoriteButton.className = 'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light emby-button';
-            favoriteButton.setAttribute('data-id', itemId);
-            favoriteButton.setAttribute('data-serverid', serverId);
-            favoriteButton.setAttribute('data-itemtype', itemType);
-            favoriteButton.setAttribute('data-likes', '');
-            favoriteButton.setAttribute('data-isfavorite', item.UserData?.IsFavorite || 'false');
-            favoriteButton.title = 'Add to favorites';
+                // Favorite button
+                const favoriteButton = document.createElement('button');
+                favoriteButton.setAttribute('is', 'emby-ratingbutton');
+                favoriteButton.type = 'button';
+                favoriteButton.setAttribute('data-action', 'none');
+                favoriteButton.className = 'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light emby-button';
+                favoriteButton.setAttribute('data-id', itemId);
+                favoriteButton.setAttribute('data-serverid', serverId);
+                favoriteButton.setAttribute('data-itemtype', itemType);
+                favoriteButton.setAttribute('data-likes', '');
+                favoriteButton.setAttribute('data-isfavorite', item.UserData?.IsFavorite || 'false');
+                favoriteButton.title = 'Add to favorites';
 
-            const favoriteIcon = document.createElement('span');
-            favoriteIcon.className = 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover favorite';
-            favoriteIcon.setAttribute('aria-hidden', 'true');
-            favoriteButton.appendChild(favoriteIcon);
-            buttonContainer.appendChild(favoriteButton);
+                const favoriteIcon = document.createElement('span');
+                favoriteIcon.className = 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover favorite';
+                favoriteIcon.setAttribute('aria-hidden', 'true');
+                favoriteButton.appendChild(favoriteIcon);
+                buttonContainer.appendChild(favoriteButton);
 
-            const moreButton = document.createElement('button');
-            moreButton.setAttribute('is', 'paper-icon-button-light');
-            moreButton.className = 'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light';
-            moreButton.setAttribute('data-action', 'menu');
-            moreButton.title = 'More';
-            const moreIcon = document.createElement('span');
-            moreIcon.className = 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover more_vert';
-            moreIcon.setAttribute('aria-hidden', 'true');
-            moreButton.appendChild(moreIcon);
+                const moreButton = document.createElement('button');
+                moreButton.setAttribute('is', 'paper-icon-button-light');
+                moreButton.className = 'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light';
+                moreButton.setAttribute('data-action', 'menu');
+                moreButton.title = 'More';
+                const moreIcon = document.createElement('span');
+                moreIcon.className = 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover more_vert';
+                moreIcon.setAttribute('aria-hidden', 'true');
+                moreButton.appendChild(moreIcon);
 
-            buttonContainer.appendChild(moreButton);
+                buttonContainer.appendChild(moreButton);
 
-            cardOverlayContainer.appendChild(playButton);
-            cardOverlayContainer.appendChild(buttonContainer);
+                cardOverlayContainer.appendChild(playButton);
+                cardOverlayContainer.appendChild(buttonContainer);
+            }
         }
 
         // Card text container - different structure for episodes
@@ -2101,7 +2228,7 @@
         cardScalable.appendChild(cardPadder);
         cardScalable.appendChild(blurhashCanvas);
         cardScalable.appendChild(cardImageContainer);
-        cardScalable.appendChild(cardOverlayContainer);
+        if (cardOverlayContainer) cardScalable.appendChild(cardOverlayContainer);
 
         cardBox.appendChild(cardScalable);
         cardBox.appendChild(cardTextFragment);
@@ -2152,7 +2279,7 @@
         } = options;
         // Backward compat: derive layout/size from fullScreen if new keys missing
         const fullScreen = options.fullScreen === true;
-        const layout = spotlightLayout ?? (fullScreen ? 'Borderless' : 'Border');
+        const layout = shouldForceBorderSpotlights() ? 'Border' : (spotlightLayout ?? (fullScreen ? 'Borderless' : 'Border'));
         const size = spotlightSize ?? (fullScreen ? 'full' : 'normal');
         let tileCount = tileCountOpt;
         if (tileCount == null || tileCount < 1 || tileCount > 3) {
@@ -2742,7 +2869,7 @@
 
             const overviewEl = document.createElement('p');
             overviewEl.className = 'spotlight-overview';
-            if (item.Overview) overviewEl.textContent = item.Overview;
+            if (item.Overview) setSanitizedOverview(overviewEl, item.Overview);
             
             // Buttons container
             const buttonsContainer = document.createElement('div');
@@ -2840,7 +2967,7 @@
             if (item.Overview) {
                 const overviewTooltip = document.createElement('div');
                 overviewTooltip.className = 'spotlight-overview-tooltip';
-                overviewTooltip.textContent = item.Overview;
+                setSanitizedOverview(overviewTooltip, item.Overview);
                 infoButton.appendChild(overviewTooltip);
             }
             
@@ -3382,8 +3509,23 @@
             { root: null, rootMargin: '0px', threshold: 0 }
         );
         visibilityObserver.observe(container);
-        
-        document.addEventListener('visibilitychange', () => {
+
+        // NOTE: this handler is created per spotlight carousel, and carousels
+        // are rebuilt on every home render. Without cleanup, each render adds
+        // another document-level listener that keeps the whole detached
+        // carousel subtree alive via its closure — a steady memory/CPU leak
+        // over a session. Self-clean: when the carousel is no longer in the
+        // DOM, remove the listener and disconnect the observer.
+        const onDocumentVisibilityChange = () => {
+            if (!container.isConnected) {
+                document.removeEventListener('visibilitychange', onDocumentVisibilityChange);
+                visibilityObserver.disconnect();
+                if (autoPlayTimer) {
+                    clearTimeout(autoPlayTimer);
+                    autoPlayTimer = null;
+                }
+                return;
+            }
             if (document.hidden) {
                 if (autoPlayTimer) {
                     clearTimeout(autoPlayTimer);
@@ -3394,7 +3536,8 @@
                     startAutoPlay();
                 }
             }
-        });
+        };
+        document.addEventListener('visibilitychange', onDocumentVisibilityChange);
         
         // Start auto-play (will no-op if container not yet in DOM or not visible once observer runs)
         if (autoPlay) {
@@ -4059,7 +4202,7 @@
      */
     function createSkeletonSpotlightSection(title, options = {}) {
         const { viewMoreUrl = null, spotlightLayout, spotlightSize, fullScreen } = options;
-        const layout = spotlightLayout ?? (fullScreen === true ? 'Borderless' : 'Border');
+        const layout = shouldForceBorderSpotlights() ? 'Border' : (spotlightLayout ?? (fullScreen === true ? 'Borderless' : 'Border'));
         const size = spotlightSize ?? (fullScreen === true ? 'full' : 'normal');
 
         // Create main container (same structure as real spotlight)
@@ -4149,7 +4292,7 @@
         
         if (viewMoreUrl) {
             const titleLink = document.createElement('a');
-            titleLink.className = 'sectionTitle-link sectionTitleTextButton';
+            titleLink.className = 'sectionTitle-link emby-button sectionTitleTextButton';
             titleLink.style.cssText = 'text-decoration: none; cursor: pointer; display: flex; align-items: center;';
             
             if (typeof viewMoreUrl === 'function') {

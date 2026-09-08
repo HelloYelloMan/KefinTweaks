@@ -2,13 +2,27 @@
 // This is a workaround for a bug in the dashboard back button
 // The dashboard back button currently leaves the Jellyfin app if the user navigates to the dashboard directly from the URL
 // This script sends you to home.html in these scenarios instead of leaving the app
+//
+// Gated to dashboard routes: the old version ran a document.body observer on
+// every page for the whole session just to catch the dashboard mounting — and
+// disconnected permanently after the first attach, so a recreated button on a
+// later dashboard visit never got the handler. Now the observer only runs
+// while the hash is a dashboard route, re-arms on every dashboard entry
+// (dashboard subpages are hash changes too, which also covers React
+// recreating the button), and stands down entirely everywhere else.
 
 (function () {
-    function attachHandler() {
-        const btn = document.querySelector('button.MuiButtonBase-root');
-        if (!btn) return;
+    let observer = null;
 
-        if (btn._backCheckAttached) return;
+    function isDashboardRoute() {
+        return (window.location.hash || '').toLowerCase().includes('dashboard');
+    }
+
+    function tryAttach() {
+        const btn = document.querySelector('button.MuiButtonBase-root');
+        if (!btn) return false;
+
+        if (btn._backCheckAttached) return true;
         btn._backCheckAttached = true;
 
         btn.addEventListener('click', function (e) {
@@ -25,13 +39,41 @@
             }
         }, true);
 
-        observer.disconnect();
+        return true;
     }
 
-    // Observe DOM in case button is recreated
-    const observer = new MutationObserver(attachHandler);
-    observer.observe(document.body, { childList: true, subtree: true });
+    function deactivate() {
+        if (observer) {
+            observer.disconnect();
+            observer = null;
+        }
+    }
+
+    function activate() {
+        if (!isDashboardRoute()) {
+            deactivate();
+            return;
+        }
+
+        if (tryAttach()) {
+            // Button present and handled; no need to keep observing until the
+            // next hash change re-runs activate().
+            deactivate();
+            return;
+        }
+
+        // Dashboard route but the MUI app hasn't mounted the button yet — watch
+        // for it, scoped to this visit only.
+        if (!observer) {
+            observer = new MutationObserver(() => {
+                if (tryAttach()) deactivate();
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        }
+    }
+
+    window.addEventListener('hashchange', activate);
 
     // Initial run
-    attachHandler();
+    activate();
 })();

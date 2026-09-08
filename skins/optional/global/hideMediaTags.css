@@ -1,0 +1,17 @@
+/* KefinTweaks — Hide Media Tags Row (global add-on)
+ *
+ * Companion toggle for the mediaTags feature (scripts/mediaTags.js), which injects
+ * a "Tags" row into the item-details metadata table with the class .kefin-tags-row.
+ * That feature is on by default; enabling THIS optional include hides the injected
+ * row again — a pure CSS visibility override, so it fits the skin-option mechanism
+ * (which only loads stylesheets) without needing to gate the JS.
+ *
+ * display:none is safe for the surrounding border logic: ElegantFin draws inter-row
+ * borders with .detailsGroupItem:not(:last-child), and structural pseudo-classes
+ * still count a display:none element, so hiding the Tags row (which sits between
+ * Genres and Studios, never last) leaves every other row's border unchanged.
+ */
+
+.detailsGroupItem.kefin-tags-row {
+    display: none !important;
+}

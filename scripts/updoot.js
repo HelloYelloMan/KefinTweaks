@@ -1185,9 +1185,15 @@
                 console.log('Home button not found');
             }
 
-            // Observe URL changes for SPA navigation
+            // Observe URL changes for SPA navigation.
+            // Jellyfin routes via the location hash, so hashchange/popstate
+            // cover every navigation. The previous implementation polled
+            // location.href from a document.body subtree MutationObserver,
+            // which ran its callback on EVERY DOM mutation anywhere in the app
+            // (each card insertion, class flip, slide transition) — constant
+            // background cost for something two events provide for free.
             let lastUrl = window.location.href;
-            const urlObserver = new MutationObserver(() => {
+            const onUrlMaybeChanged = () => {
                 const currentUrl = window.location.href;
                 if (currentUrl !== lastUrl) {
                     console.log('URL changed from', lastUrl, 'to', currentUrl);
@@ -1195,8 +1201,9 @@
                     console.log('Reinitializing script after URL change');
                     setTimeout(() => init(), 500); // Delay to allow DOM to settle
                 }
-            });
-            urlObserver.observe(document.body, { childList: true, subtree: true });
+            };
+            window.addEventListener('hashchange', onUrlMaybeChanged);
+            window.addEventListener('popstate', onUrlMaybeChanged);
 
 /*             // Override history API to catch SPA navigation
             const originalPushState = history.pushState;

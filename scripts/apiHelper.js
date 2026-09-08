@@ -182,6 +182,23 @@
      * Value: { data: response, timestamp: Date.now() }
      */
     const queryCache = new Map();
+
+    // Hard cap on cached responses. Without it the Map grows unboundedly over
+    // a session: discovery sections generate ever-new cache keys (random
+    // source items -> unique URLs) and expired entries are only deleted
+    // lazily when the exact same key is requested again — which for random
+    // keys is never. Each entry holds a full JSON item payload, so an
+    // uncapped cache is a steady memory leak that degrades long sessions.
+    // Eviction is LRU via Map insertion order: getCachedQuery re-inserts on
+    // hit, so the oldest entry is the least recently used.
+    const QUERY_CACHE_MAX_ENTRIES = 300;
+
+    function enforceQueryCacheCap() {
+        while (queryCache.size > QUERY_CACHE_MAX_ENTRIES) {
+            const oldestKey = queryCache.keys().next().value;
+            queryCache.delete(oldestKey);
+        }
+    }
     
     /**
      * Generate a cache key from options object
@@ -212,6 +229,9 @@
             queryCache.delete(cacheKey);
             return null;
         }
+        // LRU touch: re-insert so Map iteration order reflects recency.
+        queryCache.delete(cacheKey);
+        queryCache.set(cacheKey, entry);
         return entry.data;
     }
     
@@ -225,6 +245,7 @@
             data: data,
             timestamp: Date.now()
         });
+        enforceQueryCacheCap();
     }
     
     /**

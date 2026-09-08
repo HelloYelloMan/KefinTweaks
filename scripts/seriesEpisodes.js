@@ -255,7 +255,7 @@
             const seasonPopoverCss = `
                 .seasonPopover {
                     background-color: rgba(0, 0, 0, 0.95);
-                    position: absolute !important;
+                    position: absolute;
                     z-index: 1001;
                     display: block;
                 }
@@ -275,23 +275,17 @@
                 popover.style.left = '0';
             }
 
-            // Support both API shape (Id, Name, IndexNumber) and constructed shape (id, name, indexNumber)
-            const seasonId = (s) => s.Id != null ? s.Id : s.id;
-            const seasonName = (s) => s.Name != null ? s.Name : s.name;
-            const seasonIndex = (s) => s.IndexNumber != null ? s.IndexNumber : s.indexNumber;
-
             let selectedItemElement = null;
             seasons.forEach(season => {
                 const itemElement = document.createElement('div');
-                itemElement.className = 'kefinTweaks-popover-item detailsGroupItem';
-
-                const isSelected = currentSeason && (seasonId(season) === seasonId(currentSeason));
-                if (isSelected) {
+                itemElement.className = 'kefinTweaks-popover-item';
+                
+                if (currentSeason && season.id === currentSeason.id) {
                     itemElement.classList.add('selected');
                     selectedItemElement = itemElement;
                 }
-
-                const displayText = formatSeasonName(`${seasonName(season)}`, seasonIndex(season));
+                
+                const displayText = formatSeasonName(`${season.name}`, season.indexNumber);
                 itemElement.textContent = displayText;
                 itemElement.addEventListener('click', () => {
                     LOG(`Season selected: ${displayText}`);
@@ -356,6 +350,29 @@
      * @param {HTMLElement} scrollerContainer - The scroller container element
      * @param {Object} targetEpisodeNumber - Object with season and episode numbers
      */
+    // KefinTweaks' cardBuilder scroller is a plain <div class="emby-scroller"> that
+    // scrolls via a translateX transform plus a --scroll-x custom property — it is
+    // NOT Jellyfin's native emby-scroller custom element, so it has no
+    // scrollToPosition() method (calling it threw "not a function"). Drive that same
+    // transform mechanism (mirroring cardBuilder's internal setPosition), so the
+    // scroll-button state stays in sync and we never introduce a native overflow
+    // scrollbar — which is what conflicts with the ElegantFin series-page layout.
+    // Delay before positioning the scroller on the next-up episode. The section's
+    // cards and their images stream in after the initial render; scrolling at ~100ms
+    // meant positioning mid-load, so subsequent image decode/layout shifts made it
+    // look choppy. Waiting lets the row settle first, so the position lands once and
+    // stays put. Bump higher if heavy series pages still scroll before settling.
+    const SCROLL_TO_EPISODE_DELAY_MS = 450;
+
+    function setScrollerPosition(scroller, position, animate) {
+        if (!scroller) return;
+        const maxPosition = Math.max(scroller.scrollWidth - scroller.clientWidth, 0) + 300;
+        const clamped = Math.min(Math.max(position, 0), Math.max(maxPosition, 0));
+        scroller.style.transition = animate ? 'transform 270ms ease-out' : 'none';
+        scroller.style.transform = `translateX(-${clamped}px)`;
+        scroller.style.setProperty('--scroll-x', String(clamped));
+    }
+
     function scrollToEpisode(scrollerContainer, targetEpisodeNumber) {
         if (!scrollerContainer || !targetEpisodeNumber) return;
 
@@ -389,7 +406,7 @@
                 const cardOffset = targetCard.offsetLeft;
                 const scrollerPadding = parseInt(window.getComputedStyle(scrollerContainer).paddingLeft, 10) || 0;
                 const translateX = (cardOffset - scrollerPadding);
-                scrollerContainer.scrollToPosition(translateX);
+                setScrollerPosition(scrollerContainer, translateX);
                 
                 const scrollButtons = scrollerContainer.closest('.emby-scroller-container')?.querySelector('.emby-scrollbuttons');
                 if (scrollButtons) {
@@ -403,7 +420,7 @@
             } else {
                 WARN(`Could not find target episode card S${targetEpisodeNumber.season}:E${targetEpisodeNumber.episode}`);
             }
-        }, 100);
+        }, SCROLL_TO_EPISODE_DELAY_MS);
     }
 
     /**
@@ -478,14 +495,14 @@
             targetSeasonId = targetEpisode.SeasonId;
             targetSeasonIndex = targetEpisode.ParentIndexNumber;
             // Try to find matching season in seasons list for consistent naming, otherwise use API data
-            const matchingSeason = seasons.find(s => s.Id === targetSeasonId);
-            targetSeasonName = matchingSeason ? matchingSeason.Name : (targetEpisode.SeasonName || `Season ${targetSeasonIndex}`);
+            const matchingSeason = seasons.find(s => s.id === targetSeasonId);
+            targetSeasonName = matchingSeason ? matchingSeason.name : (targetEpisode.SeasonName || `Season ${targetSeasonIndex}`);
         } else {
             // Fallback to first season
             if (seasons.length > 0) {
-                targetSeasonId = seasons[0].Id;
-                targetSeasonIndex = seasons[0].IndexNumber;
-                targetSeasonName = seasons[0].Name;
+                targetSeasonId = seasons[0].id;
+                targetSeasonIndex = seasons[0].indexNumber;
+                targetSeasonName = seasons[0].name;
             } else {
                 WARN('No seasons available to render');
                 return;
@@ -541,6 +558,12 @@
         
         const hideSingleSeasonContainer = window.KefinTweaksConfig?.flattenSingleSeasonShows?.hideSingleSeasonContainer === true;
 
+        // ElegantFin handling :)
+        seasonSection.style.cssText = `
+            overflow: hidden;
+            display: block;
+        `;
+
         const scrollerContainer = seasonSection.querySelector('.emby-scroller');
         if (scrollerContainer) {
             scrollerContainer.classList.add('no-padding');
@@ -577,18 +600,18 @@
         // Add season selector if more than one season
         if (seasons.length > 1) {
             const handleSeasonChange = async (selectedSeason) => {
-                LOG(`Switching to season: ${selectedSeason.Name}`);
+                LOG(`Switching to season: ${selectedSeason.name}`);
                 
-                const newEpisodes = await fetchEpisodesForSeries(seriesId, selectedSeason.Id);
+                const newEpisodes = await fetchEpisodesForSeries(seriesId, selectedSeason.id);
                 if (newEpisodes.length === 0) {
-                    WARN(`No episodes found for Season ID: ${selectedSeason.Id}`);
+                    WARN(`No episodes found for Season ID: ${selectedSeason.id}`);
                     return;
                 }
                 
                 // Update section title
                 const sectionTitle = sectionTitleContainer.querySelector('.sectionTitle');
                 if (sectionTitle) {
-                    const newSeasonName = formatSeasonName(selectedSeason.Name, selectedSeason.IndexNumber);
+                    const newSeasonName = formatSeasonName(selectedSeason.name, selectedSeason.indexNumber);
                     sectionTitle.textContent = newSeasonName;
                 }
                 
@@ -645,7 +668,7 @@
                         // Scroll to beginning if this season doesn't have NextUp
                         if (scrollerContainer) {
                             setTimeout(() => {
-                                scrollerContainer.scrollToPosition(0);
+                                setScrollerPosition(scrollerContainer, 0);
                                 LOG('Scrolled to beginning of season (not NextUp season)');
                             }, 100);
                         }
@@ -665,19 +688,15 @@
                     style.id = 'kefinTweaks-nextUpEpisode-style';
                     const escapedHeaderText = nextUpHeaderText.replace(/'/g, "\\'").replace(/"/g, '\\"');
                     style.textContent = `
-                        .nextUpEpisode:not(.nextUpEpisode ~ .nextUpEpisode) .cardScalable::after {
+                        .nextUpEpisode .cardScalable::after {
                             content: '${escapedHeaderText}';
                             position: absolute;
-                            transform: translateY(0);
-                            top: 0.5em;
-                            left: 0.5em;
-                            padding: 0.25em 0.5em;
+                            transform: translateY(-100%);
+                            padding: 0.5em 1em;
+                            width: calc(100% - 2em);
                             text-align: center;
-                            background: rgb(0 0 0 / 85%);
-                            font-size: 1.1em;
-                            border: 1px solid rgb(255 255 255 / 40%);
-                            border-radius: 5px;
-                            pointer-events: none;
+                            background: linear-gradient(90deg, transparent, black, transparent);
+                            font-size: 1.2em;
                         }
                     `;
                     document.head.appendChild(style);
@@ -685,54 +704,41 @@
                 }
                 
                 // Add nextUpEpisode class if not S1E1
-                updateNextUpItem(targetEpisodeNumber, scrollerContainer);
+                if (targetEpisodeNumber.season !== 1 || targetEpisodeNumber.episode !== 1) {
+                    setTimeout(() => {
+                        const scrollerItemsContainer = scrollerContainer.querySelector('.itemsContainer');
+                        if (scrollerItemsContainer) {
+                            const cards = scrollerItemsContainer.querySelectorAll('.card');
+                            for (const card of cards) {
+                                const cardTextLinks = card.querySelectorAll('.cardText a');
+                                for (const link of cardTextLinks) {
+                                    const linkText = link.innerText || link.textContent;
+                                    const match = linkText.match(/S(\d+):E(\d+)/);
+                                    if (match && 
+                                        parseInt(match[1], 10) === targetEpisodeNumber.season &&
+                                        parseInt(match[2], 10) === targetEpisodeNumber.episode) {
+                                        card.classList.add('nextUpEpisode');
+                                        LOG(`Added nextUpEpisode class to card S${targetEpisodeNumber.season}:E${targetEpisodeNumber.episode}`);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }, 100);
+                }
+                
+                scrollToEpisode(scrollerContainer, targetEpisodeNumber);
             }
         }
 
         LOG(`Successfully rendered episodes section for season ${targetSeason.indexNumber} with ${episodes.length} episodes`);
     }
 
-    function updateNextUpItem(targetEpisodeNumber, scrollerContainer) {              
-        // Remove existing nextUpEpisode class
-        const existingNextUpEpisodes = scrollerContainer.querySelectorAll('.nextUpEpisode');
-        if (existingNextUpEpisodes.length > 0) {
-            for (const existingNextUpEpisode of existingNextUpEpisodes) {
-                existingNextUpEpisode.classList.remove('nextUpEpisode');
-                LOG(`Removed nextUpEpisode class from card S${targetEpisodeNumber.season}:E${targetEpisodeNumber.episode}`);
-            }
-        }        
-        
-        // Add nextUpEpisode class if not S1E1
-        if (targetEpisodeNumber.season !== 1 || targetEpisodeNumber.episode !== 1) {
-            const scrollerItemsContainer = scrollerContainer.querySelector('.itemsContainer');
-            if (scrollerItemsContainer) {
-                const cards = scrollerItemsContainer.querySelectorAll('.card');
-                for (const card of cards) {
-                    const cardTextLinks = card.querySelectorAll('.cardText a');
-                    for (const link of cardTextLinks) {
-                        const linkText = link.innerText || link.textContent;
-                        const match = linkText.match(/S(\d+):E(\d+)/);
-                        if (match && 
-                            parseInt(match[1], 10) === targetEpisodeNumber.season &&
-                            parseInt(match[2], 10) === targetEpisodeNumber.episode) {
-                            card.classList.add('nextUpEpisode');
-                            LOG(`Added nextUpEpisode class to card S${targetEpisodeNumber.season}:E${targetEpisodeNumber.episode}`);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        
-        scrollToEpisode(scrollerContainer, targetEpisodeNumber);
-    }
-
     /**
      * Processes a series page to add episodes section
      * @param {string} seriesId - The series ID
      */
-    async function processSeriesPage(series) {
-        const seriesId = series.Id;
+    async function processSeriesPage(seriesId) {
         const activePage = document.querySelector('.libraryPage:not(.hide)');
         if (!activePage) {
             WARN('Active page not found');
@@ -745,17 +751,19 @@
             return;
         }
 
-        // Use apiHelper to get seasons
-        const response = await window.apiHelper.getQuery(`${ApiClient.serverAddress()}/Shows/${seriesId}/Seasons`, { useCache: true });
-        if (!response.data) {
-            response.data = await response.dataPromise;
+        // Wait for seasons section to render
+        LOG('Waiting for seasons section to render...');
+        const childrenCollapsible = await waitForSeasonsSection(activePage);
+        
+        if (!childrenCollapsible) {
+            WARN('Could not find seasons section, aborting');
+            return;
         }
-        const seasonsData = response.data;
 
         // Extract seasons from DOM
-        const seasons = seasonsData.Items || seasonsData || [];
+        const seasons = extractSeasonsFromDOM(activePage);
         if (seasons.length === 0) {
-            WARN('No seasons found');
+            WARN('No seasons found in DOM');
             return;
         }
 
@@ -790,11 +798,11 @@
 
             // Find season matching NextUp episode by SeasonId (preferred) or index number
             if (targetEpisode.SeasonId) {
-                targetSeason = seasons.find(s => s.Id === targetEpisode.SeasonId);
+                targetSeason = seasons.find(s => s.id === targetEpisode.SeasonId);
             }
             
             if (!targetSeason && targetEpisode.ParentIndexNumber !== undefined) {
-                 targetSeason = seasons.find(s => s.IndexNumber === targetEpisode.ParentIndexNumber);
+                 targetSeason = seasons.find(s => s.indexNumber === targetEpisode.ParentIndexNumber);
             }
         }
         
@@ -802,11 +810,11 @@
         if (!targetSeason) {
             targetSeason = seasons[0];
             // If we have NextUp but season not found, use first episode of first season
-            if (targetEpisodeNumber && !seasons.find(s => s.IndexNumber === targetEpisodeNumber.season)) {
-                targetEpisodeNumber = { season: targetSeason.IndexNumber, episode: 1 };
+            if (targetEpisodeNumber && !seasons.find(s => s.indexNumber === targetEpisodeNumber.season)) {
+                targetEpisodeNumber = { season: targetSeason.indexNumber, episode: 1 };
                 LOG(`NextUp season not in seasons list, defaulting to first episode of first season`);
             } else if (!targetEpisodeNumber) {
-                targetEpisodeNumber = { season: targetSeason.IndexNumber, episode: 1 };
+                targetEpisodeNumber = { season: targetSeason.indexNumber, episode: 1 };
                 LOG(`No NextUp found, defaulting to first episode of first season`);
             }
         }
@@ -835,36 +843,6 @@
         activePage.dataset.seriesEpisodesProcessed = 'true';
     }
 
-    async function verifyNextUpItem(seriesId) {
-        const nextUpItem = await fetchNextUpEpisode(seriesId);
-
-        if (!nextUpItem) {
-            LOG('No Next Up item found, skipping');
-            return;
-        }
-
-        const currentNextUpItem = document.querySelector('.libraryPage:not(.hide) .nextUpEpisode');
-
-        if (currentNextUpItem.dataset.id === nextUpItem.Id) {
-            LOG('Next Up item is the same as the current one, skipping');
-            return;
-        }
-
-        const targetEpisodeNumber = nextUpItem ? {
-            season: nextUpItem.ParentIndexNumber,
-            episode: nextUpItem.IndexNumber,
-            id: nextUpItem.Id
-        } : null;
-
-        const scrollerContainer = document.querySelector('.libraryPage:not(.hide) .series-episodes-section .emby-scroller');
-        if (!scrollerContainer) {
-            LOG('Scroller container not found, skipping');
-            return;
-        }
-
-        updateNextUpItem(targetEpisodeNumber, scrollerContainer);
-    }
-
     /**
      * Initialize the series episodes hook
      */
@@ -882,30 +860,29 @@
                 const activePage = document.querySelector('.libraryPage:not(.hide)');
                 if (!activePage) return;
 
+                // Remove processed flag when page changes
+                if (activePage.dataset.seriesEpisodesProcessed) {
+                    //delete activePage.dataset.seriesEpisodesProcessed;
+                    LOG('Existing episodes section found, skipping');
+                    return;
+                }
+
+                // Remove any existing episodes section
                 const existingSection = activePage.querySelector('.series-episodes-section');
-
-                if (activePage.dataset.seriesEpisodesProcessed || existingSection) {
-                    LOG('Existing episodes section found, only verifying NextUp item');
-                    const itemId = document.querySelector('.libraryPage:not(.hide) .btnPlaystate')?.dataset?.id;
-
-                    if (itemId) {
-                        verifyNextUpItem(itemId);
-                    }
+                if (existingSection) {
+                    //existingSection.remove();
+                    LOG('Existing episodes section found, skipping');
                     return;
                 }
 
                 const item = await itemPromise;
-
-                if (!item || item.Type !== 'Series') {
-                    return;
-                }
 
                 if (item && item.Type === 'Series') {
                     LOG(`Found series: ${item.Id} (${item.Name})`);
                     
                     // Small delay to ensure page is ready
                     setTimeout(async () => {
-                        await processSeriesPage(item);
+                        await processSeriesPage(item.Id);
                     }, 100);
                 }
             },

@@ -1178,7 +1178,7 @@
     // Build script toggle switches
     function buildScriptToggles(scripts) {
         // Features that have configuration options (not just toggles)
-        const featuresWithConfig = new Set(['homeScreen', 'search', 'flattenSingleSeasonShows', 'skinManager', 'customMenuLinks', 'seriesInfo', 'thumbnailScrubber']);
+        const featuresWithConfig = new Set(['homeScreen', 'search', 'flattenSingleSeasonShows', 'skinManager', 'customMenuLinks', 'seriesInfo', 'thumbnailScrubber', 'themeMediaCastFix', 'pauseScreen', 'osdLogo']);
         
         const scriptNames = [
             { key: 'watchlist', label: 'Watchlist', desc: 'Allows your users to add items to their Watchlist. The Watchlist page shows an overview of all items on a user\'s Watchlist, as well as their Series Progress and Movie History. It also includes a Statistics page with an overview of your user watched stats.' },
@@ -1199,7 +1199,10 @@
             { key: 'exclusiveElsewhere', label: 'Exclusive Elsewhere', desc: 'Custom branding when items aren\'t available on streaming services' },
             { key: 'backdropLeakFix', label: 'Backdrop Leak Fix', desc: 'Fixes memory leaks from backdrop images when tab isn\'t focused' },
             { key: 'dashboardButtonFix', label: 'Dashboard Button Fix', desc: 'Improved back button behavior on dashboard - prevents navigating back to the new tab browser page' },
-            { key: 'thumbnailScrubber', label: 'Thumbnail Scrubber', desc: 'Shows trickplay thumbnail preview when hovering in the bottom 20px of a video card similar to Youtube' }
+            { key: 'thumbnailScrubber', label: 'Thumbnail Scrubber', desc: 'Shows trickplay thumbnail preview when hovering in the bottom 20px of a video card similar to Youtube' },
+            { key: 'themeMediaCastFix', label: 'Theme Media', desc: 'Plays theme songs and videos in the web client, including while casting to an mpv-shim or other remote player. Replaces the native Play Theme Music/Videos toggles and adds subtle on-video controls.' },
+            { key: 'pauseScreen', label: 'Pause Screen', desc: 'Shows a rich overlay with the media\'s logo, plot, details, disc/clear art and playback progress when playback stays paused for a few seconds. Works with the HTML5 web player and external players (mpv-shim etc.).' },
+            { key: 'osdLogo', label: 'Player Logo', desc: 'Shows the media\'s logo (or ClearArt) on the video player OSD while the playback controls are visible, with optional transparency trimming and OSD drop shadows.' }
         ];
 
         return scriptNames.map(script => {
