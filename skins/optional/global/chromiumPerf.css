@@ -1,0 +1,54 @@
+/* =============================================================================
+ * Performance Mode  —  Chromium-only render relief
+ * =============================================================================
+ * Gated on `html.kefin-blink`, a class injector.js sets only on Chromium-based
+ * engines. Everything in here targets a cost that is specific to Blink, and at
+ * least one of them (see the trade-off below) would be a net negative in Gecko,
+ * so none of it should apply to Firefox-family browsers.
+ *
+ * Style recalculation is the dominant Chromium cost on this page. Profiling a
+ * home-screen scroll measured ~2.4s of "engine-driven" UpdateLayoutTree — the
+ * browser re-matching selectors against the whole accumulated card tree as new
+ * cards stream in. A single card is 30 DOM nodes with 80 class names, so a home
+ * screen is ~9,000 nodes and a scrolled library grid ~30,000. Firefox computes
+ * style in parallel across cores (Stylo); Blink does it serially, on the same
+ * thread that runs JS and fires the IntersectionObservers that start image
+ * loads — which is why style cost shows up there as slow-loading artwork.
+ *
+ * `content-visibility: auto` is the only mechanism that REMOVES that work rather
+ * than moving it around: the browser skips style, layout and paint entirely for
+ * rows it considers off-screen.
+ *
+ * The placeholder height comes from --kefin-home-row-height, which
+ * cardBuilder.js measures off a real rendered row with a ResizeObserver and
+ * republishes on resize. It is deliberately not a hard-coded guess: a wrong
+ * placeholder shifts every row below it, which is visible as the spacing
+ * between rows changing as you scroll. 420px is only a bootstrap value for the
+ * first paint, before any row has been measured.
+ *
+ * Only the block axis is constrained. `contain-intrinsic-size` with a single
+ * value sets BOTH axes, which would also give skipped rows a 420px intrinsic
+ * width; rows are stretched flex items, so width must be left alone.
+ *
+ * `auto` makes the browser remember each row's real rendered size and prefer it
+ * over the placeholder, so the fallback only ever applies to a row that has
+ * never been on screen.
+ *
+ * TRADE-OFF: content inside a skipped subtree has no boxes, so
+ * IntersectionObserver reports its images as not intersecting. Chromium's
+ * relevance margin is tighter than the 2000px lazy-image margin cardBuilder.js
+ * uses, so artwork can start loading later than it otherwise would. If card
+ * images start popping in late, this file is the cause.
+ * ========================================================================== */
+
+html.kefin-blink .homeSectionsContainer > .verticalSection.emby-scroller-container {
+    content-visibility: auto;
+    contain-intrinsic-width: auto none;
+    contain-intrinsic-height: auto var(--kefin-home-row-height, 420px);
+}
+
+/* The spotlight is full-bleed, is normally on screen anyway, and runs its own
+ * animations — skipping it buys nothing and risks a flash on load. */
+html.kefin-blink .homeSectionsContainer > .spotlight-section {
+    content-visibility: visible;
+}

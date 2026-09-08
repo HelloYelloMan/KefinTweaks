@@ -140,6 +140,15 @@
                 name: 'Hide Media Tags Row',
                 url: `${getKefinTweaksRoot()}skins/optional/global/hideMediaTags.css`,
                 enabled: false
+            },
+            {
+                // Skin-agnostic: targets Jellyfin's .homeSectionsContainer and the
+                // .verticalSection / .spotlight-section elements KefinTweaks' own
+                // cardBuilder builds, so it applies under any skin or none. Gated to
+                // Chromium engines via html.kefin-blink (see docs/performance-mode.md).
+                name: 'Performance Mode (skip offscreen home rows)',
+                url: `${getKefinTweaksRoot()}skins/optional/global/chromiumPerf.css`,
+                enabled: true
             }
         ],
         
