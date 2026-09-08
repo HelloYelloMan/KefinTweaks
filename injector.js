@@ -59,6 +59,37 @@
         return "Custom Install";
     }
     
+    // ---- Engine detection -------------------------------------------------
+    // Several KefinTweaks optimisations target costs specific to Blink: its style
+    // recalculation is single-threaded and serialised on the same thread that runs
+    // JS and fires IntersectionObservers, whereas Gecko computes style in parallel
+    // across cores (Stylo). Some of those optimisations are a net NEGATIVE outside
+    // Blink — content-visibility trades image pre-load lead time for lower style
+    // cost, which is a bad trade when style was never the bottleneck.
+    //
+    // Publish the engine as a class on <html> so both CSS and JS can gate on it.
+    // Set as early as possible (before any skin CSS loads) so gated rules apply on
+    // the first paint and cannot cause a layout shift by arriving late.
+    const IS_BLINK = (function () {
+        try {
+            const brands = navigator.userAgentData && navigator.userAgentData.brands;
+            if (Array.isArray(brands)) {
+                // Chromium-based engines always list "Chromium" among their brands.
+                return brands.some(b => b && b.brand === 'Chromium');
+            }
+        } catch (e) { /* userAgentData unavailable; fall through to UA sniffing */ }
+        const ua = (navigator.userAgent || '');
+        // Covers Chrome, Edge, Opera, Brave, Vivaldi, Helium, etc. Excludes Firefox
+        // family; Safari/WebKit does not match either, which is intended — it is a
+        // different engine with different costs.
+        return /Chrome|Chromium|CriOS|Edg|OPR/.test(ua) && !/Firefox|FxiOS/.test(ua);
+    })();
+
+    window.KefinTweaksIsBlink = IS_BLINK;
+    if (IS_BLINK && document.documentElement) {
+        document.documentElement.classList.add('kefin-blink');
+    }
+
     // Configuration: Start with defaults, then merge user config
     // This allows new scripts to work out of the box without requiring config updates
     const ENABLED_SCRIPTS = {
@@ -87,6 +118,7 @@
         elegantfinHaspatch: true, // ElegantFin :has() hotfix marker classes (needs the local ElegantFin build)
         mediaTags: true,          // Add a Tags row to the item-details metadata table
         episodeSeasonTitle: true, // Season title/logo on episode headers + season-page logo links to series
+        jeSidebarMemo: true,      // Memoise Jellyfin Enhanced's getSidebarContainer (forced style flush on every DOM mutation)
         
         // Note: Core functionality scripts (utils, cardBuilder, localStorageCache, modal) 
         // are automatically enabled when needed by other scripts
@@ -336,6 +368,13 @@
             css: null,
             dependencies: ['utils'],
             description: 'Maintains the .ef-* marker classes that replace the Chromium-hot :has() selectors in the local ElegantFin build.'
+        },
+        {
+            name: 'jeSidebarMemo',
+            script: 'jeSidebarMemo.js',
+            css: null,
+            dependencies: [],
+            description: "Memoises Jellyfin Enhanced's getSidebarContainer(), which reads offsetParent (a forced full-document style flush) on every body mutation. Measured at 3.2s of style recalc across 104 calls when navigating into a series page. No-ops if Jellyfin Enhanced is absent."
         },
         {
             name: 'updoot',
