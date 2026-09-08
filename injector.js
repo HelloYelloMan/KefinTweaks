@@ -151,6 +151,7 @@
         skinManager: true,        // Skin selection and management
         thumbnailScrubber: false,  // Trickplay thumbnail scrub on hover (bottom 20px of video cards)
         themeMediaCastFix: true,  // Theme media playback while a remote/cast target is connected
+        castSessionWatchdog: true, // Re-subscribe the Sessions feed when a stale now playing bar shows a dead cast target
         pauseScreen: true,        // Rich pause screen overlay (logo, plot, artwork, progress)
         osdLogo: true,            // Media logo/ClearArt on the video OSD
         elegantfinHaspatch: true, // ElegantFin :has() hotfix marker classes (needs the local ElegantFin build)
@@ -525,6 +526,13 @@
             css: null,
             dependencies: [],
             description: 'Restores theme song/video playback in the web client while a remote/cast player (e.g. mpv-shim) is the selected target.'
+        },
+        {
+            name: 'castSessionWatchdog',
+            script: 'castSessionWatchdog.js',
+            css: null,
+            dependencies: [],
+            description: 'Re-subscribes the Sessions WebSocket feed when it goes silent while the now playing bar is up, so a cast target that stopped playing cannot leave a frozen seek bar on screen.'
         },
         {
             name: 'pauseScreen',
