@@ -72,6 +72,9 @@
         discoverySectionsRemain: true,
         ensuringDiscoveryBuffer: false,
         infiniteScrollHandler: null,
+        discoveryObserver: null,
+        discoverySentinel: null,
+        discoveryContainerObserver: null,
         userDisplayPreferences: null,
         firstDiscoveryBuffer: null,
         getDisplayPrefernces: fetchDisplayPreferences,
@@ -1877,12 +1880,34 @@
         });
     }
 
-    function disconnectDiscoveryInteraction() {
-        // If we are using infinite scroll, disconnect the scroll event listener
+    /**
+     * Tear down whichever infinite-scroll mechanism is currently armed.
+     * Safe to call when nothing is armed.
+     */
+    function teardownDiscoveryScroll() {
+        if (state.discoveryContainerObserver) {
+            state.discoveryContainerObserver.disconnect();
+            state.discoveryContainerObserver = null;
+        }
+        if (state.discoveryObserver) {
+            state.discoveryObserver.disconnect();
+            state.discoveryObserver = null;
+        }
+        if (state.discoverySentinel) {
+            state.discoverySentinel.remove();
+            state.discoverySentinel = null;
+        }
         if (state.infiniteScrollHandler) {
             window.removeEventListener('scroll', state.infiniteScrollHandler);
             state.infiniteScrollHandler = null;
-        } else {
+        }
+    }
+
+    function disconnectDiscoveryInteraction() {
+        // If we are using infinite scroll, tear the observer/sentinel down
+        const usingInfiniteScroll = !!(state.discoveryObserver || state.infiniteScrollHandler);
+        teardownDiscoveryScroll();
+        if (!usingInfiniteScroll) {
             const loadMoreButton = document.querySelector('.libraryPage:not(.hide) .load-more-discovery-btn');
             if (loadMoreButton) {
                 loadMoreButton.remove();
@@ -2014,6 +2039,14 @@
 
             if (!getDiscoverySettings().infiniteScroll) {
                 setupLoadMoreButton(container);
+            } else if (state.discoverySentinel && state.discoveryObserver) {
+                // New sections were appended after the sentinel, so move it back to
+                // the end. Re-observing forces a fresh notification: if the sentinel
+                // never left the root margin, the observer would otherwise stay
+                // silent and infinite scroll would stall after one group.
+                container.appendChild(state.discoverySentinel);
+                state.discoveryObserver.unobserve(state.discoverySentinel);
+                state.discoveryObserver.observe(state.discoverySentinel);
             }
 
             container.dataset.loadingDiscovery = 'false';
@@ -2334,31 +2367,76 @@
         if (container.dataset.discoveryHandler) return;
         container.dataset.discoveryHandler = 'true';
 
-        state.infiniteScrollHandler = window.addEventListener('scroll', () => {
-            // Check if the user is on the home page
-            const currentView = window.KefinTweaksUtils?.getCurrentView();
-            const isHomePage = currentView === 'home' || currentView === 'home.html';
-            if (!isHomePage) return;
+        // Drop anything left over from a previous .homeSectionsContainer. Jellyfin
+        // recreates that node on navigation back to home, so the dataset guard above
+        // (which lives on the node) cannot catch a stale observer from the last visit.
+        teardownDiscoveryScroll();
 
-            // Check if the user is on the first tab
-            const activeTab = document.querySelector('.headerTabs .emby-tab-button-active').getAttribute('data-index');
-            if (activeTab !== '0') return;
+        // A scroll listener that measured documentElement.scrollHeight used to live
+        // here. Profiling a 12s home-screen scroll in Chromium showed it costing
+        // ~1.6s of Recalculate Style across 244 calls: reading scrollHeight forces a
+        // synchronous style+layout flush of the whole document, and on this page that
+        // is 20k elements. An IntersectionObserver on a sentinel at the end of the
+        // container answers the same question ("are we near the bottom?") entirely on
+        // the compositor, with no forced flush at all.
+        const sentinel = document.createElement('div');
+        sentinel.className = 'kefin-discovery-sentinel';
+        sentinel.setAttribute('aria-hidden', 'true');
+        // .sections.homeSectionsContainer is `display:flex; flex-direction:column`
+        // (homeScreen.css:3) and every section positions itself with an explicit CSS
+        // `order` (cardBuilder.js:952). In a flex container DOM order is NOT visual
+        // order, so a sentinel with the default `order:0` renders ABOVE every section
+        // — it sits near the top of the page and can never be reached by scrolling
+        // down, which silently kills discovery loading. Order it after everything,
+        // including the loading indicator's 1000000000.
+        sentinel.style.cssText = 'width:100%;height:1px;margin:0;padding:0;pointer-events:none;order:2000000000;';
+        container.appendChild(sentinel);
+
+        const observer = new IntersectionObserver((entries) => {
+            if (!entries.some(e => e.isIntersecting)) return;
+
+            const currentView = window.KefinTweaksUtils?.getCurrentView();
+            if (currentView !== 'home' && currentView !== 'home.html') return;
+
+            const activeTabEl = document.querySelector('.headerTabs .emby-tab-button-active');
+            if (!activeTabEl || activeTabEl.getAttribute('data-index') !== '0') return;
 
             if (!container.dataset.sectionsRendered) return;
-
             if (state.isRenderingDiscovery) return;
-             
-            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-            const windowHeight = window.innerHeight;
-            const documentHeight = document.documentElement.scrollHeight;
-            
-            const threshold = windowHeight * 1.5;
-            
-            if (scrollTop + windowHeight >= documentHeight - threshold) { 
-                renderNextDiscoveryGroup(container);
-            }
-        }, { passive: true });
-        LOG('Infinite scroll enabled for discovery.');
+
+            renderNextDiscoveryGroup();
+        }, {
+            root: null,
+            // Same trigger distance the old scrollTop maths used: 1.5 viewports.
+            rootMargin: '0px 0px 150% 0px',
+            threshold: 0
+        });
+        observer.observe(sentinel);
+
+        // The sentinel only reports "near the bottom" while it IS the bottom, but
+        // renderProgressiveSections() appends new sections with
+        // container.appendChild(fragment) — i.e. AFTER the sentinel — which buries it
+        // mid-page. Once buried it can never intersect again while scrolling down, so
+        // discovery silently stops loading. Watch the container's direct children only
+        // (no subtree: this fires a handful of times, on section appends, not on the
+        // thousands of card insertions underneath) and move the sentinel back to the
+        // end whenever that happens. Re-observing forces a fresh notification, since a
+        // sentinel that never changed intersection state would otherwise stay silent.
+        const keepSentinelLast = () => {
+            if (!state.discoverySentinel || !state.discoveryObserver) return;
+            if (container.lastElementChild === state.discoverySentinel) return;
+            container.appendChild(state.discoverySentinel);
+            state.discoveryObserver.unobserve(state.discoverySentinel);
+            state.discoveryObserver.observe(state.discoverySentinel);
+        };
+        const containerObserver = new MutationObserver(keepSentinelLast);
+        containerObserver.observe(container, { childList: true });
+
+        state.discoverySentinel = sentinel;
+        state.discoveryObserver = observer;
+        state.discoveryContainerObserver = containerObserver;
+        keepSentinelLast();
+        LOG('Infinite scroll enabled for discovery (sentinel).');
     }
 
     function setupLoadMoreButton(container) {
