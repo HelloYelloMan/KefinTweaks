@@ -151,6 +151,16 @@
                 enabled: true
             },
             {
+                // Corrects ElegantFin's square-card exception, which shows the
+                // poster and switches to the secondary header on the collections
+                // whose Primary happens to be landscape. Pure CSS so it applies
+                // on the first paint; the JS version it replaces could only run
+                // after the wrong layout had been painted.
+                name: 'Ignore Poster Shape on Collection Pages',
+                url: `${getKefinTweaksRoot()}skins/optional/global/collectionPosterLayout.css`,
+                enabled: false
+            },
+            {
                 // Needs body.kefin-collection-single, set by the Virtual Specials
                 // Tweaks feature; inert without it, hence the name. See the
                 // header of the stylesheet for why the condition is not

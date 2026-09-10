@@ -88,7 +88,6 @@
     const ANIDB_CACHE_NAME = 'virtualSpecials_anidbSeries';
     const ART_FLAG = 'kefinFallbackArt';
     const ART_FLAG_ATTR = 'kefin-fallback-art';
-    const SHAPE_FLAG = 'kefinPosterShape';
 
     // ======================================================================
     // Shared data
@@ -321,19 +320,35 @@
     // the text title through
     // `.detailLogo.hide ~ .detailPageWrapperContainer .nameContainer h1`,
     // so the page reads exactly as it did before, just with a backdrop.
-    function logoLayoutIsSafe(page) {
+    // The "Ignore Poster Shape on Collection Pages" stylesheet publishes
+    // --kefin-collection-poster-layout when it is loaded AND the layout it
+    // corrects is the active one. With it on, a collection page keeps the
+    // primary-page header whatever its poster's shape, so the logo is
+    // positioned correctly and there is nothing to withhold. Read once per
+    // view rather than per tick: getComputedStyle forces a style flush.
+    function posterLayoutOptionActive() {
+        try {
+            return getComputedStyle(document.documentElement)
+                .getPropertyValue('--kefin-collection-poster-layout').trim() === '1';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function logoLayoutIsSafe(page, optionActive) {
+        if (optionActive) return true;
         const card = page.querySelector('.detailImageContainer .card');
         return !!card && card.classList.contains('portraitCard');
     }
 
     // renderLogo does exactly this: drop `hide`, set the image. Only ever fills
     // a blank -- an element already carrying an image belongs to the item.
-    function applyLogo(page, url) {
+    function applyLogo(page, url, optionActive) {
         const logo = page.querySelector('.detailLogo');
         if (!logo) return;
         if (logo.style.backgroundImage && !logo.dataset[ART_FLAG]) return;
 
-        if (!logoLayoutIsSafe(page)) {
+        if (!logoLayoutIsSafe(page, optionActive)) {
             // Undo an earlier tick that ran before the poster card existed.
             if (logo.dataset[ART_FLAG]) {
                 logo.style.backgroundImage = '';
@@ -346,70 +361,6 @@
         logo.style.backgroundImage = "url('" + url + "')";
         logo.dataset[ART_FLAG] = '1';
         logo.classList.remove('hide');
-    }
-
-    // THE POSTER SHOULD NEVER SHOW ON A COLLECTION PAGE, and normally it does
-    // not: ElegantFin hides it with `.detailImageContainer .card { display: none }`.
-    // But it makes exceptions, and one of them catches these pages by accident:
-    //
-    //   .detailImageContainer > .backdropCard,
-    //   .detailImageContainer > .card:has(.album),  ... :has(.book),
-    //   ... :has(.live_tv), :has(.person), :has(.queue),
-    //   .detailImageContainer > .squareCard          { display: block }
-    //
-    // Square means an album, a book, a person or a live-TV entry, where the
-    // image IS the identity and showing it is right. A collection ends up there
-    // only because jellyfin-web picks the card shape from the Primary image's
-    // aspect ratio, and 19 of the 300 collections here have a Primary wider than
-    // about 0.85 -- AniDB simply has a landscape picture for those releases.
-    //
-    // Every consequence follows from that one misclassification: the poster
-    // appears, the header shrinks to 73vh, and the logo keeps its full-height
-    // position and lands on the description. Overriding the three of them
-    // separately would mean fighting the theme rule by rule and re-deriving
-    // heights it computes. Correcting the classification instead fixes all
-    // three at once, because every one of those rules keys off the card's shape.
-    //
-    // This is not lying to the theme. The page is a collection whose poster is
-    // meant to be hidden; the shape was inferred from artwork, not from what the
-    // item is, and the inference is simply wrong here. The card is display:none
-    // afterwards, so nothing about its own layout matters.
-    // EVERY card in the container, not just the first. jellyfin-web renders more
-    // than one .card into .detailImageContainer, and the theme's selectors are
-    // `:has(.detailImageContainer .squareCard)` -- a descendant match, so one
-    // stale card left behind keeps the whole page in the square layout. Fixing
-    // only the first left the header at 145px instead of 657px and the overview
-    // still underneath the logo.
-    //
-    // The padder class goes too. Nothing here reads it today, but it is the same
-    // classification expressed a second way, and leaving the two disagreeing is
-    // how the next rule that keys off it quietly misbehaves. ef-has-nonportrait
-    // is dropped for the same reason: elegantfin-haspatch.js only ever adds that
-    // marker, so it would otherwise outlive the condition that earned it.
-    function normalisePosterShape(page) {
-        // EVERY container, not just the first. A detail page carries two:
-        // `.detailImageContainer.hide-mobile` in .detailPagePrimaryContainer and
-        // `.detailImageContainer.hide-desktop.hide-tv` in .infoWrapper. Only one
-        // is visible at a time, but the theme's selectors are page-level
-        // descendant matches -- `#itemDetailPage:has(.detailImageContainer
-        // .squareCard)` -- so the hidden one holds the whole page in the square
-        // layout just as well as the visible one. Fixing only the desktop
-        // container left the header at 145px instead of 657px, with the overview
-        // still sitting under the logo, and the card that did it was invisible.
-        page.querySelectorAll('.detailImageContainer').forEach(container => {
-            let changed = false;
-            container.querySelectorAll('.card.squareCard').forEach(card => {
-                card.classList.remove('squareCard');
-                card.classList.add('portraitCard');
-                card.dataset[SHAPE_FLAG] = '1';
-                changed = true;
-            });
-            container.querySelectorAll('.cardPadder-square').forEach(padder => {
-                padder.classList.remove('cardPadder-square');
-                padder.classList.add('cardPadder-portrait');
-            });
-            if (changed) container.classList.remove('ef-has-nonportrait');
-        });
     }
 
     function preload(url) {
@@ -441,34 +392,30 @@
     // place, leaving the page with no title at all. Verifying the load first is
     // also the only check available: a background-image that fails reports
     // nothing to the page.
-    // Scheduled together, and on the same ticks, because the order matters:
-    // normalisePosterShape decides what logoLayoutIsSafe will say, so it has to
-    // run first within each tick. The shape fix is scheduled even when there is
-    // no artwork to borrow -- a collection with its own backdrop and logo can
-    // still have a landscape Primary.
     async function scheduleDetailFixes(page, art, alive) {
         stopArtRetries();
+        if (!art) return;
 
         const [backdropOk, logoOk] = await Promise.all([
-            art && art.backdrop ? preload(art.backdrop) : Promise.resolve(false),
-            art && art.logo ? preload(art.logo) : Promise.resolve(false)
+            art.backdrop ? preload(art.backdrop) : Promise.resolve(false),
+            art.logo ? preload(art.logo) : Promise.resolve(false)
         ]);
         if (!alive()) return;
 
         const backdrop = backdropOk ? art.backdrop : null;
         const logo = logoOk ? art.logo : null;
+        if (!backdrop && !logo) return;
+
+        const optionActive = posterLayoutOptionActive();
 
         artTimers = ART_RETRIES_MS.map(delay => setTimeout(() => {
             if (!alive()) return;
-            normalisePosterShape(page);
             if (backdrop) applyBackdrop(backdrop);
-            if (logo) applyLogo(page, logo);
+            if (logo) applyLogo(page, logo, optionActive);
         }, delay));
 
-        if (backdrop || logo) {
-            LOG('Borrowed artwork:', [backdrop && 'backdrop', logo && 'logo']
-                .filter(Boolean).join(' + '));
-        }
+        LOG('Borrowed artwork:', [backdrop && 'backdrop', logo && 'logo']
+            .filter(Boolean).join(' + '));
     }
 
 

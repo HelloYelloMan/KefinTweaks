@@ -1,0 +1,70 @@
+/* Collection pages keep their layout whatever shape the poster is
+ * (KefinTweaks global option)
+ *
+ * THE PROBLEM. A collection page normally shows no poster: ElegantFin hides it
+ * with `.detailImageContainer .card { display: none }`. But it grants
+ * exceptions, and one of them catches collections by accident:
+ *
+ *     .detailImageContainer > .backdropCard,
+ *     .detailImageContainer > .card:has(.album), :has(.book), :has(.live_tv),
+ *     :has(.person), :has(.queue),
+ *     .detailImageContainer > .squareCard          { display: block }
+ *
+ * Square means an album, a book, a person or a live-TV entry, where the image
+ * IS the identity and showing it is right. A collection lands in that bucket
+ * only because jellyfin-web infers the card shape from the Primary image's
+ * aspect ratio, and a Primary wider than about 0.85 becomes a squareCard. On
+ * this server 19 of 300 collections are in that position, because AniDB simply
+ * has a landscape picture for those releases.
+ *
+ * Two things then go wrong together. The poster appears, and the page switches
+ * to the theme's "secondary" header via
+ *
+ *     #itemDetailPage:has(.detailImageContainer .squareCard) .itemBackdrop {
+ *         height: calc(73vh - var(--secondaryItemPageNegativeSpace)) }
+ *
+ * while .detailLogo stays positioned for the primary header. Measured on a
+ * 1113px viewport: the header collapsed from 657px to 145px and the overview
+ * rose to sit underneath the logo.
+ *
+ * THE FIX, in two declarations, and neither re-derives a height.
+ *
+ * The second one is the whole trick. The primary and secondary headers differ
+ * only in which negative-space variable the theme subtracts -- 14vh against
+ * 60vh, both defined on `body`. Pointing the secondary one at the primary makes
+ * the theme's own calc produce the primary header, on its own terms. That keeps
+ * working if those values change, and it follows the +5em variant ElegantFin
+ * applies while audio is playing, which a hardcoded height would not.
+ *
+ * WHY CSS RATHER THAN JS. This was first done by rewriting the card's classes
+ * from virtualSpecials.js. It worked, but the swap can only run after the view
+ * has rendered, so the wrong layout was painted first and visibly corrected
+ * itself. A stylesheet applies on the first paint and cannot flicker.
+ *
+ * ON THE :has(). It is a registered :has() selector, which KefinTweaks
+ * otherwise avoids -- see the header of scripts/elegantfin-haspatch.js. Two
+ * things make it an acceptable trade here. The subject is #itemDetailPage,
+ * which ElegantFin has already registered as a :has() subject several times
+ * over, including for the very rule being corrected. And the argument features
+ * are .collectionItems and .collectionItemsContainer, which exist only on a
+ * collection page and are inserted once per navigation -- unlike .card, whose
+ * churn is what made the selectors in that file expensive.
+ */
+
+/* Published so scripts/virtualSpecials.js can tell this option is on and stop
+ * withholding a borrowed logo on these pages. Scoped to the desktop layout
+ * because that is where the header fix below applies; mobile and TV position
+ * the logo by their own rules and are left as the theme has them. */
+html.layout-desktop {
+    --kefin-collection-poster-layout: 1;
+}
+
+/* 1. No poster on a collection page, whatever shape it was classified as. */
+#itemDetailPage:has(.collectionItems .itemsContainer.collectionItemsContainer) .detailImageContainer > .card {
+    display: none;
+}
+
+/* 2. Keep the primary-page header. */
+.layout-desktop #itemDetailPage:has(.collectionItems .itemsContainer.collectionItemsContainer) {
+    --secondaryItemPageNegativeSpace: var(--primaryItemPageNegativeSpace);
+}
