@@ -23,9 +23,16 @@
  * which is the right failure, since it leaves the stock page intact.
  */
 
+/* Every rule is scoped to the VISIBLE detail page. Jellyfin keeps the outgoing
+ * view in the DOM during a navigation, so for a moment two .itemDetailPage
+ * elements exist at once -- measured mid-transition, a document-wide query saw
+ * the cards of both. The marker is computed from the visible page alone, so
+ * unscoped rules would apply that page's answer to its predecessor as well and
+ * could collapse a row mid-animation. */
+
 /* The heading and the one-card row. .collectionItems holds one .verticalSection
  * per item type; a single-item collection has exactly one of each. */
-body.kefin-collection-single .collectionItems > .verticalSection {
+body.kefin-collection-single .itemDetailPage:not(.hide) .collectionItems > .verticalSection {
     display: none;
 }
 
@@ -33,12 +40,12 @@ body.kefin-collection-single .collectionItems > .verticalSection {
  * before year, rating, runtime and size, so :first-child is the count and only
  * the count. Confirmed on 10.11.11, where the line reads:
  *   ["1 items", "2025", "4.8", "-23m / 23m", "5.52 GB"] */
-body.kefin-collection-single .itemMiscInfo-primary > .mediaInfoItem:first-child {
+body.kefin-collection-single .itemDetailPage:not(.hide) .itemMiscInfo-primary > .mediaInfoItem:first-child {
     display: none;
 }
 
 /* Shuffle. jellyfin-web already adds .hide when nothing in the collection is
  * playable, but not when there is exactly one thing to play. */
-body.kefin-collection-single .btnShuffle {
+body.kefin-collection-single .itemDetailPage:not(.hide) .btnShuffle {
     display: none;
 }
