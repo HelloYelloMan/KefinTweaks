@@ -1603,169 +1603,6 @@
         return undefined;
     }
 
-    // ---- Card played / favourite buttons ------------------------------------
-    // These were Jellyfin's own custom elements, `is="emby-playstatebutton"` and
-    // `is="emby-ratingbutton"`. Every instance subscribes to the global
-    // UserDataChanged notification when it attaches, and Jellyfin's
-    // serverNotifications fires that notification once per entry in the message's
-    // UserDataList — one entry per affected item, so marking a series played sends
-    // one for the series and one for every season and episode under it.
-    //
-    // With a button pair on every card, a single click therefore ran
-    // (2 x cards) x entries handlers before the browser could paint again. On a
-    // home screen of a few hundred cards that is tens of thousands of calls on the
-    // same thread that delivers the lazy-image IntersectionObserver callbacks, so
-    // artwork stopped appearing mid-click and popped back in afterwards. It read as
-    // the whole page reloading its images.
-    //
-    // The markup and the state attributes are unchanged — watchlist.css, the skins
-    // and Jellyfin's own indicator update all still match on them. What changed is
-    // that the behaviour now comes from one delegated click listener and one
-    // message listener for the whole document. The message carries the entire
-    // UserDataList at once, so a change of any size costs a single pass over the
-    // buttons that are actually on the page.
-    const USERDATA_BUTTON_CLASS = 'kefin-userdata-button';
-    const PLAYSTATE_BUTTON_CLASS = 'kefin-playstate-button';
-    const FAVORITE_BUTTON_CLASS = 'kefin-favorite-button';
-
-    let clickHandlerInstalled = false;
-    let messageHandlerInstalled = false;
-
-    function setPlayedState(button, played) {
-        const icon = button.querySelector('.material-icons');
-        if (icon) {
-            icon.classList.toggle('playstatebutton-icon-played', !!played);
-            icon.classList.toggle('playstatebutton-icon-unplayed', !played);
-        }
-        button.classList.toggle('playstatebutton-played', !!played);
-        button.setAttribute('data-played', played ? 'true' : 'false');
-
-        const itemType = button.getAttribute('data-itemtype');
-        const isAudio = itemType === 'AudioBook' || itemType === 'AudioPodcast';
-        button.title = played ? (isAudio ? 'Played' : 'Watched') : 'Mark played';
-    }
-
-    function setFavoriteState(button, likes, isFavorite) {
-        const icon = button.querySelector('.material-icons');
-        if (icon) {
-            icon.classList.add('favorite');
-            icon.classList.toggle('ratingbutton-icon-withrating', !!isFavorite);
-        }
-        button.classList.toggle('ratingbutton-withrating', !!isFavorite);
-        button.setAttribute('data-isfavorite', isFavorite ? 'true' : 'false');
-        button.setAttribute('data-likes', likes === null || likes === undefined ? '' : String(likes));
-        button.title = isFavorite ? 'Favorite' : 'Add to favorites';
-    }
-
-    // Both buttons keep `itemAction` + `data-action="none"`, which is what stops
-    // Jellyfin's itemShortcuts from treating the click as a card activation. That
-    // handler sits on the itemsContainer and so runs before this one; leaving the
-    // event to propagate keeps the original ordering.
-    function onUserDataButtonClick(e) {
-        const target = e.target;
-        if (!(target instanceof Element)) return;
-
-        const button = target.closest('.' + USERDATA_BUTTON_CLASS);
-        if (!button) return;
-
-        const itemId = button.getAttribute('data-id');
-        if (!itemId || !window.ApiClient) return;
-
-        const userId = ApiClient.getCurrentUserId();
-
-        if (button.classList.contains(PLAYSTATE_BUTTON_CLASS)) {
-            const wasPlayed = button.getAttribute('data-played') === 'true';
-
-            // Optimistic, as Jellyfin's button was: the server confirms over the
-            // message feed a moment later. Unlike Jellyfin's, this puts the icon
-            // back if the request fails, rather than leaving it lying.
-            setPlayedState(button, !wasPlayed);
-
-            Promise.resolve(wasPlayed
-                ? ApiClient.markUnplayed(userId, itemId, new Date())
-                : ApiClient.markPlayed(userId, itemId, new Date())
-            ).catch(err => {
-                setPlayedState(button, wasPlayed);
-                console.error('[KefinTweaks CardBuilder] Failed to update played state:', err);
-            });
-            return;
-        }
-
-        const isFavorite = button.getAttribute('data-isfavorite') === 'true';
-        Promise.resolve(ApiClient.updateFavoriteStatus(userId, itemId, !isFavorite))
-            .then(userData => setFavoriteState(button, userData?.Likes, userData?.IsFavorite))
-            .catch(err => console.error('[KefinTweaks CardBuilder] Failed to update favorite state:', err));
-    }
-
-    // One pass over the page per message, not one per changed item.
-    function onUserDataMessage(msg) {
-        const data = msg && msg.Data;
-        const list = data && data.UserDataList;
-        if (!Array.isArray(list) || list.length === 0) return;
-
-        if (data.UserId && window.ApiClient && data.UserId !== ApiClient.getCurrentUserId()) return;
-
-        const byItemId = new Map();
-        for (const userData of list) {
-            if (userData && userData.ItemId) byItemId.set(userData.ItemId, userData);
-        }
-
-        const buttons = document.querySelectorAll('.' + USERDATA_BUTTON_CLASS + '[data-id]');
-        for (const button of buttons) {
-            const userData = byItemId.get(button.getAttribute('data-id'));
-            if (!userData) continue;
-
-            if (button.classList.contains(PLAYSTATE_BUTTON_CLASS)) {
-                setPlayedState(button, userData.Played);
-            } else {
-                setFavoriteState(button, userData.Likes, userData.IsFavorite);
-            }
-        }
-    }
-
-    // Jellyfin's serverNotifications listens with Events.on(apiClient, 'message'),
-    // which appends to apiClient._callbacks.message. Registering there puts us on
-    // the same feed, so a websocket reconnect carries us with it — unlike a hook on
-    // socket.onmessage, which is left pointing at the dead socket. Events.trigger
-    // calls back as (event, msg), hence the two parameters.
-    function subscribeToMessages() {
-        const apiClient = window.ApiClient;
-        if (!apiClient) return false;
-
-        apiClient._callbacks = apiClient._callbacks || {};
-        const callbacks = apiClient._callbacks.message = apiClient._callbacks.message || [];
-        callbacks.push((event, msg) => {
-            if (msg && msg.MessageType === 'UserDataChanged') onUserDataMessage(msg);
-        });
-        return true;
-    }
-
-    /**
-     * Install the shared click and message handlers. Called from the card build
-     * path, so it costs nothing on pages that never build a card, and by then
-     * ApiClient exists. websocketHelper is the fallback for a build where the
-     * callback list is not reachable.
-     *
-     * The two halves are tracked separately: the click listener is installed once
-     * and is enough for the buttons to work, while the feed subscription is
-     * retried on the next card if neither route was available yet.
-     */
-    function ensureUserDataButtonHandlers() {
-        if (!clickHandlerInstalled) {
-            clickHandlerInstalled = true;
-            document.addEventListener('click', onUserDataButtonClick);
-        }
-
-        if (messageHandlerInstalled) return;
-
-        if (subscribeToMessages()) {
-            messageHandlerInstalled = true;
-        } else if (window.websocketHelper) {
-            window.websocketHelper.listen('UserDataChanged', onUserDataMessage);
-            messageHandlerInstalled = true;
-        }
-    }
-
     /**
      * Creates a Jellyfin card element from an item
      * @param {Object} item - The Jellyfin item object
@@ -2237,20 +2074,17 @@
                 const buttonContainer = document.createElement('div');
                 buttonContainer.className = 'cardOverlayButton-br flex';
 
-                // Played and favourite state is driven by the shared handlers above,
-                // not by a per-card subscription. `show-focus` is what emby-button's
-                // createdCallback would have added on the TV layout.
-                ensureUserDataButtonHandlers();
-                const focusClass = document.documentElement.classList.contains('layout-tv') ? ' show-focus' : '';
-
                 // Watched button
                 const watchedButton = document.createElement('button');
+                watchedButton.setAttribute('is', 'emby-playstatebutton');
                 watchedButton.type = 'button';
                 watchedButton.setAttribute('data-action', 'none');
-                watchedButton.className = `cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light emby-button ${USERDATA_BUTTON_CLASS} ${PLAYSTATE_BUTTON_CLASS}${focusClass}`;
+                watchedButton.className = 'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light emby-button';
                 watchedButton.setAttribute('data-id', itemId);
                 watchedButton.setAttribute('data-serverid', serverId);
                 watchedButton.setAttribute('data-itemtype', itemType);
+                watchedButton.setAttribute('data-played', item.UserData?.Played || 'false');
+                watchedButton.title = 'Mark played';
 
                 // Replaces `.card:not(:has(button[data-played]))` in watchlist.css.
                 // That :has() registered EVERY .card as an invalidation subject keyed
@@ -2263,29 +2097,28 @@
                 card.classList.add('kefin-has-playstate');
 
                 const watchedIcon = document.createElement('span');
-                watchedIcon.className = 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover check';
+                watchedIcon.className = 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover check playstatebutton-icon-unplayed';
                 watchedIcon.setAttribute('aria-hidden', 'true');
                 watchedButton.appendChild(watchedIcon);
-                // Sets data-played, the icon state and the title together. The
-                // custom element used to do this from its attachedCallback, which is
-                // why the built markup never carried the played variants itself.
-                setPlayedState(watchedButton, item.UserData?.Played === true);
                 buttonContainer.appendChild(watchedButton);
 
                 // Favorite button
                 const favoriteButton = document.createElement('button');
+                favoriteButton.setAttribute('is', 'emby-ratingbutton');
                 favoriteButton.type = 'button';
                 favoriteButton.setAttribute('data-action', 'none');
-                favoriteButton.className = `cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light emby-button ${USERDATA_BUTTON_CLASS} ${FAVORITE_BUTTON_CLASS}${focusClass}`;
+                favoriteButton.className = 'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light emby-button';
                 favoriteButton.setAttribute('data-id', itemId);
                 favoriteButton.setAttribute('data-serverid', serverId);
                 favoriteButton.setAttribute('data-itemtype', itemType);
+                favoriteButton.setAttribute('data-likes', '');
+                favoriteButton.setAttribute('data-isfavorite', item.UserData?.IsFavorite || 'false');
+                favoriteButton.title = 'Add to favorites';
 
                 const favoriteIcon = document.createElement('span');
                 favoriteIcon.className = 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover favorite';
                 favoriteIcon.setAttribute('aria-hidden', 'true');
                 favoriteButton.appendChild(favoriteIcon);
-                setFavoriteState(favoriteButton, item.UserData?.Likes, item.UserData?.IsFavorite === true);
                 buttonContainer.appendChild(favoriteButton);
 
                 const moreButton = document.createElement('button');
