@@ -268,12 +268,51 @@
             .forEach(el => el.remove());
     }
 
+    // WHEN A BORROWED LOGO IS SAFE TO SHOW.
+    //
+    // ElegantFin positions .detailLogo for one layout: the standard
+    // portrait-poster page, with `top: calc(100vh - ...)` and
+    // `transform: translateY(-100%)` so it sits at the foot of a full-height
+    // header. When the detail image is NOT a portrait card it shrinks that
+    // header to 73vh, and then only handles the logo for some of those cases --
+    // hidden for .album and .backdropCard, moved for .person. .squareCard is
+    // not among them, so a logo shown there keeps its 100vh position, lands
+    // below the shortened header and sits on top of the description.
+    //
+    // That combination never arose before this feature: a collection with a
+    // non-portrait poster had no logo to place. It arises now because 19 of the
+    // 300 collections here have a non-portrait Primary -- AniDB hands back a
+    // landscape picture for some releases, 400x331 for the Sagacious Wisdom
+    // one -- and jellyfin-web renders any Primary wider than about 0.85 as a
+    // squareCard.
+    //
+    // So a logo is only borrowed where the page is in the layout the skin
+    // positions logos for. Declining is not a degradation: ElegantFin restores
+    // the text title through
+    // `.detailLogo.hide ~ .detailPageWrapperContainer .nameContainer h1`,
+    // so the page reads exactly as it did before, just with a backdrop.
+    function logoLayoutIsSafe(page) {
+        const card = page.querySelector('.detailImageContainer .card');
+        return !!card && card.classList.contains('portraitCard');
+    }
+
     // renderLogo does exactly this: drop `hide`, set the image. Only ever fills
     // a blank -- an element already carrying an image belongs to the item.
     function applyLogo(page, url) {
         const logo = page.querySelector('.detailLogo');
         if (!logo) return;
         if (logo.style.backgroundImage && !logo.dataset[ART_FLAG]) return;
+
+        if (!logoLayoutIsSafe(page)) {
+            // Undo an earlier tick that ran before the poster card existed.
+            if (logo.dataset[ART_FLAG]) {
+                logo.style.backgroundImage = '';
+                delete logo.dataset[ART_FLAG];
+                logo.classList.add('hide');
+            }
+            return;
+        }
+
         logo.style.backgroundImage = "url('" + url + "')";
         logo.dataset[ART_FLAG] = '1';
         logo.classList.remove('hide');
@@ -288,7 +327,7 @@
     // The detail view finishes rendering in passes and can re-hide the logo
     // after we write it, so re-apply on a few bounded ticks rather than
     // observing. applyBackdrop is idempotent, so repeating it is free.
-    const ART_RETRIES_MS = [0, 250, 800, 2000];
+    const ART_RETRIES_MS = [0, 250, 800, 2000, 3500];
     let artTimers = [];
 
     function stopArtRetries() {
