@@ -87,6 +87,7 @@
 
     const ANIDB_CACHE_NAME = 'virtualSpecials_anidbSeries';
     const ART_FLAG = 'kefinFallbackArt';
+    const ART_FLAG_ATTR = 'kefin-fallback-art';
 
     // ======================================================================
     // Shared data
@@ -209,32 +210,84 @@
         return (result.backdrop || result.logo) ? result : null;
     }
 
-    // jellyfin-web sets both of these as inline background images when the item
-    // has them, so writing the same property is writing what it would have
-    // written. Only ever fills a blank -- an element already carrying an image
-    // belongs to the item and is left alone.
-    function applyArtwork(page, art) {
-        if (!art) return;
-        if (art.backdrop) {
-            const backdrop = page.querySelector('.itemBackdrop');
-            if (backdrop && (!backdrop.style.backgroundImage || backdrop.dataset[ART_FLAG])) {
-                backdrop.style.backgroundImage = "url('" + art.backdrop + "')";
-                backdrop.dataset[ART_FLAG] = '1';
-                backdrop.classList.remove('hide');
-            }
+    // WHERE THE BACKDROP ACTUALLY GOES.
+    //
+    // Not on .itemBackdrop. That element exists on every detail page and stays
+    // empty even when the item HAS a backdrop -- measured on a series page,
+    // where its background-image is `none` -- because ElegantFin uses it purely
+    // to reserve header height. Painting it produced a second, in-flow,
+    // wrongly-sized copy of the image sitting ABOVE the gradient layers instead
+    // of beneath them, which is what made the page look wrong compared to a
+    // series page.
+    //
+    // Jellyfin's real mechanism is components/backdrop/backdrop.js: a
+    // .backdropImage div appended to the body-level .backdropContainer, fixed
+    // and full-viewport at z-index -1, under both the gradient .backdropContainer
+    // paints and the fade on .detailPageWrapperContainer. Its presence is then
+    // announced by `withBackdrop` on .backgroundContainer, which is what every
+    // theme keys its page background off. Miss that class and the gradient is
+    // drawn for a page that has no backdrop. All three parts are reproduced
+    // below, class for class.
+    //
+    // Preloading through an Image() first is jellyfin's own order and it earns
+    // its keep twice: no half-painted backdrop fading in, and a source whose
+    // image 404s never gets inserted at all -- the only load check available,
+    // since a background-image that fails reports nothing.
+
+    function applyBackdrop(url) {
+        const container = document.querySelector('.backdropContainer');
+        if (!container) return;
+
+        const existing = container.querySelector('.displayingBackdropImage');
+        if (existing) {
+            // Already showing the right thing, or showing the item's OWN
+            // backdrop -- which outranks anything borrowed. Leave both alone.
+            if (existing.getAttribute('data-url') === url) return;
+            if (!existing.dataset[ART_FLAG]) return;
+            existing.remove();
         }
-        if (art.logo) {
-            const logo = page.querySelector('.detailLogo');
-            if (logo && (!logo.style.backgroundImage || logo.dataset[ART_FLAG])) {
-                logo.style.backgroundImage = "url('" + art.logo + "')";
-                logo.dataset[ART_FLAG] = '1';
-                logo.classList.remove('hide');
-            }
-        }
+
+        const probe = new Image();
+        probe.onload = () => {
+            if (!container.isConnected) return;
+            if (container.querySelector('.displayingBackdropImage[data-url="' + url + '"]')) return;
+            const el = document.createElement('div');
+            el.className = 'backdropImage displayingBackdropImage backdropImageFadeIn';
+            el.style.backgroundImage = "url('" + url + "')";
+            el.setAttribute('data-url', url);
+            el.dataset[ART_FLAG] = '1';
+            container.appendChild(el);
+            const background = document.querySelector('.backgroundContainer');
+            if (background) background.classList.add('withBackdrop');
+        };
+        probe.src = url;
     }
 
-    // The detail view finishes rendering in passes and can clear these after we
-    // write them, so re-apply on a few bounded ticks rather than observing.
+    function removeBorrowedBackdrop() {
+        document.querySelectorAll('.backdropContainer .backdropImage[data-' + ART_FLAG_ATTR + ']')
+            .forEach(el => el.remove());
+    }
+
+    // renderLogo does exactly this: drop `hide`, set the image. Only ever fills
+    // a blank -- an element already carrying an image belongs to the item.
+    function applyLogo(page, url) {
+        const logo = page.querySelector('.detailLogo');
+        if (!logo) return;
+        if (logo.style.backgroundImage && !logo.dataset[ART_FLAG]) return;
+        logo.style.backgroundImage = "url('" + url + "')";
+        logo.dataset[ART_FLAG] = '1';
+        logo.classList.remove('hide');
+    }
+
+    function applyArtwork(page, art) {
+        if (!art) return;
+        if (art.backdrop) applyBackdrop(art.backdrop);
+        if (art.logo) applyLogo(page, art.logo);
+    }
+
+    // The detail view finishes rendering in passes and can re-hide the logo
+    // after we write it, so re-apply on a few bounded ticks rather than
+    // observing. applyBackdrop is idempotent, so repeating it is free.
     const ART_RETRIES_MS = [0, 250, 800, 2000];
     let artTimers = [];
 
@@ -403,6 +456,11 @@
     let teardown = [];
     function stopAll() {
         stopArtRetries();
+        // .backdropContainer is body-level, not part of the view, so a borrowed
+        // backdrop would otherwise follow the user to the next item. Jellyfin
+        // clears the container itself on every navigation, but only ours is
+        // ours to remove, and this runs before we know what the next page needs.
+        removeBorrowedBackdrop();
         teardown.forEach(fn => { try { fn(); } catch (e) { /* already stopped */ } });
         teardown = [];
     }
