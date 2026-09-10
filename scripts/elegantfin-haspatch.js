@@ -68,19 +68,6 @@
                     'kefin-borderless-spotlight',
                     !!document.querySelector('.spotlight-section[data-layout="Borderless"]')
                 );
-                // A collection detail page whose items row holds exactly one
-                // card. Read by skins/optional/global/collectionSingleItem.css,
-                // which hides the heading, the row, the "1 items" count and the
-                // shuffle button. Those last two sit outside the items
-                // container, so a CSS-only version would need :has() with the
-                // whole detail page as its subject -- the shape this file
-                // exists to remove. Note this is a plain querySelector, not a
-                // :has() one: "a card that is an only child" is the condition
-                // itself, so no ancestor lookup is needed to test it.
-                body.classList.toggle(
-                    'kefin-collection-single',
-                    !!document.querySelector('.itemDetailPage:not(.hide) .collectionItemsContainer > .card:only-child')
-                );
             }
         } catch (e) {
             // :has() unsupported in querySelector — leave markers unset.

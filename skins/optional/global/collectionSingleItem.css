@@ -10,17 +10,21 @@
  * item", which is still the useful thing to do from here -- and with the row
  * hidden it becomes the only way to start playback from this page.
  *
- * The condition is carried by body.kefin-collection-single, set by
- * scripts/elegantfin-haspatch.js. Expressing it in CSS instead would take a
+ * The condition is carried by body.kefin-collection-single, set by the
+ * "Virtual Specials Tweaks" feature (scripts/virtualSpecials.js) from the
+ * collection's child count. Expressing it in CSS instead would take a
  * page-level :has() -- the count and the shuffle button are outside the items
  * container, so the subject has to be an ancestor of the whole detail page --
- * and that is the selector shape that script exists to eliminate: a registered
- * :has() pays style-invalidation cost on every DOM mutation under its subject.
- * A querySelector from JS is a one-time match with no registration.
+ * and that is the selector shape elegantfin-haspatch.js exists to eliminate: a
+ * registered :has() pays style-invalidation cost on every DOM mutation under
+ * its subject, where a check from JS is a one-time match with no registration.
  *
- * Consequence worth knowing: this stylesheet does nothing on its own. If that
- * script is disabled the marker is never set, and every rule below is inert --
- * which is the right failure, since it leaves the stock page intact.
+ * So this stylesheet does nothing on its own, and the option is named to say
+ * so. The marker used to be set in elegantfin-haspatch.js, which works but is
+ * not in the Feature Configuration list -- meaning the dependency could not be
+ * seen or managed from the UI. Reading the child count from the item is also
+ * better than matching `:only-child` in the DOM: it is authoritative and it is
+ * known before the row renders, so the row never appears and then vanishes.
  */
 
 /* Every rule is scoped to the VISIBLE detail page. Jellyfin keeps the outgoing

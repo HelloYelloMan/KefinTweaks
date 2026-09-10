@@ -151,10 +151,11 @@
                 enabled: true
             },
             {
-                // Needs body.kefin-collection-single from elegantfin-haspatch.js;
-                // inert without it. See the header of the stylesheet for why the
-                // condition is not expressed as :has().
-                name: 'Trim Single-Item Collection Pages',
+                // Needs body.kefin-collection-single, set by the Virtual Specials
+                // Tweaks feature; inert without it, hence the name. See the
+                // header of the stylesheet for why the condition is not
+                // expressed as :has().
+                name: 'Trim Single-Item Collection Pages (needs Virtual Specials Tweaks)',
                 url: `${getKefinTweaksRoot()}skins/optional/global/collectionSingleItem.css`,
                 enabled: false
             }
