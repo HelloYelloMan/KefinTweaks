@@ -234,6 +234,8 @@
     // image 404s never gets inserted at all -- the only load check available,
     // since a background-image that fails reports nothing.
 
+    // Both images are preloaded before anything is revealed (see scheduleArtwork),
+    // so by the time these run the bytes are in cache and the insert is instant.
     function applyBackdrop(url) {
         const container = document.querySelector('.backdropContainer');
         if (!container) return;
@@ -247,25 +249,38 @@
             existing.remove();
         }
 
-        const probe = new Image();
-        probe.onload = () => {
-            if (!container.isConnected) return;
-            if (container.querySelector('.displayingBackdropImage[data-url="' + url + '"]')) return;
-            const el = document.createElement('div');
-            el.className = 'backdropImage displayingBackdropImage backdropImageFadeIn';
-            el.style.backgroundImage = "url('" + url + "')";
-            el.setAttribute('data-url', url);
-            el.dataset[ART_FLAG] = '1';
-            container.appendChild(el);
-            const background = document.querySelector('.backgroundContainer');
-            if (background) background.classList.add('withBackdrop');
-        };
-        probe.src = url;
+        const el = document.createElement('div');
+        el.className = 'backdropImage displayingBackdropImage backdropImageFadeIn';
+        el.style.backgroundImage = "url('" + url + "')";
+        el.setAttribute('data-url', url);
+        el.dataset[ART_FLAG] = '1';
+        container.appendChild(el);
+
+        const background = document.querySelector('.backgroundContainer');
+        if (background) background.classList.add('withBackdrop');
     }
 
     function removeBorrowedBackdrop() {
-        document.querySelectorAll('.backdropContainer .backdropImage[data-' + ART_FLAG_ATTR + ']')
+        const container = document.querySelector('.backdropContainer');
+        if (!container) return;
+        container.querySelectorAll('.backdropImage[data-' + ART_FLAG_ATTR + ']')
             .forEach(el => el.remove());
+
+        // Jellyfin only clears `withBackdrop` when IT changes the backdrop, so
+        // taking ours away can leave the class behind and style the next page as
+        // though it had a backdrop it does not have.
+        if (!container.querySelector('.backdropImage')) {
+            const background = document.querySelector('.backgroundContainer');
+            if (background) background.classList.remove('withBackdrop');
+        }
+    }
+
+    function removeBorrowedLogo() {
+        document.querySelectorAll('.detailLogo[data-' + ART_FLAG_ATTR + ']').forEach(logo => {
+            logo.style.backgroundImage = '';
+            delete logo.dataset[ART_FLAG];
+            logo.classList.add('hide');
+        });
     }
 
     // WHEN A BORROWED LOGO IS SAFE TO SHOW.
@@ -318,15 +333,18 @@
         logo.classList.remove('hide');
     }
 
-    function applyArtwork(page, art) {
-        if (!art) return;
-        if (art.backdrop) applyBackdrop(art.backdrop);
-        if (art.logo) applyLogo(page, art.logo);
+    function preload(url) {
+        return new Promise(resolve => {
+            const img = new Image();
+            img.onload = () => resolve(true);
+            img.onerror = () => resolve(false);
+            img.src = url;
+        });
     }
 
     // The detail view finishes rendering in passes and can re-hide the logo
     // after we write it, so re-apply on a few bounded ticks rather than
-    // observing. applyBackdrop is idempotent, so repeating it is free.
+    // observing. Both apply functions are idempotent, so repeating is cheap.
     const ART_RETRIES_MS = [0, 250, 800, 2000, 3500];
     let artTimers = [];
 
@@ -335,10 +353,38 @@
         artTimers = [];
     }
 
-    function scheduleArtwork(page, art) {
+    // NOTHING IS REVEALED UNTIL IT HAS LOADED, and for the logo that is not a
+    // nicety. ElegantFin swaps the text title for the logo the moment
+    // .detailLogo loses `hide`
+    // (`.detailLogo:not(.hide) ~ ... .nameContainer h1 { display: var(--itemTitleVisibility) }`,
+    // and the rule beside it puts the title back for `.detailLogo.hide`). So a
+    // borrowed logo whose URL 404s would hide the title and show nothing in its
+    // place, leaving the page with no title at all. Verifying the load first is
+    // also the only check available: a background-image that fails reports
+    // nothing to the page.
+    async function scheduleArtwork(page, art, alive) {
         stopArtRetries();
-        artTimers = ART_RETRIES_MS.map(delay => setTimeout(() => applyArtwork(page, art), delay));
+
+        const [backdropOk, logoOk] = await Promise.all([
+            art.backdrop ? preload(art.backdrop) : Promise.resolve(false),
+            art.logo ? preload(art.logo) : Promise.resolve(false)
+        ]);
+        if (!alive()) return;
+
+        const backdrop = backdropOk ? art.backdrop : null;
+        const logo = logoOk ? art.logo : null;
+        if (!backdrop && !logo) return;
+
+        artTimers = ART_RETRIES_MS.map(delay => setTimeout(() => {
+            if (!alive()) return;
+            if (backdrop) applyBackdrop(backdrop);
+            if (logo) applyLogo(page, logo);
+        }, delay));
+
+        LOG('Borrowed artwork:', [backdrop && 'backdrop', logo && 'logo']
+            .filter(Boolean).join(' + ') || 'none (nothing loaded)');
     }
+
 
     // ======================================================================
     // 2. Studios row
@@ -492,14 +538,25 @@
         return stop;
     }
 
+    // Every async continuation below outlives the navigation that started it, and
+    // several of them write to elements shared across views -- .backdropContainer
+    // and .backgroundContainer are body-level, and the waitFor() polls query the
+    // document rather than a page. Navigate from one collection to another
+    // quickly and the first page's fetches land after the second has rendered,
+    // painting it with the wrong show's backdrop. So each view takes a token,
+    // stopAll() invalidates it, and nothing touches the DOM once it is stale.
+    let viewToken = 0;
+
     let teardown = [];
     function stopAll() {
+        viewToken++;
         stopArtRetries();
-        // .backdropContainer is body-level, not part of the view, so a borrowed
-        // backdrop would otherwise follow the user to the next item. Jellyfin
-        // clears the container itself on every navigation, but only ours is
-        // ours to remove, and this runs before we know what the next page needs.
+        // These live outside the view, so a borrowed backdrop or logo would
+        // otherwise follow the user to the next item. Jellyfin clears the
+        // backdrop container itself on navigation, but only ours is ours to
+        // remove, and this runs before we know what the next page needs.
         removeBorrowedBackdrop();
+        removeBorrowedLogo();
         teardown.forEach(fn => { try { fn(); } catch (e) { /* already stopped */ } });
         teardown = [];
     }
@@ -541,21 +598,22 @@
                 stopAll();
                 if (!item || item.Type !== 'BoxSet' || !item.Id) return;
 
+                const token = viewToken;
+                const alive = () => token === viewToken;
+
                 // One fetch, three consumers.
                 const children = await fetchChildren(item.Id);
+                if (!alive()) return;
 
                 // --- artwork -------------------------------------------------
                 resolveArtwork(item, children).then(art => {
-                    if (!art) return;
-                    scheduleArtwork(page, art);
-                    LOG('Borrowed artwork:',
-                        art.backdrop ? 'backdrop' : '',
-                        art.logo ? 'logo' : '');
+                    if (!art || !alive()) return;
+                    scheduleArtwork(page, art, alive);
                 });
 
                 // --- studios -------------------------------------------------
                 waitFor('.itemDetailsGroup', Date.now()).then(group => {
-                    if (!group) return;
+                    if (!group || !alive()) return;
                     teardown.push(makeBoundedObserver(
                         group, () => injectStudios(page, item), POLL_TIMEOUT_MS));
                 });
@@ -564,7 +622,7 @@
                 const names = specialNamesFrom(children);
                 if (names.size) {
                     waitFor('.collectionItemsContainer', Date.now()).then(container => {
-                        if (!container) return;
+                        if (!container || !alive()) return;
                         teardown.push(makeBoundedObserver(
                             container, () => applyNames(container, names), OBSERVE_MS));
                     });
