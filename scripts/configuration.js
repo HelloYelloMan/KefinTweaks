@@ -1195,6 +1195,8 @@
             { key: 'flattenSingleSeasonShows', label: 'Episodes On Series Page', desc: 'Displays episodes directly on series page. For single-season shows, shows all episodes. For multi-season shows, shows episodes from the season with Next Up episode (or Season 1 if no Next Up).' },
             { key: 'seriesInfo', label: 'Series Info+', desc: 'Adds Season and Episode counts to the Series and Season pages. Also adds an "Ends at" time similar to the Episode page.' },
             { key: 'collections', label: 'Collection Sorting', desc: 'Collection sorting functionality on the Collection page' },
+            { key: 'collectionStudios', label: 'Studios on Collections', desc: 'Shows the Studios row on a collection page. Jellyfin builds the row but never fills it in for a collection, on the grounds that a large collection could list hundreds of studios, so it is empty and hidden no matter how few there are.' },
+            { key: 'collectionSpecialNames', label: 'Trim Special Prefix on Collections', desc: 'Removes the "Special - " that Jellyfin prepends to the title of every episode in a Specials season, on collection pages only. Continue Watching, Next Up, season pages and search results are left alone.' },
             { key: 'subtitleSearch', label: 'Subtitle Search', desc: 'Search and download subtitles directly from the video OSD' },
             { key: 'exclusiveElsewhere', label: 'Exclusive Elsewhere', desc: 'Custom branding when items aren\'t available on streaming services' },
             { key: 'backdropLeakFix', label: 'Backdrop Leak Fix', desc: 'Fixes memory leaks from backdrop images when tab isn\'t focused' },

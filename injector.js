@@ -158,6 +158,8 @@
         mediaTags: true,          // Add a Tags row to the item-details metadata table
         episodeSeasonTitle: true, // Season title/logo on episode headers + season-page logo links to series
         jeSidebarMemo: true,      // Memoise Jellyfin Enhanced's getSidebarContainer (forced style flush on every DOM mutation)
+        collectionStudios: true,  // Show the Studios row on collection (BoxSet) detail pages
+        collectionSpecialNames: true, // Drop the "Special - " prefix from titles on collection pages
         
         // Note: Core functionality scripts (utils, cardBuilder, localStorageCache, modal) 
         // are automatically enabled when needed by other scripts
@@ -414,6 +416,20 @@
             css: null,
             dependencies: [],
             description: "Memoises Jellyfin Enhanced's getSidebarContainer(), which reads offsetParent (a forced full-document style flush) on every body mutation. Measured at 3.2s of style recalc across 104 calls when navigating into a series page. No-ops if Jellyfin Enhanced is absent."
+        },
+        {
+            name: 'collectionStudios',
+            script: 'collectionStudios.js',
+            css: null,
+            dependencies: ['utils'],
+            description: "Shows the Studios row on a collection (BoxSet) detail page. jellyfin-web's renderStudio returns early for BoxSet and Playlist, so the row is built but left empty and hidden however few studios the collection has. This fills it in from item.Studios and removes the hide."
+        },
+        {
+            name: 'collectionSpecialNames',
+            script: 'collectionSpecialNames.js',
+            css: null,
+            dependencies: ['utils'],
+            description: "Removes the \"Special - \" prefix jellyfin-web prepends to every season-0 episode title, on collection detail pages only. Reads each item's real Name from the API rather than stripping a string, so it is correct in any server language, and leaves Continue Watching, Next Up and season pages untouched."
         },
         {
             name: 'updoot',
