@@ -306,7 +306,7 @@
             name: 'cardBuilder',
             script: 'cardBuilder.js',
             css: 'cardBuilder.css',
-            dependencies: ['apiHelper', 'userHelper'],
+            dependencies: ['apiHelper', 'userHelper', 'websocketHelper'],
             description: 'Core card building functionality (required by other scripts)'
         },
         {

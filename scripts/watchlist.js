@@ -7432,8 +7432,10 @@ In the Custom Tabs plugin, add a new tab with the following HTML content:
 			}
 		}
 		
-		// Add the watchlist button to the button container, right before the play state button if it exists
-		const playStateButton = buttonContainer.querySelector('button[is="emby-playstatebutton"]');
+		// Add the watchlist button to the button container, right before the play state button if it exists.
+		// Cards built by cardBuilder.js carry .kefin-playstate-button instead of the
+		// `is` attribute; Jellyfin's own cards still use the custom element.
+		const playStateButton = buttonContainer.querySelector('button[is="emby-playstatebutton"], button.kefin-playstate-button');
 		if (playStateButton) {
 			buttonContainer.insertBefore(watchlistButton, playStateButton);
 		} else {
