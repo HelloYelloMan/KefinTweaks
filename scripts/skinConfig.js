@@ -151,15 +151,6 @@
                 enabled: true
             },
             {
-                // Skin-agnostic: scoped by the data-type jellyfin-web writes on
-                // each card, so it reshapes only collections of episodes and
-                // needs no marker class. Handles both width mechanisms (the
-                // stock percentage ladder and ElegantFin's --cardCount).
-                name: 'Landscape Cards on Episode Collections',
-                url: `${getKefinTweaksRoot()}skins/optional/global/collectionEpisodeCards.css`,
-                enabled: false
-            },
-            {
                 // Needs body.kefin-collection-single from elegantfin-haspatch.js;
                 // inert without it. See the header of the stylesheet for why the
                 // condition is not expressed as :has().
