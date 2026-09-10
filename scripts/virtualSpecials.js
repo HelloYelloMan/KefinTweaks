@@ -108,6 +108,52 @@
     // 1. Artwork fallback
     // ======================================================================
 
+    // WHAT WAS BORROWED LAST TIME, per collection.
+    //
+    // The chain cannot run until the item, its children and a source have all
+    // come back, so on a first visit the page is necessarily painted before the
+    // artwork is known -- that is inherent to resolving this on the client, and
+    // no amount of reordering removes it. What it does remove is the SECOND
+    // visit onwards: the answer from last time is known the moment the item is,
+    // so the backdrop goes in while the page is still assembling instead of
+    // arriving a quarter of a second late.
+    //
+    // Only ever used to fill something the item still lacks, checked against the
+    // item on every visit, so a collection that gains its own artwork stops
+    // using the cached borrow immediately. The fresh chain still runs behind it
+    // and rewrites the entry; a changed answer is deliberately NOT swapped in
+    // mid-view, because replacing a backdrop the viewer is already looking at is
+    // a worse flicker than the one being fixed. It takes effect next visit.
+    const ART_CACHE_NAME = 'virtualSpecials_borrowedArt';
+    let artCache = null;
+
+    function cacheHandle() {
+        try { return window.LocalStorageCache ? new window.LocalStorageCache() : null; }
+        catch (e) { return null; }
+    }
+
+    function readArtCache() {
+        if (artCache) return artCache;
+        try {
+            const c = cacheHandle();
+            artCache = (c && c.get(ART_CACHE_NAME)) || {};
+        } catch (e) {
+            artCache = {};
+        }
+        return artCache;
+    }
+
+    function writeArtCache(collectionId, art) {
+        const cache = readArtCache();
+        const next = art ? { backdrop: art.backdrop || null, logo: art.logo || null } : null;
+        if (JSON.stringify(cache[collectionId] || null) === JSON.stringify(next)) return;
+        if (next) cache[collectionId] = next; else delete cache[collectionId];
+        try {
+            const c = cacheHandle();
+            if (c) c.set(ART_CACHE_NAME, cache);
+        } catch (e) { /* quota; the chain still works, just without the head start */ }
+    }
+
     let aniDbSeriesMap = null;
 
     async function getAniDbSeriesMap() {
@@ -160,29 +206,39 @@
         });
     }
 
-    // The chain as thunks, so a source is only fetched while something is still
-    // missing. Steps 3 to 5 each cost a request; step 2 is already in hand.
-    function buildChain(item, children) {
+    // THE CHAIN'S LOOKUPS ALL START AT ONCE, and are then read in order.
+    //
+    // They were thunks, evaluated one at a time so that a later source was never
+    // fetched if an earlier one answered. That is the right instinct for saving
+    // requests and the wrong one here: they are independent, small, and every
+    // one of them sits on the critical path between the page appearing and the
+    // artwork appearing on it. Measured cold, the sequential version spent
+    // 64ms on the children, then 95ms on the AniDB map, then a season fetch,
+    // then a series fetch, and only reached the image at 232ms.
+    //
+    // Starting them together costs at most three extra requests on a page that
+    // has already made half a dozen, and collapses that stretch to the slowest
+    // single one. Priority is unaffected: order is decided when the results are
+    // READ, below, not when they are asked for.
+    function startChainLookups(item, children) {
         const child = children[0];
         const pids = item.ProviderIds || {};
-        const steps = [];
 
-        if (child) steps.push(() => Promise.resolve(child));
-
-        if (pids.AniDB && pids.AniDB !== pids.AnimePipelineSeries) {
-            steps.push(async () => {
-                const map = await getAniDbSeriesMap();
-                const seriesId = map[pids.AniDB];
-                if (!seriesId) return null;
+        const sharedSeries = (pids.AniDB && pids.AniDB !== pids.AnimePipelineSeries)
+            ? getAniDbSeriesMap().then(map => {
+                const id = map[pids.AniDB];
+                if (!id) return null;
                 LOG('AniDB', pids.AniDB, 'resolves to a series distinct from the parent show');
-                return getItem(seriesId);
-            });
-        }
+                return getItem(id);
+            }).catch(() => null)
+            : Promise.resolve(null);
 
-        if (child && child.SeasonId) steps.push(() => getItem(child.SeasonId));
-        if (child && child.SeriesId) steps.push(() => getItem(child.SeriesId));
-
-        return steps;
+        return [
+            Promise.resolve(child || null),                                        // 2. first child
+            sharedSeries,                                                          // 3. shared AniDB id
+            child && child.SeasonId ? getItem(child.SeasonId) : Promise.resolve(null),  // 4. season
+            child && child.SeriesId ? getItem(child.SeriesId) : Promise.resolve(null)   // 5. series
+        ];
     }
 
     async function resolveArtwork(item, children) {
@@ -191,12 +247,12 @@
         if (!needBackdrop && !needLogo) return null;
 
         const result = { backdrop: null, logo: null };
-        const steps = buildChain(item, children);
+        const pending = startChainLookups(item, children);
 
-        for (let i = 0; i < steps.length; i++) {
+        for (let i = 0; i < pending.length; i++) {
             if (!needBackdrop && !needLogo) break;
             let source;
-            try { source = await steps[i](); } catch (e) { source = null; }
+            try { source = await pending[i]; } catch (e) { source = null; }
             if (!source) continue;
             if (needBackdrop && hasBackdrop(source)) {
                 result.backdrop = backdropUrlOf(source);
@@ -209,30 +265,6 @@
         }
         return (result.backdrop || result.logo) ? result : null;
     }
-
-    // WHERE THE BACKDROP ACTUALLY GOES.
-    //
-    // Not on .itemBackdrop. That element exists on every detail page and stays
-    // empty even when the item HAS a backdrop -- measured on a series page,
-    // where its background-image is `none` -- because ElegantFin uses it purely
-    // to reserve header height. Painting it produced a second, in-flow,
-    // wrongly-sized copy of the image sitting ABOVE the gradient layers instead
-    // of beneath them, which is what made the page look wrong compared to a
-    // series page.
-    //
-    // Jellyfin's real mechanism is components/backdrop/backdrop.js: a
-    // .backdropImage div appended to the body-level .backdropContainer, fixed
-    // and full-viewport at z-index -1, under both the gradient .backdropContainer
-    // paints and the fade on .detailPageWrapperContainer. Its presence is then
-    // announced by `withBackdrop` on .backgroundContainer, which is what every
-    // theme keys its page background off. Miss that class and the gradient is
-    // drawn for a page that has no backdrop. All three parts are reproduced
-    // below, class for class.
-    //
-    // Preloading through an Image() first is jellyfin's own order and it earns
-    // its keep twice: no half-painted backdrop fading in, and a source whose
-    // image 404s never gets inserted at all -- the only load check available,
-    // since a background-image that fails reports nothing.
 
     // Both images are preloaded before anything is revealed (see scheduleArtwork),
     // so by the time these run the bytes are in cache and the insert is instant.
@@ -635,16 +667,34 @@
                 const token = viewToken;
                 const alive = () => token === viewToken;
 
+                // --- artwork, from last visit's answer, before anything else -
+                // This runs before the children fetch on purpose: it needs only
+                // the item, which has already resolved, so the borrow can be in
+                // place before the page has finished assembling.
+                const remembered = readArtCache()[item.Id];
+                let appliedFromCache = false;
+                if (remembered) {
+                    const art = {
+                        backdrop: hasBackdrop(item) ? null : remembered.backdrop,
+                        logo: hasLogo(item) ? null : remembered.logo
+                    };
+                    if (art.backdrop || art.logo) {
+                        scheduleDetailFixes(page, art, alive);
+                        appliedFromCache = true;
+                    }
+                }
+
                 // One fetch, three consumers.
                 const children = await fetchChildren(item.Id);
                 if (!alive()) return;
 
                 setSingleItemMarker(children.length === 1);
 
-                // --- artwork -------------------------------------------------
+                // --- artwork, resolved fresh ---------------------------------
                 resolveArtwork(item, children).then(art => {
                     if (!alive()) return;
-                    scheduleDetailFixes(page, art, alive);
+                    writeArtCache(item.Id, art);
+                    if (!appliedFromCache) scheduleDetailFixes(page, art, alive);
                 });
 
                 // --- studios -------------------------------------------------
