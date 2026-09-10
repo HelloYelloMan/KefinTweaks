@@ -1,0 +1,44 @@
+/* Trim a collection page that holds exactly one item (KefinTweaks global option)
+ *
+ * A collection of one is still drawn as a list: a heading, a row with a single
+ * lonely card under it, a "1 items" count in the misc-info line, and a shuffle
+ * button that can only ever shuffle one thing. None of that tells the viewer
+ * anything. This hides all three, so the page reads as being about the work
+ * rather than about a collection that happens to contain it.
+ *
+ * The Play button is deliberately left alone. For one item it means "play this
+ * item", which is still the useful thing to do from here -- and with the row
+ * hidden it becomes the only way to start playback from this page.
+ *
+ * The condition is carried by body.kefin-collection-single, set by
+ * scripts/elegantfin-haspatch.js. Expressing it in CSS instead would take a
+ * page-level :has() -- the count and the shuffle button are outside the items
+ * container, so the subject has to be an ancestor of the whole detail page --
+ * and that is the selector shape that script exists to eliminate: a registered
+ * :has() pays style-invalidation cost on every DOM mutation under its subject.
+ * A querySelector from JS is a one-time match with no registration.
+ *
+ * Consequence worth knowing: this stylesheet does nothing on its own. If that
+ * script is disabled the marker is never set, and every rule below is inert --
+ * which is the right failure, since it leaves the stock page intact.
+ */
+
+/* The heading and the one-card row. .collectionItems holds one .verticalSection
+ * per item type; a single-item collection has exactly one of each. */
+body.kefin-collection-single .collectionItems > .verticalSection {
+    display: none;
+}
+
+/* The "1 items" count. mediainfo.js pushes the child count first for a BoxSet,
+ * before year, rating, runtime and size, so :first-child is the count and only
+ * the count. Confirmed on 10.11.11, where the line reads:
+ *   ["1 items", "2025", "4.8", "-23m / 23m", "5.52 GB"] */
+body.kefin-collection-single .itemMiscInfo-primary > .mediaInfoItem:first-child {
+    display: none;
+}
+
+/* Shuffle. jellyfin-web already adds .hide when nothing in the collection is
+ * playable, but not when there is exactly one thing to play. */
+body.kefin-collection-single .btnShuffle {
+    display: none;
+}
