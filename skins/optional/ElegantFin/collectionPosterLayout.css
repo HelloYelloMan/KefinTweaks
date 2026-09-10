@@ -1,5 +1,11 @@
 /* Collection pages keep their layout whatever shape the poster is
- * (KefinTweaks global option)
+ * (KefinTweaks option for ElegantFin and the skins derived from it)
+ *
+ * Registered under ElegantFin and NeutralFin rather than in the global list,
+ * because every rule it corrects is ElegantFin's own -- including the
+ * --primaryItemPageNegativeSpace / --secondaryItemPageNegativeSpace pair the
+ * second declaration pivots on, which no other skin defines. NeutralFin points
+ * at this same file, as it already does for mediaBarSupport.css.
  *
  * THE PROBLEM. A collection page normally shows no poster: ElegantFin hides it
  * with `.detailImageContainer .card { display: none }`. But it grants

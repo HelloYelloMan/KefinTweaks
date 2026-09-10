@@ -151,16 +151,6 @@
                 enabled: true
             },
             {
-                // Corrects ElegantFin's square-card exception, which shows the
-                // poster and switches to the secondary header on the collections
-                // whose Primary happens to be landscape. Pure CSS so it applies
-                // on the first paint; the JS version it replaces could only run
-                // after the wrong layout had been painted.
-                name: 'Ignore Poster Shape on Collection Pages',
-                url: `${getKefinTweaksRoot()}skins/optional/global/collectionPosterLayout.css`,
-                enabled: false
-            },
-            {
                 // Needs body.kefin-collection-single, set by the Virtual Specials
                 // Tweaks feature; inert without it, hence the name. See the
                 // header of the stylesheet for why the condition is not
@@ -216,6 +206,15 @@
                         name: 'Media Bar Support',
                         url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/mediaBarSupport.css`,
                         enabled: true
+                    },
+                    {
+                        // Everything it overrides is ElegantFin's, including the
+                        // --primaryItemPageNegativeSpace / --secondary... pair it
+                        // pivots on, so it belongs to this family of skins rather
+                        // than to the global list where it started.
+                        name: 'Ignore Poster Shape on Collection Pages',
+                        url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/collectionPosterLayout.css`,
+                        enabled: false
                     },
                     {
                         name: 'Media Bar Support (Nightly Version)',
@@ -281,6 +280,15 @@
                         name: 'Media Bar Support',
                         url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/mediaBarSupport.css`,
                         enabled: true
+                    },
+                    {
+                        // Everything it overrides is ElegantFin's, including the
+                        // --primaryItemPageNegativeSpace / --secondary... pair it
+                        // pivots on, so it belongs to this family of skins rather
+                        // than to the global list where it started.
+                        name: 'Ignore Poster Shape on Collection Pages',
+                        url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/collectionPosterLayout.css`,
+                        enabled: false
                     },
                     {
                         name: 'Media Bar Support (Nightly Version)',
