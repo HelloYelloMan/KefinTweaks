@@ -158,6 +158,7 @@
         mediaTags: true,          // Add a Tags row to the item-details metadata table
         episodeSeasonTitle: true, // Season title/logo on episode headers + season-page logo links to series
         jeSidebarMemo: true,      // Memoise Jellyfin Enhanced's getSidebarContainer (forced style flush on every DOM mutation)
+        jeSpoilerGuardScope: true, // Scope Jellyfin Enhanced's Spoiler Guard image refresh to the item that changed
         collectionStudios: true,  // Show the Studios row on collection (BoxSet) detail pages
         collectionSpecialNames: true, // Drop the "Special - " prefix from titles on collection pages
         
@@ -430,6 +431,14 @@
             css: null,
             dependencies: ['utils'],
             description: "Removes the \"Special - \" prefix jellyfin-web prepends to every season-0 episode title, on collection detail pages only. Reads each item's real Name from the API rather than stripping a string, so it is correct in any server language, and leaves Continue Watching, Next Up and season pages untouched."
+        },
+        {
+            name: 'jeSpoilerGuardScope',
+            script: 'jeSpoilerGuardScope.js',
+            css: null,
+            dependencies: ['websocketHelper'],
+            priority: true, // Must claim the plugin's watched-refresh hook before its Spoiler Guard boots
+            description: "Scopes Jellyfin Enhanced's Spoiler Guard image refresh to the items whose watched state changed. As shipped it rewrites the URL of every Jellyfin image in the document after any mark-played, which makes all card artwork and the detail-page backdrop reload at once. No-ops if Jellyfin Enhanced or Spoiler Guard is absent."
         },
         {
             name: 'updoot',
