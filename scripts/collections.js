@@ -613,7 +613,16 @@
         const totalItemCount = item.RecursiveItemCount || item.ChildCount || 0;
         const playedItemCount = totalItemCount - unplayedItemCount;
 
-        const isVideoCollection = document.querySelector('.libraryPage:not(.hide) .collectionItems:has(.card[data-mediatype="Video"])').length > 0;
+        // querySelector returns an element or null, never a list, so the old
+        // `.length > 0` was undefined > 0 -- always false, so every collection
+        // got the "complete/incomplete" wording meant for non-video ones. Worse,
+        // on a collection with no video cards it dereferenced null and threw;
+        // this runs from an async function nobody awaits, so that surfaced as an
+        // unhandled rejection and the counts below were silently never added.
+        // Ask for the card itself rather than for a :has() wrapper around it.
+        const isVideoCollection = !!document.querySelector(
+            '.libraryPage:not(.hide) .collectionItems .card[data-mediatype="Video"]'
+        );
         const progressText = isVideoCollection ? 'watched' : 'complete';
         const incompleteText = isVideoCollection ? 'unwatched' : 'incomplete';
 
