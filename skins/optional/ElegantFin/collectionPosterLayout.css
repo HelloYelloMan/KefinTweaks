@@ -83,7 +83,7 @@ html {
 }
 
 /* 1. No poster on a collection page, whatever shape it was classified as. */
-.detailImageContainer > .card:has(.video_library) {
+.detailImageContainer > .card:has(.cardImageIcon.video_library) {
     display: none;
 }
 
@@ -112,14 +112,33 @@ html {
  * `.layout-tv .detailLogo` at top:39vh -- both measured against a header the
  * square rule had shrunk out from under them.
  */
-.layout-desktop #itemDetailPage:has(.detailImageContainer .video_library) {
+.layout-desktop #itemDetailPage:has(.detailImageContainer .cardImageIcon.video_library) {
     --secondaryItemPageNegativeSpace: var(--primaryItemPageNegativeSpace);
 }
 
-.layout-mobile #itemDetailPage:has(.detailImageContainer .video_library) .itemBackdrop {
+.layout-mobile #itemDetailPage:has(.detailImageContainer .cardImageIcon.video_library) .itemBackdrop {
     height: 45vh;
 }
 
-.layout-tv #itemDetailPage:has(.detailImageContainer .video_library) .itemBackdrop {
+.layout-tv #itemDetailPage:has(.detailImageContainer .cardImageIcon.video_library) .itemBackdrop {
     height: 33vh;
+}
+
+/* 3. Keep the logo. jellyfin-web's buildCardImage picks the card's shape from
+ * the Primary's aspect ratio alone -- >= 3 banner, >= 1.33 backdrop, > 0.8
+ * square, else portrait -- and on this server 5 collection posters are wide
+ * enough to come back as a BACKDROP card rather than a square one. For those
+ * ElegantFin does not merely show the poster, it hides the logo outright:
+ *
+ *     #itemDetailPage:has(.detailImageContainer .album) .detailLogo,
+ *     #itemDetailPage:has(.detailImageContainer .backdropCard) .detailLogo
+ *         { display: none }
+ *
+ * which is right for an album, where the sleeve is the identity, and wrong for
+ * a collection. Restored through the theme's own --clearLogoVisibility so that
+ * turning logos off globally still turns this one off. A collection with no
+ * logo stays hidden either way: jellyfin-web marks it `.hide`, and that carries
+ * !important, which nothing here outranks. */
+#itemDetailPage:has(.detailImageContainer .cardImageIcon.video_library) .detailLogo {
+    display: var(--clearLogoVisibility);
 }
