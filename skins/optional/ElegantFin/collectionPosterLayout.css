@@ -57,11 +57,11 @@
  * churn is what made the selectors in that file expensive.
  */
 
-/* Published so scripts/virtualSpecials.js can tell this option is on and stop
- * withholding a borrowed logo on these pages. Scoped to the desktop layout
- * because that is where the header fix below applies; mobile and TV position
- * the logo by their own rules and are left as the theme has them. */
-html.layout-desktop {
+/* Published so scripts/virtualSpecials.js knows this option is on and stops
+ * withholding a borrowed logo. On every layout, not just desktop: with the
+ * header restored below, the theme's own logo positions are correct again in
+ * all three, so there is nothing left to withhold anywhere. */
+html {
     --kefin-collection-poster-layout: 1;
 }
 
@@ -70,7 +70,39 @@ html.layout-desktop {
     display: none;
 }
 
-/* 2. Keep the primary-page header. */
+/* 2. Put the header back to the height the layout would have given it.
+ *
+ * DESKTOP is done by pivoting one variable rather than restating a height. The
+ * primary and secondary headers differ only in which negative space the theme
+ * subtracts from 73vh -- 14vh against 60vh, both defined on `body` -- so
+ * pointing one at the other makes ElegantFin's own calc produce the primary
+ * header on its own terms. It keeps working if those values change, and it
+ * follows the +5em variant the theme applies while audio is playing. It also
+ * carries to `#itemDetailPage:has(.subtitle) .detailLogo`, which is expressed
+ * against the same variable, so the header and the logo stay consistent.
+ *
+ * MOBILE AND TV cannot be done that way: their base heights are plain literals,
+ * not built from those variables, so there is nothing to pivot and the values
+ * have to be restated. They are copied from
+ *
+ *     .layout-mobile .itemBackdrop { height: 45vh }
+ *     .layout-tv     .itemBackdrop { height: 33vh }
+ *
+ * and are the one thing here that would need revisiting if ElegantFin changed
+ * them. Restating them is still worth it: the square-card rule beats those base
+ * rules on specificity, and getting the height back is what puts the logo where
+ * it belongs, since `.layout-mobile .detailLogo` sits at top:45vh and
+ * `.layout-tv .detailLogo` at top:39vh -- both measured against a header the
+ * square rule had shrunk out from under them.
+ */
 .layout-desktop #itemDetailPage:has(.collectionItems .itemsContainer.collectionItemsContainer) {
     --secondaryItemPageNegativeSpace: var(--primaryItemPageNegativeSpace);
+}
+
+.layout-mobile #itemDetailPage:has(.collectionItems .itemsContainer.collectionItemsContainer) .itemBackdrop {
+    height: 45vh;
+}
+
+.layout-tv #itemDetailPage:has(.collectionItems .itemsContainer.collectionItemsContainer) .itemBackdrop {
+    height: 33vh;
 }
