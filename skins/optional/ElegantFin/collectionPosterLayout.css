@@ -47,14 +47,31 @@
  * has rendered, so the wrong layout was painted first and visibly corrected
  * itself. A stylesheet applies on the first paint and cannot flicker.
  *
- * ON THE :has(). It is a registered :has() selector, which KefinTweaks
- * otherwise avoids -- see the header of scripts/elegantfin-haspatch.js. Two
- * things make it an acceptable trade here. The subject is #itemDetailPage,
- * which ElegantFin has already registered as a :has() subject several times
- * over, including for the very rule being corrected. And the argument features
- * are .collectionItems and .collectionItemsContainer, which exist only on a
- * collection page and are inserted once per navigation -- unlike .card, whose
- * churn is what made the selectors in that file expensive.
+ * ON THE :has() AND WHAT IT LOOKS FOR. It asks for the BoxSet ICON --
+ * jellyfin-web gives every card an item-type icon, and video_library is the one
+ * BaseItemKind.BoxSet gets (movie, tv, album, book, queue and person are the
+ * others, and ElegantFin's own exceptions above are written against exactly
+ * those). The icon is part of the card, so this matches at the same instant the
+ * theme's .squareCard rule does.
+ *
+ * That timing is the whole point, and the first version got it wrong. It keyed
+ * on .collectionItems, which is the row of the collection's contents -- and that
+ * row is rendered from a separate request, after the poster card. Traced on
+ * entry: at 50ms there was no card and the header was right, at 98ms the card
+ * arrived as a squareCard and the theme collapsed the header to 145px and
+ * showed the poster, and only at 128ms did the contents row appear and bring
+ * these rules with it. Thirty milliseconds of the wrong layout, painted and
+ * then taken back, which is exactly the flicker this option exists to avoid.
+ *
+ * Keying on the icon also lets the first rule drop its page-level subject
+ * entirely: it now styles the card itself, so nothing above it is registered as
+ * a :has() subject at all. The second one still needs the page as its subject,
+ * and that is a subject ElegantFin has already registered several times over,
+ * including for the very rule being corrected. The argument is fractionally
+ * busier than before, since a collection card can appear elsewhere inside a
+ * detail page, but it is a class on a static span rather than on .card itself,
+ * whose churn is what made the selectors elegantfin-haspatch.js removes
+ * expensive.
  */
 
 /* Published so scripts/virtualSpecials.js knows this option is on and stops
@@ -66,7 +83,7 @@ html {
 }
 
 /* 1. No poster on a collection page, whatever shape it was classified as. */
-#itemDetailPage:has(.collectionItems .itemsContainer.collectionItemsContainer) .detailImageContainer > .card {
+.detailImageContainer > .card:has(.video_library) {
     display: none;
 }
 
@@ -95,14 +112,14 @@ html {
  * `.layout-tv .detailLogo` at top:39vh -- both measured against a header the
  * square rule had shrunk out from under them.
  */
-.layout-desktop #itemDetailPage:has(.collectionItems .itemsContainer.collectionItemsContainer) {
+.layout-desktop #itemDetailPage:has(.detailImageContainer .video_library) {
     --secondaryItemPageNegativeSpace: var(--primaryItemPageNegativeSpace);
 }
 
-.layout-mobile #itemDetailPage:has(.collectionItems .itemsContainer.collectionItemsContainer) .itemBackdrop {
+.layout-mobile #itemDetailPage:has(.detailImageContainer .video_library) .itemBackdrop {
     height: 45vh;
 }
 
-.layout-tv #itemDetailPage:has(.collectionItems .itemsContainer.collectionItemsContainer) .itemBackdrop {
+.layout-tv #itemDetailPage:has(.detailImageContainer .video_library) .itemBackdrop {
     height: 33vh;
 }
