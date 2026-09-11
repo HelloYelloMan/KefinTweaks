@@ -155,7 +155,7 @@
                 // Tweaks feature; inert without it, hence the name. See the
                 // header of the stylesheet for why the condition is not
                 // expressed as :has().
-                name: 'Trim Single-Item Collection Pages (needs Virtual Specials Tweaks)',
+                name: 'Virtual Specials Tweaks',
                 url: `${getKefinTweaksRoot()}skins/optional/global/collectionSingleItem.css`,
                 enabled: false
             }

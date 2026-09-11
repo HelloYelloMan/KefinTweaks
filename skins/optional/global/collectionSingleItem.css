@@ -1,4 +1,7 @@
-/* Trim a collection page that holds exactly one item (KefinTweaks global option)
+/* Virtual Specials Tweaks -- collection page styling (KefinTweaks global option)
+ *
+ * Two unrelated corrections that both belong to collection pages. The first
+ * applies to every collection; the rest only to one holding a single item.
  *
  * A collection of one is still drawn as a list: a heading, a row with a single
  * lonely card under it, a "1 items" count in the misc-info line, and a shuffle
@@ -52,4 +55,52 @@ body.kefin-collection-single .itemDetailPage:not(.hide) .itemMiscInfo-primary > 
  * playable, but not when there is exactly one thing to play. */
 body.kefin-collection-single .itemDetailPage:not(.hide) .btnShuffle {
     display: none;
+}
+
+
+/* ---------------------------------------------------------------------------
+ * Keep the collection's own title even when a logo is showing.
+ * ------------------------------------------------------------------------ */
+/*
+ * ElegantFin treats the logo as a REPLACEMENT for the heading:
+ *
+ *     .detailLogo:not(.hide) ~ .detailPageWrapperContainer .nameContainer h1
+ *         { display: var(--itemTitleVisibility) }   -- none by default
+ *     .detailLogo.hide ~ .detailPageWrapperContainer .nameContainer h1
+ *         { display: block !important }
+ *
+ * That is right for a film, whose logo IS its title. It is wrong for these
+ * collections, whose logo is the SHOW'S -- filled in by the plugin or borrowed
+ * from the parent series -- and therefore says nothing about which work the
+ * page is actually for. A Steins;Gate logo over a page for The Sagacious Wisdom
+ * of Cognitive Computing identifies the wrong thing, and dropping the heading
+ * leaves nothing that identifies the right one.
+ *
+ * Scoped by the BoxSet icon rather than by the contents row: jellyfin-web gives
+ * every card an item-type icon and video_library is the one a BoxSet gets, so
+ * this matches as soon as the poster card exists. The contents row arrives from
+ * a separate request well after it, which is late enough to be seen.
+ *
+ * Harmless rather than skin-specific: the rule it overrides is ElegantFin's, and
+ * on a skin without it the heading is already display:block, so re-asserting it
+ * changes nothing.
+ */
+#itemDetailPage:has(.detailImageContainer .cardImageIcon.video_library) .detailLogo:not(.hide) ~ .detailPageWrapperContainer .nameContainer h1 {
+    display: block;
+}
+
+/* Showing both means making room for both, or they land on top of each other:
+ * ElegantFin parks the logo at the foot of the header and the heading is the
+ * first thing in the flow beneath it, so with the heading restored they
+ * overlapped by 79px -- logo bottom at 794, heading top at 715.
+ *
+ * Raised through ElegantFin's own --clearLogoBottomSpace, which it subtracts
+ * from 100vh to place the logo, so a larger value lifts it. Its 11em plus 7em,
+ * one line of the heading at its 4em size with a little air. Using that
+ * variable rather than a transform is what keeps this safe on other skins:
+ * nothing else defines or reads it, so setting it there does nothing at all,
+ * whereas overriding `transform` would have moved a logo that was never
+ * overlapping anything. */
+#itemDetailPage:has(.detailImageContainer .cardImageIcon.video_library) {
+    --clearLogoBottomSpace: 18em;
 }
