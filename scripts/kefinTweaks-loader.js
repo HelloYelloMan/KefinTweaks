@@ -31,7 +31,22 @@
         thumbnailScrubber: false,
         watchTogether: false,
         userManager: false,
-        games: true
+        games: true,
+
+        // ---- fork-only features ------------------------------------------
+        // Upstream moved this registry out of injector.js and into this file,
+        // which is what the installer now loads. These ten are ours and have no
+        // upstream entry, so without them the scripts ship but never run.
+        castSessionWatchdog: true, // Re-subscribe the Sessions feed when a stale now playing bar shows a dead cast target
+        elegantfinHaspatch: true, // ElegantFin :has() hotfix marker classes (needs the local ElegantFin build)
+        episodeSeasonTitle: true, // Season title/logo on episode headers + season-page logo links to series
+        jeSidebarMemo: true,      // Memoise Jellyfin Enhanced's getSidebarContainer (forced style flush on every DOM mutation)
+        jeSpoilerGuardScope: true, // Scope Jellyfin Enhanced's Spoiler Guard image refresh to the item that changed
+        mediaTags: true,          // Add a Tags row to the item-details metadata table
+        osdLogo: true,            // Media logo/ClearArt on the video OSD
+        pauseScreen: true,        // Rich pause screen overlay (logo, plot, artwork, progress)
+        themeMediaCastFix: true,  // Theme media playback while a remote/cast target is connected
+        virtualSpecials: true,    // Collection pages: borrowed artwork, Studios row, no "Special - " prefix
     };
 
     const THIRD_PARTY_SCRIPTS = {
@@ -536,7 +551,80 @@
             css: null,
             dependencies: ['utils', 'modal'],
             description: 'Adds sorting functionality to collection pages'
+        },,
+
+        // ---- fork-only features, see the defaults above ----------------
+        {
+            name: 'castSessionWatchdog',
+            script: 'castSessionWatchdog.js',
+            css: null,
+            dependencies: [],
+            description: 'Re-subscribes the Sessions WebSocket feed when it goes silent while the now playing bar is up, so a cast target that stopped playing cannot leave a frozen seek bar on screen.'
         },
+        {
+            name: 'elegantfinHaspatch',
+            script: 'elegantfin-haspatch.js',
+            css: null,
+            dependencies: ['utils'],
+            description: 'Maintains the .ef-* marker classes that replace the Chromium-hot :has() selectors in the local ElegantFin build.'
+        },
+        {
+            name: 'episodeSeasonTitle',
+            script: 'episodeSeasonTitle.js',
+            css: null,
+            dependencies: ['utils'],
+            description: "Season title/logo on episode headers, and a season-page logo that links to the series."
+        },
+        {
+            name: 'jeSidebarMemo',
+            script: 'jeSidebarMemo.js',
+            css: null,
+            dependencies: [],
+            description: "Memoises Jellyfin Enhanced's getSidebarContainer(), which reads offsetParent (a forced full-document style flush) on every body mutation. Measured at 3.2s of style recalc across 104 calls when navigating into a series page. No-ops if Jellyfin Enhanced is absent."
+        },
+        {
+            name: 'jeSpoilerGuardScope',
+            script: 'jeSpoilerGuardScope.js',
+            css: null,
+            dependencies: ['websocketHelper'],
+            priority: true, // Must claim the plugin's watched-refresh hook before its Spoiler Guard boots
+            description: "Scopes Jellyfin Enhanced's Spoiler Guard image refresh to the items whose watched state changed. As shipped it rewrites the URL of every Jellyfin image in the document after any mark-played, which makes all card artwork and the detail-page backdrop reload at once. No-ops if Jellyfin Enhanced or Spoiler Guard is absent."
+        },
+        {
+            name: 'mediaTags',
+            script: 'mediaTags.js',
+            css: null,
+            dependencies: ['utils'],
+            description: 'Adds a Tags row to the item-details metadata table, matching the Genres/Studios rows.'
+        },
+        {
+            name: 'osdLogo',
+            script: 'osdLogo.js',
+            css: null,
+            dependencies: [],
+            description: 'Shows the media\'s logo (or ClearArt) on the video OSD while playback controls are visible, with optional transparency trimming and OSD shadows.'
+        },
+        {
+            name: 'pauseScreen',
+            script: 'pauseScreen.js',
+            css: null,
+            dependencies: [],
+            description: 'Shows a rich overlay (logo, plot, details, disc/clear art, progress) when playback is paused for a few seconds. Supports the HTML5 player and external players (mpv-shim etc.).'
+        },
+        {
+            name: 'themeMediaCastFix',
+            script: 'themeMediaCastFix.js',
+            css: null,
+            dependencies: [],
+            description: 'Restores theme song/video playback in the web client while a remote/cast player (e.g. mpv-shim) is the selected target.'
+        },
+        {
+            name: 'virtualSpecials',
+            script: 'virtualSpecials.js',
+            css: null,
+            dependencies: ['utils', 'localStorageCache'],
+            description: "Three fixes to the collection (BoxSet) detail page. Borrows a backdrop and logo for collections that have neither, walking the collection, its first child, the series sharing its AniDB id, the child's season and finally the child's series. Fills in the Studios row, which renderStudio refuses to render for a BoxSet. Removes the \"Special - \" prefix jellyfin-web prepends to every season-0 episode title, on collection pages only."
+        }
     ];
 
     const CONFIG_DEPENDENCY_NAMES = [

@@ -6517,7 +6517,7 @@
                 if (isBlink()) {
                     try { img.fetchPriority = 'high'; } catch (e) { /* older engines */ }
                 }
-                img.onload = () => {
+                const applyLoaded = () => {
                     const isSvg = /\.svg(?:[?#]|$)/i.test(imageUrl);
                     if (isSvg) {
                         const maskUrl = `url("${imageUrl}")`;
