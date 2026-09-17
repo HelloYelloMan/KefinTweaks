@@ -509,7 +509,10 @@
                 }
                 // If query path is Items/itemid/Similar then return the details page for the item
                 if (firstQuery.path.includes('Similar')) {
-                    const itemId = firstQuery.path.split('/')[2];
+                    // /Items/{id}/Similar -> [2], but /SmartSimilar/Items/{id}/Similar
+                    // carries an extra leading segment, so the id sits one further in.
+                    const parts = firstQuery.path.split('/');
+                    const itemId = firstQuery.path.includes('/SmartSimilar/') ? parts[3] : parts[2];
                     return `#/details?id=${itemId}&serverId=${serverId}`;
                 }
             }
@@ -594,7 +597,7 @@
                 queryOptions: { ItemType: itemType, Limit: 100 }
             };
         }
-        if (discoveryType === 'Similar' || discoveryType === 'Watchlist') {
+        if (discoveryType === 'Similar' || discoveryType === 'SmartSimilar' || discoveryType === 'Watchlist') {
             if (config.sourceType === 'liked' || discoveryType === 'Watchlist') {
                 return {
                     path: '/Items',
@@ -804,8 +807,26 @@
             return null;
         }
 
-        const pool = await fetchDiscoveryPool(config);
+        let pool = await fetchDiscoveryPool(config);
         if (!pool.length) return null;
+
+        // "Recently watched" means recently, carried over from the fork. The pool
+        // query only sorts by DatePlayed, so on a library with little recent activity
+        // it still returns things watched years ago and the row claims otherwise.
+        // recentMaxDays <= 0 disables the window.
+        if (String(config.sourceType || '').includes('recent')) {
+            const recentMaxDays = getDiscoverySettings().recentMaxDays ?? 30;
+            if (recentMaxDays > 0) {
+                const cutoff = Date.now() - (recentMaxDays * 24 * 60 * 60 * 1000);
+                const within = pool.filter((item) => {
+                    const last = item?.UserData?.LastPlayedDate;
+                    return last ? new Date(last).getTime() >= cutoff : false;
+                });
+                // Only narrow when something survives: an empty window should fall
+                // back to the unfiltered pool rather than silently drop the section.
+                if (within.length) pool = within;
+            }
+        }
 
         if (discoveryType === 'Genre') {
             const settings = getDiscoverySettings();
@@ -855,7 +876,7 @@
             };
         }
 
-        if (discoveryType === 'Similar' || discoveryType === 'Watchlist') {
+        if (discoveryType === 'Similar' || discoveryType === 'SmartSimilar' || discoveryType === 'Watchlist') {
             const dedupe = discoveryState.renderedDiscoveryIds.similar;
             const eligible = shuffleArray(pool).filter((item) => {
                 const sourceId = resolveSimilarSourceId(item);
@@ -1035,7 +1056,34 @@
         }
         if (!queryOptions.Limit) queryOptions.Limit = instanceConfig.itemLimit || 20;
 
-        if (discoveryKind === 'Similar' || discoveryKind === 'Watchlist') {
+        if (discoveryKind === 'SmartSimilar') {
+            // The SmartSimilar plugin, not Jellyfin's native endpoint. Same request
+            // and response contract, but it scores candidates by IDF-weighted cosine
+            // similarity over tags, genres, people and studios, and discards features
+            // that appear in more than a quarter of the library. The native endpoint
+            // weights every shared tag equally, so one common tag is enough to surface
+            // something unrelated. Compared on a mecha series here, native returned
+            // five mostly unrelated shows and this returned five mecha ones.
+            //
+            // Degrades to an empty row rather than an error if the plugin is absent:
+            // the request 404s, the section yields nothing, and nothing else breaks.
+            const similarId = dynamicResult.similarSourceId || resolvedSource;
+            const smartThreshold = getDiscoverySettings().smartWatchThreshold ?? 0;
+            const smartLimit = instanceConfig.itemLimit || 20;
+            instanceConfig.queries = [{
+                ...(hasTemplateQueries ? instanceConfig.queries[0] : {}),
+                path: `/SmartSimilar/Items/${similarId}/Similar`,
+                queryOptions: {
+                    // Over-request: the server pre-filters on the same threshold, but
+                    // the client filter still prunes anything watched since the
+                    // response was cached.
+                    Limit: smartLimit * 2,
+                    Fields: queryOptions.Fields || 'PrimaryImageAspectRatio,DateCreated,Overview,Taglines,ProductionYear,RecursiveItemCount,ChildCount,UserData',
+                    ...(smartThreshold >= 0 ? { filterWatched: true, watchedThreshold: smartThreshold } : {})
+                }
+            }];
+            instanceConfig.refreshUserData = true;
+        } else if (discoveryKind === 'Similar' || discoveryKind === 'Watchlist') {
             const similarId = dynamicResult.similarSourceId || resolvedSource;
             instanceConfig.queries = [{
                 ...(hasTemplateQueries ? instanceConfig.queries[0] : {}),

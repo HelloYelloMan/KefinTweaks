@@ -2183,38 +2183,12 @@
             ]
         },
         // ── Series Equivalents ────────────────────────────────────────
-        // Genre Shows Group
-        {
-            id: 'discovery-genre-shows',
-            name: 'Genre Shows',
-            sections: [
-                {
-                    id: 'genreShows',
-                    type: 'Genre',
-                    source: 'Dynamic',
-                    name: '{Genre} Shows',
-                    enabled: true,
-                    itemLimit: 20,
-                    sortOrder: 'Random',
-                    cardFormat: 'Poster',
-                    includeItemTypes: ['Series'],
-                    ttl: CACHE_CONFIG.DISCOVERY_TTL
-                },
-                {
-                    id: 'spotlightGenreShows',
-                    type: 'Genre',
-                    source: 'Dynamic',
-                    name: 'Top Rated {Genre} Shows',
-                    enabled: true,
-                    itemLimit: 20,
-                    sortOrder: 'CommunityRating',
-                    sortOrderDirection: 'Descending',
-                    includeItemTypes: ['Series'],
-                    renderMode: 'Spotlight',
-                    ttl: CACHE_CONFIG.DISCOVERY_TTL
-                }
-            ]
-        },
+        // The Genre Shows group that stood here was removed after the upstream
+        // merge: upstream's discovery-genre-series group is the same two sections
+        // ({Genre} Series, Top Rated {Genre} Series) on the schema its section
+        // helper prefers, so carrying ours as well meant two rows offering the
+        // same thing. pruneStaleDefaultGroups drops the saved copy from existing
+        // user configs, which is what that function is for.
         // People Shows Group
         {
             id: 'discovery-people-shows',
