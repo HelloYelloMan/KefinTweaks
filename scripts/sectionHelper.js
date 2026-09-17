@@ -273,19 +273,27 @@
         };
 
         const queryResult = results[0];
+        // postProcess is synchronous and applySmartFilter is not, so the filter
+        // wraps the data paths rather than joining postProcess.
+        const needsSmartFilter = !!(sectionConfig.refreshUserData || sectionConfig.postFetchFilter);
+
         let mappedDataPromise = null;
         const ensureData = () => {
             if (!mappedDataPromise) {
                 const raw = typeof queryResult.ensureData === 'function'
                     ? queryResult.ensureData()
                     : queryResult.dataPromise;
-                mappedDataPromise = Promise.resolve(raw).then((data) => postProcess(sectionConfig, data));
+                mappedDataPromise = Promise.resolve(raw)
+                    .then((data) => postProcess(sectionConfig, data))
+                    .then((data) => needsSmartFilter ? applySmartFilter(sectionConfig, data) : data);
             }
             return mappedDataPromise;
         };
 
         const result = {
-            data: postProcess(sectionConfig, queryResult.data),
+            data: needsSmartFilter
+                ? await applySmartFilter(sectionConfig, postProcess(sectionConfig, queryResult.data))
+                : postProcess(sectionConfig, queryResult.data),
             isStale: queryResult.isStale === true,
             isStalePromise: queryResult.isStalePromise,
             ensureData
@@ -310,6 +318,71 @@
      * Jellyfin /Items?Ids= does not reliably return items in request order.
      * When queryOptions.Ids is set, re-sort the item list to match that sequence.
      */
+    /**
+     * Refresh user data and drop watched items, for sections that asked for it.
+     * Carried over from the fork, where this lived inline in homeScreen3.js before
+     * that code moved here; upstream has no equivalent, and the Smart Suggest
+     * sections depend on it. Both hooks it reads -- refreshUserData and
+     * postFetchFilter -- are set by buildDiscoverySectionInstance below.
+     *
+     * Returning null means "skip this section entirely", which is what happens
+     * when filtering leaves too few items to be worth a row.
+     *
+     * @param {Object} sectionConfig - The section being loaded
+     * @param {Object|Array} data - Query result, or a bare item array
+     * @returns {Promise<Object|Array|null>} Filtered data, or null to skip
+     */
+    async function applySmartFilter(sectionConfig, data) {
+        if (!data) return data;
+
+        let items = data.Items || data;
+        if (!Array.isArray(items) || items.length === 0) return data;
+
+        // A cached response carries whatever UserData was true when it was cached,
+        // so anything marked played since then would survive the filter below.
+        if (sectionConfig.refreshUserData) {
+            try {
+                const userId = ApiClient.getCurrentUserId();
+                const ids = items.map(i => i.Id).filter(Boolean).join(',');
+                if (ids) {
+                    // RecursiveItemCount is required, not decorative:
+                    // Folder.FillUserDataDtoValues only computes
+                    // UserData.PlayedPercentage for a Series when the request asks
+                    // for it. Without it, in-progress series come back with a null
+                    // percentage and pass any threshold.
+                    const freshResp = await ApiClient.getJSON(
+                        ApiClient.getUrl(`Users/${userId}/Items`, {
+                            Ids: ids,
+                            Fields: 'RecursiveItemCount'
+                        })
+                    );
+                    if (freshResp?.Items) {
+                        const freshMap = new Map(freshResp.Items.map(i => [i.Id, i.UserData]));
+                        for (const item of items) {
+                            const freshUd = freshMap.get(item.Id);
+                            if (freshUd) item.UserData = freshUd;
+                        }
+                    }
+                }
+            } catch (e) {
+                WARN(`Section ${sectionConfig.id}: could not refresh UserData:`, e);
+            }
+        }
+
+        if (sectionConfig.postFetchFilter) {
+            const filtered = sectionConfig.postFetchFilter(items);
+            if (filtered === null) return null;
+            if (data.Items) {
+                data.Items = filtered;
+                data.TotalRecordCount = filtered.length;
+            } else {
+                data = filtered;
+            }
+        }
+
+        return data;
+    }
+
     function sortItemsByConfiguredIds(sectionConfig, items) {
         const list = Array.isArray(items) ? items : (items?.Items || []);
         if (!Array.isArray(list) || list.length === 0) return items;
@@ -1030,6 +1103,52 @@
                 ...(hasTemplateQueries ? instanceConfig.queries[0] : {}),
                 queryOptions
             }];
+        }
+
+        // Generic hideWatched support, carried over from the fork; applies to any
+        // section type. Sets the two hooks applySmartFilter reads when the section
+        // is loaded. Upstream has no equivalent, and Smart Suggest relies on it.
+        if (instanceConfig.hideWatched === true && !instanceConfig.postFetchFilter) {
+            const threshold = getDiscoverySettings().smartWatchThreshold ?? 0;
+            const finalLimit = instanceConfig.itemLimit || 20;
+
+            // Over-request, because filtering removes items after the query and a
+            // short row is worse than a slightly larger fetch. SmartSimilar already
+            // doubles its own limit, so it is left alone.
+            if (instanceConfig.type !== 'SmartSimilar' && instanceConfig.queries) {
+                for (const q of instanceConfig.queries) {
+                    if (q.queryOptions && q.queryOptions.Limit) {
+                        q.queryOptions.Limit = q.queryOptions.Limit * 2;
+                    } else if (q.queryOptions) {
+                        q.queryOptions.Limit = finalLimit * 2;
+                    }
+                }
+            }
+
+            if (threshold >= 0) {
+                instanceConfig.postFetchFilter = (items) => {
+                    const filtered = items.filter(item => {
+                        if (!item.UserData) return true;
+                        // Fully played is always excluded. Played and
+                        // PlayedPercentage are independent signals: a finished
+                        // movie has Played true but its playback position reset,
+                        // so no percentage at all.
+                        if (item.UserData.Played) return false;
+                        // Above zero, also exclude partial progress at or past the
+                        // threshold -- playback position for a movie, watched
+                        // episodes for a series.
+                        if (threshold > 0) {
+                            return (item.UserData.PlayedPercentage || 0) < threshold;
+                        }
+                        return true;
+                    });
+                    // Too few left to be worth a row; skip the section.
+                    if (filtered.length < 3) return null;
+                    return filtered.slice(0, finalLimit);
+                };
+            }
+
+            instanceConfig.refreshUserData = true;
         }
 
         instanceConfig.name = fillTemplate(instanceConfig.name, dynamicResult.metadata);
