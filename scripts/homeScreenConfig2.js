@@ -2344,7 +2344,24 @@
             sections: [
                 {
                     id: 'smartBecauseYouWatched',
-                    type: 'SmartSimilar',
+                    // Upstream's schema, not the legacy `type` one: the config
+                    // migration rewrites `type` to 'discovery', which silently
+                    // erased the identity of these sections and left the helper
+                    // unable to tell what they were. discoveryType survives it.
+                    type: 'discovery',
+                    discoveryType: 'SmartSimilar',
+                    discoveryItemType: 'Movie',
+                    discoverySourceQuery: {
+                        path: '/Items',
+                        queryOptions: {
+                            IncludeItemTypes: ['Movie'],
+                            Recursive: true,
+                            Filters: 'IsPlayed',
+                            Fields: 'UserData,People',
+                            SortBy: 'Random',
+                            Limit: 20
+                        }
+                    },
                     hideWatched: true,
                     source: 'Dynamic',
                     sourceType: 'watched',
@@ -2357,7 +2374,25 @@
                 },
                 {
                     id: 'smartBecauseYouRecentlyWatched',
-                    type: 'SmartSimilar',
+                    // Upstream's schema, not the legacy `type` one: the config
+                    // migration rewrites `type` to 'discovery', which silently
+                    // erased the identity of these sections and left the helper
+                    // unable to tell what they were. discoveryType survives it.
+                    type: 'discovery',
+                    discoveryType: 'SmartSimilar',
+                    discoveryItemType: 'Movie',
+                    discoverySourceQuery: {
+                        path: '/Items',
+                        queryOptions: {
+                            IncludeItemTypes: ['Movie'],
+                            Recursive: true,
+                            Filters: 'IsPlayed',
+                            Fields: 'UserData,People',
+                            SortBy: 'DatePlayed',
+                            SortOrder: 'Descending',
+                            Limit: 5
+                        }
+                    },
                     hideWatched: true,
                     source: 'Dynamic',
                     sourceType: 'watched-recent',
@@ -2370,7 +2405,24 @@
                 },
                 {
                     id: 'smartBecauseYouLiked',
-                    type: 'SmartSimilar',
+                    // Upstream's schema, not the legacy `type` one: the config
+                    // migration rewrites `type` to 'discovery', which silently
+                    // erased the identity of these sections and left the helper
+                    // unable to tell what they were. discoveryType survives it.
+                    type: 'discovery',
+                    discoveryType: 'SmartSimilar',
+                    discoveryItemType: 'Movie',
+                    discoverySourceQuery: {
+                        path: '/Items',
+                        queryOptions: {
+                            IncludeItemTypes: ['Movie'],
+                            Recursive: true,
+                            Filters: 'IsFavorite',
+                            Fields: 'UserData,People',
+                            SortBy: 'Random',
+                            Limit: 20
+                        }
+                    },
                     hideWatched: true,
                     source: 'Dynamic',
                     sourceType: 'liked',
@@ -2390,7 +2442,24 @@
             sections: [
                 {
                     id: 'smartBecauseYouWatchedShow',
-                    type: 'SmartSimilar',
+                    // Upstream's schema, not the legacy `type` one: the config
+                    // migration rewrites `type` to 'discovery', which silently
+                    // erased the identity of these sections and left the helper
+                    // unable to tell what they were. discoveryType survives it.
+                    type: 'discovery',
+                    discoveryType: 'SmartSimilar',
+                    discoveryItemType: 'Series',
+                    discoverySourceQuery: {
+                        path: '/Items',
+                        queryOptions: {
+                            IncludeItemTypes: ['Episode'],
+                            Recursive: true,
+                            Filters: 'IsPlayed',
+                            Fields: 'UserData,People',
+                            SortBy: 'Random',
+                            Limit: 20
+                        }
+                    },
                     hideWatched: true,
                     source: 'Dynamic',
                     sourceType: 'watched',
@@ -2403,7 +2472,25 @@
                 },
                 {
                     id: 'smartBecauseYouRecentlyWatchedShow',
-                    type: 'SmartSimilar',
+                    // Upstream's schema, not the legacy `type` one: the config
+                    // migration rewrites `type` to 'discovery', which silently
+                    // erased the identity of these sections and left the helper
+                    // unable to tell what they were. discoveryType survives it.
+                    type: 'discovery',
+                    discoveryType: 'SmartSimilar',
+                    discoveryItemType: 'Series',
+                    discoverySourceQuery: {
+                        path: '/Items',
+                        queryOptions: {
+                            IncludeItemTypes: ['Episode'],
+                            Recursive: true,
+                            Filters: 'IsPlayed',
+                            Fields: 'UserData,People',
+                            SortBy: 'DatePlayed',
+                            SortOrder: 'Descending',
+                            Limit: 5
+                        }
+                    },
                     hideWatched: true,
                     source: 'Dynamic',
                     sourceType: 'watched-recent',
@@ -2416,7 +2503,24 @@
                 },
                 {
                     id: 'smartBecauseYouLikedShow',
-                    type: 'SmartSimilar',
+                    // Upstream's schema, not the legacy `type` one: the config
+                    // migration rewrites `type` to 'discovery', which silently
+                    // erased the identity of these sections and left the helper
+                    // unable to tell what they were. discoveryType survives it.
+                    type: 'discovery',
+                    discoveryType: 'SmartSimilar',
+                    discoveryItemType: 'Series',
+                    discoverySourceQuery: {
+                        path: '/Items',
+                        queryOptions: {
+                            IncludeItemTypes: ['Episode'],
+                            Recursive: true,
+                            Filters: 'IsFavorite',
+                            Fields: 'UserData,People',
+                            SortBy: 'Random',
+                            Limit: 20
+                        }
+                    },
                     hideWatched: true,
                     source: 'Dynamic',
                     sourceType: 'liked',
