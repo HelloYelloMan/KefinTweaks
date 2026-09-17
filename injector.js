@@ -242,7 +242,6 @@
         // Grouped at the end so an upstream merge lands their additions above
         // this line and ours below it, rather than interleaved.
         // ================================================================
-        libraryMarkers: true,     // Publish the item's library as a body class, for library-scoped CSS
         castSessionWatchdog: true, // Re-subscribe the Sessions feed when a stale now playing bar shows a dead cast target
         elegantfinHaspatch: true, // ElegantFin :has() hotfix marker classes (needs the local ElegantFin build)
         episodeSeasonTitle: true, // Season title/logo on episode headers + season-page logo links to series
@@ -763,13 +762,6 @@
         // ================================================================
         // FORK-ONLY FEATURES -- matching the block in the defaults above
         // ================================================================
-        {
-            name: 'libraryMarkers',
-            script: 'libraryMarkers.js',
-            css: null,
-            dependencies: ['utils'],
-            description: "Publishes the library an item belongs to as a class on <body> (kefin-library-<name> and kefin-library-id-<id>), so a stylesheet can be scoped to one library. Nothing on a detail page identifies the parent library, so CSS cannot do this alone."
-        },
         {
             name: 'elegantfinHaspatch',
             script: 'elegantfin-haspatch.js',
