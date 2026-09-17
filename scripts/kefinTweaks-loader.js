@@ -33,10 +33,15 @@
         userManager: false,
         games: true,
 
-        // ---- fork-only features ------------------------------------------
-        // Upstream moved this registry out of injector.js and into this file,
-        // which is what the installer now loads. These ten are ours and have no
-        // upstream entry, so without them the scripts ship but never run.
+        // ================================================================
+        // FORK-ONLY FEATURES
+        // Grouped at the end so an upstream merge lands their additions above
+        // this line and ours below it, rather than interleaved.
+        //
+        // Upstream moved this registry out of injector.js into this file, which
+        // is what the installer loads. These ten have no upstream entry, so
+        // without them the scripts ship but never run -- and nothing errors,
+        // which is why it went unnoticed after the merge.
         castSessionWatchdog: true, // Re-subscribe the Sessions feed when a stale now playing bar shows a dead cast target
         elegantfinHaspatch: true, // ElegantFin :has() hotfix marker classes (needs the local ElegantFin build)
         episodeSeasonTitle: true, // Season title/logo on episode headers + season-page logo links to series
@@ -553,7 +558,9 @@
             description: 'Adds sorting functionality to collection pages'
         },,
 
-        // ---- fork-only features, see the defaults above ----------------
+        // ================================================================
+        // FORK-ONLY FEATURES -- matching the block in the defaults above
+        // ================================================================
         {
             name: 'castSessionWatchdog',
             script: 'castSessionWatchdog.js',

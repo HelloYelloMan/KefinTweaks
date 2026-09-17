@@ -137,6 +137,22 @@
                 enabled: false
             },
             {
+                name: '16:9 Episode Thumbnails on Season Page',
+                url: `${getKefinTweaksRoot()}skins/optional/global/episodeThumbnailSize.css`,
+                enabled: false
+            },
+            {
+                name: 'Hide Missing And Unaired Indicators On Home Screen',
+                url: `${getKefinTweaksRoot()}skins/optional/global/hideMissingAndUnairedIndicatorsOnHomeScreen.css`,
+                enabled: false
+            },
+
+            // ================================================================
+            // FORK-ONLY OPTIONS
+            // Kept at the end so a merge with upstream shows their additions
+            // above this line and ours below it, instead of interleaved.
+            // ================================================================
+            {
                 name: 'Hide Media Tags Row',
                 url: `${getKefinTweaksRoot()}skins/optional/global/hideMediaTags.css`,
                 enabled: false
@@ -165,16 +181,6 @@
                 // what that depends on and why it fails safe.
                 name: 'Hide Specials From Season Row',
                 url: `${getKefinTweaksRoot()}skins/optional/global/hideSpecialsSeason.css`,
-                enabled: false
-            },
-            {
-                name: '16:9 Episode Thumbnails on Season Page',
-                url: `${getKefinTweaksRoot()}skins/optional/global/episodeThumbnailSize.css`,
-                enabled: false
-            },
-            {
-                name: 'Hide Missing And Unaired Indicators On Home Screen',
-                url: `${getKefinTweaksRoot()}skins/optional/global/hideMissingAndUnairedIndicatorsOnHomeScreen.css`,
                 enabled: false
             }
         ],
