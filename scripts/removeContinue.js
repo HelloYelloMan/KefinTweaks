@@ -78,7 +78,7 @@
         
         // Only add button to cards with data-positionticks (in progress items)
         const positionTicks = card.getAttribute('data-positionticks');
-        if (!positionTicks) {
+        if (!positionTicks || positionTicks === '0') {
             return; // Not a continue watching item, skip
         }
         
@@ -162,7 +162,7 @@
         const response = await fetch(userDataUrl, {
             method: 'GET',
             headers: { 
-                "Authorization": `MediaBrowser Token="${token}"`,
+                "Authorization": window.apiHelper.getAuthHeader(),
                 "Content-Type": "application/json"
             }
         });
@@ -196,7 +196,7 @@
         const response = await fetch(userDataUrl, {
             method: 'POST',
             headers: { 
-                "Authorization": `MediaBrowser Token="${token}"`,
+                "Authorization": window.apiHelper.getAuthHeader(),
                 "Content-Type": "application/json"
             },
             body: JSON.stringify(updatedUserData)

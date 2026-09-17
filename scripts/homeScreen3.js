@@ -41,27 +41,17 @@
         renderedSections: new Set(),
         renderedDiscoveryIds: {
             genres: new Set(),
-            networks: new Set(),
+            genresSeries: new Set(),
+            seriesStudios: new Set(),
+            seriesStudiosTopRated: new Set(),
             collections: new Set(),
-            studios: new Set(),
             people: new Set(),
-            actors: new Set(),
-            directors: new Set(),
-            writers: new Set(),
-            watchedMovies: new Set(),
-            likedMovies: new Set(),
-            watchedSeries: new Set(),
-            likedSeries: new Set(),
+            similar: new Set(),
+            watchlist: new Set(),
             customDiscoverySections: new Set()
         },
         currentDiscoveryGenre: null,
         currentDiscoveryStudio: null,
-        cachedFavorites: null,
-        cachedRecentMovies: null,
-        cachedFavoriteSeries: null,
-        cachedWatchedSeries: null,
-        cachedRecentSeries: null,
-        _cachedInteractedSeries: null,
         isPeopleCacheComplete: false,
         discoveryGroupIndex: 0,
         isRenderingDiscovery: false,
@@ -71,18 +61,34 @@
         discoverySectionOrder: 100000000,
         discoverySectionsRemain: true,
         ensuringDiscoveryBuffer: false,
+        discoveryNeedsMoreScroll: false,
+        discoveryMode: null, // 'infinite' | 'chevron'
         infiniteScrollHandler: null,
-        discoveryObserver: null,
-        discoverySentinel: null,
-        discoveryContainerObserver: null,
+        discoveryWheelHandler: null,
+        discoveryTouchStartHandler: null,
+        discoveryTouchMoveHandler: null,
+        discoveryScrollDebounceTimer: null,
         userDisplayPreferences: null,
         firstDiscoveryBuffer: null,
-        getDisplayPrefernces: fetchDisplayPreferences,
+        getDisplayPrefernces: null,
         kefinNextUp: false,
         kefinContinueWatching: false,
         kefinLatestMedia: false,
-        jellyfinOrders: {}
+        jellyfinOrders: {},
+        homePaintedEventFired: false
     };
+
+    async function fetchDisplayPreferences() {
+        if (!window.userHelper?.getUserDisplayPreferences) {
+            WARN('userHelper.getUserDisplayPreferences unavailable');
+            return null;
+        }
+        const { promise, cached } = await window.userHelper.getUserDisplayPreferences({ cacheOnly: true });
+        const prefs = cached || await promise;
+        state.userDisplayPreferences = prefs;
+        return prefs;
+    }
+    state.getDisplayPrefernces = fetchDisplayPreferences;
 
     const performanceTimer = {
         loadTimeStart: null,
@@ -108,14 +114,16 @@
 
     // Create loading indicator element
     function createDiscoveryLoadingIndicator(container) {
-        let loadingDiv = document.querySelector('.homePage:not(.hide) #discovery-loading-indicator');
+        let loadingDiv = document.querySelector('.homePage:not(.hide) #discovery-loading-indicator')
+            || document.querySelector('.libraryPage:not(.hide) #discovery-loading-indicator');
         if (loadingDiv) {
             return loadingDiv;
         }
 
         // Prefer the provided container, but fall back to the standard sections container
         if (!container) {
-            container = document.querySelector('.homePage:not(.hide) #homeTab .sections');
+            container = document.querySelector('.homePage:not(.hide) #homeTab .sections')
+                || document.querySelector('.libraryPage:not(.hide) .homeSectionsContainer');
         }
 
         if (!container) {
@@ -135,6 +143,97 @@
         LOG('Created discovery loading indicator inside sections container');
         
         return loadingDiv;
+    }
+
+    function getDiscoveryHomePageEl() {
+        return document.querySelector('#indexPage')
+            || document.querySelector('.homePage:not(.hide)')
+            || document.querySelector('.libraryPage:not(.hide)');
+    }
+
+    function setDiscoveryPageAttrs({ ready = false, infinite = false, exhausted = false } = {}) {
+        const page = getDiscoveryHomePageEl();
+        if (!page) return;
+        if (ready) page.dataset.discoveryReady = 'true';
+        else delete page.dataset.discoveryReady;
+        if (infinite) page.dataset.infiniteScroll = 'true';
+        else delete page.dataset.infiniteScroll;
+        if (exhausted) page.dataset.discoveryExhausted = 'true';
+        else delete page.dataset.discoveryExhausted;
+    }
+
+    function showDiscoveryLoadingIndicator() {
+        const loadingIndicator = createDiscoveryLoadingIndicator(
+            document.querySelector('.libraryPage:not(.hide) .homeSectionsContainer')
+        );
+        if (!loadingIndicator) return;
+        loadingIndicator.classList.add('show');
+        loadingIndicator.style.visibility = 'visible';
+        loadingIndicator.style.display = 'flex';
+    }
+
+    function hideDiscoveryLoadingIndicator() {
+        const loadingIndicator = document.querySelector('.libraryPage:not(.hide) #discovery-loading-indicator');
+        if (!loadingIndicator) return;
+        loadingIndicator.classList.remove('show');
+        // Chevron / exhausted idle UI is shown via data-discovery-ready CSS
+        if (state.discoveryMode === 'chevron' || state.discoverySectionsRemain === false) {
+            loadingIndicator.style.visibility = '';
+            loadingIndicator.style.display = '';
+        } else {
+            loadingIndicator.style.visibility = 'hidden';
+            loadingIndicator.style.display = 'none';
+        }
+    }
+
+    function isDiscoveryHomeContext() {
+        const currentView = window.KefinTweaksUtils?.getCurrentView();
+        const isHomePage = currentView === 'home' || currentView === 'home.html';
+        if (!isHomePage) return false;
+        const activeTab = document.querySelector('.headerTabs .emby-tab-button-active');
+        if (!activeTab || activeTab.getAttribute('data-index') !== '0') return false;
+        return true;
+    }
+
+    function removeDiscoveryScrollListeners() {
+        if (state.discoveryScrollDebounceTimer) {
+            clearTimeout(state.discoveryScrollDebounceTimer);
+            state.discoveryScrollDebounceTimer = null;
+        }
+        if (state.infiniteScrollHandler) {
+            window.removeEventListener('scroll', state.infiniteScrollHandler);
+            state.infiniteScrollHandler = null;
+        }
+        if (state.discoveryWheelHandler) {
+            window.removeEventListener('wheel', state.discoveryWheelHandler);
+            state.discoveryWheelHandler = null;
+        }
+        if (state.discoveryTouchStartHandler) {
+            window.removeEventListener('touchstart', state.discoveryTouchStartHandler);
+            state.discoveryTouchStartHandler = null;
+        }
+        if (state.discoveryTouchMoveHandler) {
+            window.removeEventListener('touchmove', state.discoveryTouchMoveHandler);
+            state.discoveryTouchMoveHandler = null;
+        }
+        const container = document.querySelector('.libraryPage:not(.hide) .homeSectionsContainer');
+        if (container) delete container.dataset.discoveryHandler;
+    }
+
+    function markDiscoveryExhausted() {
+        state.discoverySectionsRemain = false;
+        state.discoveryBuffer = null;
+        removeDiscoveryScrollListeners();
+        setDiscoveryPageAttrs({ ready: true, infinite: false, exhausted: true });
+        const loadingIndicator = createDiscoveryLoadingIndicator(
+            document.querySelector('.libraryPage:not(.hide) .homeSectionsContainer')
+        );
+        if (loadingIndicator) {
+            loadingIndicator.classList.remove('show');
+            loadingIndicator.style.visibility = '';
+            loadingIndicator.style.display = '';
+        }
+        LOG('Discovery exhausted — No More Content to Discover');
     }
 
     // Legacy helper kept for compatibility – no longer used in the main flow
@@ -346,7 +445,7 @@
             if (nextupSectionConfig && nextupSectionConfig.enabled && nextupSectionConfig.queries) {
                 for (const query of nextupSectionConfig.queries) {
                     if (query.path || !query.dataSource) {
-                        const queryUrl = ApiHelper.buildQueryFromSection(query, ApiClient.getCurrentUserId(), ApiClient.serverAddress(), nextupSectionConfig.renderMode === 'Spotlight');
+                        const queryUrl = ApiHelper.buildQueryFromSection(query, ApiClient.getCurrentUserId(), ApiClient.serverAddress(), nextupSectionConfig.renderMode === 'Spotlight', { sectionType: nextupSectionConfig.type });
                         if (queryUrl && typeof queryUrl === 'string') {
                             ApiHelper.invalidateCache(queryUrl);
                         }
@@ -358,7 +457,7 @@
             if (continueWatchingSectionConfig && continueWatchingSectionConfig.enabled && continueWatchingSectionConfig.queries) {
                 for (const query of continueWatchingSectionConfig.queries) {
                     if (query.path || !query.dataSource) {
-                        const queryUrl = ApiHelper.buildQueryFromSection(query, ApiClient.getCurrentUserId(), ApiClient.serverAddress(), continueWatchingSectionConfig.renderMode === 'Spotlight');
+                        const queryUrl = ApiHelper.buildQueryFromSection(query, ApiClient.getCurrentUserId(), ApiClient.serverAddress(), continueWatchingSectionConfig.renderMode === 'Spotlight', { sectionType: continueWatchingSectionConfig.type });
                         if (queryUrl && typeof queryUrl === 'string') {
                             ApiHelper.invalidateCache(queryUrl);
                         }
@@ -370,7 +469,7 @@
             if (continueWatchingAndNextUpSectionConfig && continueWatchingAndNextUpSectionConfig.enabled && continueWatchingAndNextUpSectionConfig.queries) {
                 for (const query of continueWatchingAndNextUpSectionConfig.queries) {
                     if (query.path || !query.dataSource) {
-                        const queryUrl = ApiHelper.buildQueryFromSection(query, ApiClient.getCurrentUserId(), ApiClient.serverAddress(), continueWatchingAndNextUpSectionConfig.renderMode === 'Spotlight');
+                        const queryUrl = ApiHelper.buildQueryFromSection(query, ApiClient.getCurrentUserId(), ApiClient.serverAddress(), continueWatchingAndNextUpSectionConfig.renderMode === 'Spotlight', { sectionType: continueWatchingAndNextUpSectionConfig.type });
                         if (queryUrl && typeof queryUrl === 'string') {
                             ApiHelper.invalidateCache(queryUrl);
                         }
@@ -409,18 +508,6 @@
             return;
         }
 
-        // Re-entrancy guard, set synchronously before any await. Multiple
-        // triggers can fire near-simultaneously (view event, visibilitychange,
-        // DOM poller); without this they race into overlapping builds that
-        // duplicate or clobber sections. Cleared on the container if a rebuild
-        // is ever needed (the container is replaced by Jellyfin on full
-        // navigation away, which naturally resets this).
-        if (container.dataset.kefinHomeScreenBuilding === 'true' || container.dataset.kefinHomeScreen === 'true') {
-            LOG('Home screen build already in progress or complete; skipping');
-            return;
-        }
-        container.dataset.kefinHomeScreenBuilding = 'true';
-
         // Create Kefin home sections container as a sibling of the Jellyfin sections container
 /*         let kefinHomeSectionsContainer = document.querySelector('.homePage:not(.hide) #homeTab .kefinHomeSectionsContainer');
         if (!kefinHomeSectionsContainer) {
@@ -434,9 +521,11 @@
             }
         } */
 
-        // (Completion/re-entrancy is handled by the single guard above, which
-        // sets kefinHomeScreenBuilding. A second early-return here would exit
-        // while that latch is held and permanently block rebuilds.)
+        // If we've already initialized and Jellyfin has completed its render, avoid re-running
+        if (container.dataset.kefinHomeScreen) {
+            LOG('Home screen already initialized and Jellyfin has rendered');
+            return;
+        }
 
         let performanceStartTime = performance.now();
         
@@ -447,24 +536,46 @@
         let performanceDuration = performanceEndTime - performanceStartTime;
         LOG(`Home Screen v3 Fetch display preferences initialization time: ${performanceDuration.toFixed(2)}ms`);
 
+        // Load user preferences and apply filtering/ordering
         performanceStartTime = performance.now();
-        
-        // Merge configs - flatten groups first
-        //const defaultHomeSections = flattenSectionGroups(Config.HOME_SECTION_GROUPS || []);
-        //const mergedHomeSections = await mergeHomeSectionConfigs(defaultHomeSections);
-        const mergedHomeSections = await mergeHomeSectionConfigs();
-        
+
+        const userHomeConfig = window.KefinUserHomeScreenConfig;
+        let filteredHomeSections;
+        let homeScreen;
+        let userDisplayPreferences = null;
+
+        if (typeof userHomeConfig?.getConfig === 'function') {
+            const userConfig = await userHomeConfig.getConfig();
+            filteredHomeSections = userConfig.sections || [];
+            homeScreen = userConfig.homeScreen;
+            userDisplayPreferences = await state.getDisplayPrefernces();
+            //addUserHomeScreenOrderCSS(userDisplayPreferences, homeScreen);
+        } else {
+            const mergedHomeSections = await mergeHomeSectionConfigs();
+            userDisplayPreferences = await state.getDisplayPrefernces();
+            const customPrefs = userDisplayPreferences?.CustomPrefs || {};
+            homeScreen = userHomeConfig.parseKefinTweaksHomeScreen(customPrefs);
+            const pinnedSections = userHomeConfig.buildPinnedSectionConfigs(homeScreen);
+            //addUserHomeScreenOrderCSS(userDisplayPreferences, homeScreen);
+
+            const serverSectionsById = new Map();
+            mergedHomeSections.forEach(section => {
+                if (section?.id) serverSectionsById.set(section.id, section);
+            });
+
+            filteredHomeSections = [...mergedHomeSections, ...pinnedSections];
+            filteredHomeSections = userHomeConfig.applyUserSectionOverrides(filteredHomeSections, homeScreen, { serverSectionsById });
+            filteredHomeSections = filteredHomeSections.filter(section => section.enabled !== false);
+        }
+
         performanceEndTime = performance.now();
         performanceDuration = performanceEndTime - performanceStartTime;
-        LOG(`Home Screen v3 Merge home section configs initialization time: ${performanceDuration.toFixed(2)}ms`);
+        LOG(`Home Screen v3 Load user home screen sections initialization time: ${performanceDuration.toFixed(2)}ms`);
 
-        performanceStartTime = performance.now();
-
-
-        const nextupSectionConfig = mergedHomeSections.find(s => s.id === 'nextUp');
-        const continueWatchingSectionConfig = mergedHomeSections.find(s => s.id === 'continueWatching');
-        const continueWatchingAndNextUpSectionConfig = mergedHomeSections.find(s => s.id === 'continueWatchingAndNextUp');
-        const recentlyAddedSectionConfig = mergedHomeSections.find(s => s.id.startsWith('recently-added-') && s.enabled === true);
+        const nextupSectionConfig = filteredHomeSections.find(s => s.id === 'nextUp');
+        const continueWatchingSectionConfig = filteredHomeSections.find(s => s.id === 'continueWatching');
+        const continueWatchingAndNextUpSectionConfig = filteredHomeSections.find(s => s.id === 'continueWatchingAndNextUp');
+        const recentlyAddedSectionConfig = filteredHomeSections.find(s => s.id?.startsWith?.('recently-added-') && s.enabled === true);
         state.kefinNextUp = nextupSectionConfig?.enabled === true || continueWatchingAndNextUpSectionConfig?.enabled === true;
         state.kefinContinueWatching = continueWatchingSectionConfig?.enabled === true || continueWatchingAndNextUpSectionConfig?.enabled === true;
         state.kefinLatestMedia = recentlyAddedSectionConfig?.enabled === true;
@@ -475,30 +586,6 @@
                 handleUserDataChanged(event, nextupSectionConfig, continueWatchingSectionConfig, continueWatchingAndNextUpSectionConfig);
             });
         }
-
-        performanceEndTime = performance.now();
-        performanceDuration = performanceEndTime - performanceStartTime;
-        LOG(`Home Screen v3 Setup event listener initialization time: ${performanceDuration.toFixed(2)}ms`);
-
-        // Load user preferences and apply filtering/ordering
-        performanceStartTime = performance.now();
-
-        const userDisplayPreferences = await state.getDisplayPrefernces();
-        let userHomeScreenSections = loadUserHomeScreenSections(userDisplayPreferences);
-        addUserHomeScreenOrderCSS(userDisplayPreferences);
-
-        let filteredHomeSections = mergedHomeSections.map(section => {
-            const userSection = userHomeScreenSections.find(s => s.id === section.id);
-            if (userSection) {
-                section.enabled = userSection.enabled;
-                section.order = userSection.order;
-            }
-            return section;
-        });
-
-        performanceEndTime = performance.now();
-        performanceDuration = performanceEndTime - performanceStartTime;
-        LOG(`Home Screen v3 Load user home screen sections initialization time: ${performanceDuration.toFixed(2)}ms`);
 
         // Set up mutation observer BEFORE rendering, so we can react when Jellyfin renders home sections
 /*         const handleJellyfinRender = async () => {
@@ -551,49 +638,18 @@
         // Initial render directly into Kefin container (no waiting for Jellyfin)
         performanceStartTime = performance.now();
         LOG('Rendering Standard/Seasonal Sections (initial render)...');
-        try {
-            await renderHomeSections(filteredHomeSections, container, false);
-            performanceEndTime = performance.now();
-            performanceDuration = performanceEndTime - performanceStartTime;
-            LOG(`Home Screen v3 Render home sections (initial) initialization time: ${performanceDuration.toFixed(2)}ms`);
+        await renderHomeSections(filteredHomeSections, container, false);
+        performanceEndTime = performance.now();
+        performanceDuration = performanceEndTime - performanceStartTime;
+        LOG(`Home Screen v3 Render home sections (initial) initialization time: ${performanceDuration.toFixed(2)}ms`);
 
-            performanceMetrics.initialRenderEnd = performanceEndTime;
+        performanceMetrics.initialRenderEnd = performanceEndTime;
 
-            performanceTimer.loadTimeEnd = performance.now();
-            LOG(`Home Screen v3 load time initialization: ${(performanceTimer.loadTimeEnd - performanceTimer.loadTimeStart).toFixed(2)}ms`);
-
-            LOG('Initializing Discovery Sections...');
-            setupDiscoveryInteraction(container);
-
-            // Mark the build complete only after sections actually rendered.
-            // tryEnhanceHomeScreen treats this flag as authoritative "built and
-            // intact" and clears it on a warm reopen when the sections are gone,
-            // so a completed build here won't block later recovery.
-            container.dataset.kefinHomeScreen = 'true';
-            const scope = container.closest('#homeTab') || document;
-            container.dataset.kefinRenderedEmpty =
-                (!container.querySelector('[data-section-id]')
-                    && !scope.querySelector('.homeSectionsContainer [data-section-id]'))
-                ? 'true' : 'false';
-        } catch (err) {
-            // A mid-render failure can leave partial sections in the DOM with no
-            // completion flag; the next trigger would then render again on top of
-            // them. Clear whatever this attempt rendered so the retry starts from
-            // a clean slate, then rethrow for the caller's error handling.
-            try {
-                const scope = container.closest('#homeTab') || document;
-                scope.querySelectorAll('[data-section-id]').forEach(el => el.remove());
-            } catch (cleanupErr) {
-                WARN('Failed to clear partial sections after render error:', cleanupErr);
-            }
-            throw err;
-        } finally {
-            // Always release the re-entrancy latch, even if the build threw.
-            // Leaving it set would permanently block every future trigger
-            // (view event, visibilitychange, poller) from rebuilding — which
-            // is exactly what stranded the home screen on warm reopen.
-            delete container.dataset.kefinHomeScreenBuilding;
-        }
+        performanceTimer.loadTimeEnd = performance.now();
+        LOG(`Home Screen v3 load time initialization: ${(performanceTimer.loadTimeEnd - performanceTimer.loadTimeStart).toFixed(2)}ms`);
+        
+        LOG('Initializing Discovery Sections...');
+        setupDiscoveryInteraction(container);
 
         /* // If Jellyfin hasn't rendered after 5 seconds, assume it won't and clean up the observer
         setTimeout(() => {
@@ -772,6 +828,7 @@
                         enabled: true,
                         order: libConfig.order || 61,
                         cardFormat: libConfig.cardFormat || 'Poster',
+                        jellyfinId: 'latestmedia',
                         viewMoreUrl: viewMoreUrl,
                         queries: [{
                             path: `/Items/Latest`,
@@ -787,32 +844,6 @@
                     merged.push(newSection);
                 }
             });
-        }
-
-        // Handle MergeNextUp setting - check if continueWatchingAndNextUp should be enabled
-        const mergeNextUp = await getMergeNextUpSetting();
-        if (mergeNextUp) {
-            // Find and disable nextUp and continueWatching sections when merged
-            const nextUpIndex = merged.findIndex(s => s.id === 'nextUp');
-            const continueWatchingIndex = merged.findIndex(s => s.id === 'continueWatching');
-            if (nextUpIndex !== -1) {
-                merged[nextUpIndex].enabled = false;
-            }
-            if (continueWatchingIndex !== -1) {
-                merged[continueWatchingIndex].enabled = false;
-            }
-            // Enable the merged section
-            const mergedIndex = merged.findIndex(s => s.id === 'continueWatchingAndNextUp');
-            if (mergedIndex !== -1) {
-                merged[mergedIndex].enabled = true;
-                LOG('MergeNextUp enabled: Using continueWatchingAndNextUp section');
-            }
-        } else {
-            // Disable merged section if merge is not enabled
-            const mergedIndex = merged.findIndex(s => s.id === 'continueWatchingAndNextUp');
-            if (mergedIndex !== -1) {
-                merged[mergedIndex].enabled = false;
-            }
         }
 
         // Filter seasonal sections based on date
@@ -866,12 +897,24 @@
         return filteredMerged; */
     }
 
-    function getDiscoverySections() {
+    async function getDiscoverySections() {
         const settings = getDiscoverySettings();
 
         if (!settings || settings.enabled === false) {
             LOG('Discovery is disabled');
             return [];
+        }
+
+        const page = state.discoveryGroupIndex + 1;
+
+        const filterByDiscoveryPage = (sections) => (sections || []).filter((section) => {
+            if (section.pageNumber == null) return true; // native discovery templates
+            return Number(section.pageNumber) === page;
+        });
+
+        const userHomeScreenConfig = await window.KefinUserHomeScreenConfig.getConfig();
+        if (userHomeScreenConfig) {
+            return filterByDiscoveryPage(userHomeScreenConfig.enabledDiscoverySections);
         }
 
         const homeScreenConfig = window.KefinHomeScreen.getConfig();
@@ -895,35 +938,41 @@
             return section;
         });
 
-        // Get custom discovery sections from CUSTOM_SECTION_GROUPS
-        // Filter for sections that have discovery-related properties (type, source: 'Dynamic', etc.)
-        const customSections = homeScreenConfig ? flattenSectionGroups(homeScreenConfig.CUSTOM_SECTION_GROUPS || []) : [];
-        const customDiscoverySections = customSections.filter(section => {
-            return section.discoveryEnabled === true && section.enabled === true;
-        });
+        const isInSeasonalPeriod = (startDate, endDate) => {
+            const currentDate = new Date();
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            start.setFullYear(currentDate.getFullYear());
+            end.setFullYear(currentDate.getFullYear());
+            return currentDate >= start && currentDate <= end;
+        };
 
-        // Add one additional custom discovery section that hasn't been rendered yet
-        if (customDiscoverySections.length > 0) {
-            const availableSections = customDiscoverySections.filter(section => !state.renderedDiscoveryIds.customDiscoverySections.has(section.id));
-            if (availableSections.length > 0) {
-                const selectedSection = availableSections[Math.floor(Math.random() * availableSections.length)];
-                if (selectedSection) {
-                    mergedSections.push(selectedSection);
-                    state.renderedDiscoveryIds.customDiscoverySections.add(selectedSection.id);
-                }
-            }
-        }
+        const customGroups = homeScreenConfig?.CUSTOM_SECTION_GROUPS
+            || window.KefinTweaksConfig?.homeScreenConfig?.CUSTOM_SECTION_GROUPS
+            || [];
+        const collect = window.KefinHomeScreen?.collectCustomDiscoverySections;
+        const customDiscoverySections = typeof collect === 'function'
+            ? collect(customGroups, {
+                isSectionActive: (s) => s.enabled === true,
+                isInSeasonalPeriod
+            })
+            : [];
+
+        mergedSections.push(...filterByDiscoveryPage(customDiscoverySections));
 
         // Legacy support: Also check old customSections location
         const legacyCustomSections = window.KefinTweaksConfig?.homeScreen?.customSections || [];
         if (legacyCustomSections.length > 0) {
             legacyCustomSections.forEach(section => {
                 if (section.enabled && section.discoveryEnabled) {
-                    if (state.renderedDiscoveryIds.customDiscoverySections.has(section.id)) {
+                    const legacyPage = section.pageNumber == null ? 1 : Number(section.pageNumber);
+                    if (legacyPage !== page) return;
+                    const customDedupe = window.sectionHelper?.getDiscoveryState?.()?.renderedDiscoveryIds?.customDiscoverySections;
+                    if (customDedupe?.has(section.id)) {
                         return;
                     }
                     mergedSections.push(section);
-                    state.renderedDiscoveryIds.customDiscoverySections.add(section.id);
+                    customDedupe?.add(section.id);
                 }
             });
         }
@@ -1033,9 +1082,10 @@
     /**
      * Add CSS for user-defined section ordering
      */
-    function addUserHomeScreenOrderCSS(userDisplayPreferences) {     
+    function addUserHomeScreenOrderCSS(userDisplayPreferences, homeScreen = null) {
         const customPrefs = userDisplayPreferences?.CustomPrefs || {};
-        const kefinHomeScreen = JSON.parse(customPrefs.kefinHomeScreen || '[]');
+        const parsedHomeScreen = homeScreen || window.KefinUserHomeScreenConfig.parseKefinTweaksHomeScreen(customPrefs);
+        const kefinHomeScreen = window.KefinUserHomeScreenConfig.homeScreenToLegacyArray(parsedHomeScreen);
 
         // Create a homesectionN : order value mapping for the custom CSS orders to be applied
         const jellyfinOrders = {};
@@ -1169,7 +1219,6 @@
             let performanceDuration;
 
             const performanceTimes = [];
-            const mergeNextUp = await getMergeNextUpSetting();
 
             for (const sectionConfig of sortedSections) {
                 const loopStartTime = performance.now();
@@ -1189,19 +1238,6 @@
 
                 if (existingSection) {
                     LOG(`Section already rendered: ${sectionConfig.id}`);
-                    continue;
-                }
-                
-                // Check merge setting for continueWatchingAndNextUp
-                if (sectionConfig.id === 'continueWatchingAndNextUp' && !mergeNextUp) {
-                    LOG(`Skipping continueWatchingAndNextUp: merge not enabled`);
-                    continue;
-                }
-                
-                // Skip individual sections when merge is enabled
-                if (mergeNextUp && 
-                    (sectionConfig.id === 'continueWatching' || sectionConfig.id === 'nextUp')) {
-                    LOG(`Skipping ${sectionConfig.id}: merge enabled, using continueWatchingAndNextUp`);
                     continue;
                 }
                 
@@ -1234,69 +1270,32 @@
             sectionCache.renderedSections = [...sectionsToRender];
         }
 
+        const homeConfig = await window.KefinHomeScreen.getConfig();
+        const showStaleDataBeforeRefresh = homeConfig?.HOME_SETTINGS?.showStaleDataBeforeRefresh === true;
+
         const targetContainer = container;
 
         const renderStartTime = performance.now();
-        await window.cardBuilder.renderProgressiveSections(targetContainer, sectionsToRender, { waitForContainerClass: 'homeSectionsContainer' });
+        await window.cardBuilder.renderProgressiveSections(targetContainer, sectionsToRender, {
+            waitForContainerClass: 'homeSectionsContainer',
+            enhanceOnVisible: true,
+            showStaleDataBeforeRefresh
+        });
         const renderEndTime = performance.now();
         const renderDuration = renderEndTime - renderStartTime;
         LOG(`Home Screen v3 Render progressive sections initialization time: ${renderDuration.toFixed(2)}ms`);
 
+        // Allow deferred library-cache crawls to start (movies/series/people scheduleBootstrap)
+        if (!state.homePaintedEventFired) {
+            state.homePaintedEventFired = true;
+            try {
+                document.dispatchEvent(new CustomEvent('kefinTweaksHomePainted'));
+            } catch (_) { /* ignore */ }
+        }
+
         // Check if target container is homeSectionsContainer
         if (!targetContainer.classList.contains('homeSectionsContainer')) {
             targetContainer.dataset.sectionsPrerendered = 'true';
-        }
-    }
-
-    function flattenSeriesEpisodes(items) {
-        if (!items || items.length === 0) return items;
-
-        // Keep only the first item in the array for any given series
-        const seriesMap = new Map();
-        items.forEach(item => {
-            if (item.Type !== 'Episode') {
-                return;
-            }
-
-            if (seriesMap.has(item.SeriesId)) {
-                return;
-            }
-
-            seriesMap.set(item.SeriesId, item);
-        });
-        
-        return Array.from(seriesMap.values());
-    }
-
-    function formatAirDate(premiereDate) {
-        if (!premiereDate) return '';
-
-        // Ignore timezone offset
-        const date = new Date(premiereDate.replace('Z', ''));
-
-        // Use format: Tues Jan 4
-        const options = { weekday: 'short', month: 'short', day: 'numeric' };
-        return date.toLocaleDateString('en-US', options);
-    }
-
-    async function getMergeNextUpSetting() {
-        const config = await window.KefinHomeScreen.getConfig();
-        const mergeNextUp = config.MERGE_NEXT_UP;
-        if (mergeNextUp !== undefined) {
-            return mergeNextUp;
-        }
-        return false;
-    }
-
-    let _displayPreferencesPromise = null;
-
-    async function fetchDisplayPreferences() {
-        try {
-            const { promise, cached } = await window.userHelper.getUserDisplayPreferences();
-            return await promise;
-        } catch (e) {
-            ERR('Failed to fetch display preferences:', e);
-            return null;
         }
     }
 
@@ -1305,620 +1304,32 @@
         return userConfig?.recentlyAddedInLibrary && Object.keys(userConfig.recentlyAddedInLibrary).length > 0;
     }
 
-    /**
-     * Refactored: Load section for rendering using queries array
-     */
     async function loadSectionForRendering(sectionConfig) {
-        LOG(`Loading Section for Rendering: ${sectionConfig.id} (${sectionConfig.name})`);  
-
-        // Forcefully disable play, more, mark played, and favorite buttons for the My Media section
-        if (sectionConfig.id === 'myMedia' || sectionConfig.id === 'smallBackdrops' || (sectionConfig.name && sectionConfig.name.toLowerCase() === 'my media') || sectionConfig.type === 'UserViews') {
-            sectionConfig.showPlayButton = false;
-            sectionConfig.showMoreButton = false;
-            sectionConfig.showMarkPlayedButton = false;
-            sectionConfig.showFavoriteButton = false;
-            sectionConfig.enablePlayButton = false;
-            sectionConfig.enableMoreButton = false;
-            sectionConfig.enableMarkPlayedButton = false;
-            sectionConfig.enableMarkFavoriteButton = false;
-            sectionConfig.overlayPlayButton = false;
-            sectionConfig.overlayMoreButton = false;
-        }
-
-        const loadSectionTimerStart = performance.now();
-
-        // Prepare section (template replacements, view more URL, etc.)
-        const viewMoreUrl = await resolveViewMoreUrl(sectionConfig);
-        const cardFormat = resolveCardFormat(sectionConfig);
-        const sectionName = fillTemplate(sectionConfig.name, sectionConfig.metadata);
-/*         const viewMoreUrl = '';
-        const cardFormat = '';
-        const sectionName = ''; */
-
-        sectionConfig.overflowCard = true;
-        
-        if (viewMoreUrl) {
-            sectionConfig.viewMoreUrl = viewMoreUrl;
-        }
-        if (cardFormat) {
-            sectionConfig.cardFormat = cardFormat;
-        }
-        if (sectionName) {
-            sectionConfig.name = sectionName;
-        }
-
-        // Check for forced image type preference
-        let forcedImageType = null;
-        if ((sectionConfig.id === 'nextUp' || sectionConfig.id === 'continueWatching' || sectionConfig.id === 'continueWatchingAndNextUp')) {
-            const userDisplayPreferences = await state.getDisplayPrefernces();
-            if (userDisplayPreferences && userDisplayPreferences.CustomPrefs && userDisplayPreferences.CustomPrefs.useEpisodeImagesInNextUpAndResume === 'true') {
-                forcedImageType = 'Primary';
-            }
-        }
-
-        if (forcedImageType) {
-            sectionConfig.forcedImageType = forcedImageType;
-        }
-
-        // Check renderMode first (preferred), fallback to spotlight boolean for backward compatibility
-        const shouldRenderSpotlight = sectionConfig.renderMode === 'Spotlight' || sectionConfig.renderMode === 'Random' || sectionConfig.spotlight === true;
-        if (shouldRenderSpotlight) {
-            const spotlightConfig = { ...window.KefinHomeScreen.getConfig().SPOTLIGHT_SETTINGS, ...sectionConfig.spotlightConfig };
-            sectionConfig.spotlightConfig = spotlightConfig;
-            // Set renderMode if not already set (for backward compatibility)
-            if (!sectionConfig.renderMode && sectionConfig.spotlight) {
-                sectionConfig.renderMode = 'Spotlight';
-            }
-        }
-
-        // Static items: normalize and return immediately (no queries, no dataPromise)
-        if (sectionConfig.items && sectionConfig.items.length > 0) {
-            const kefinTweaksRoot = window.KefinTweaksConfig?.kefinTweaksRoot || '';
-            const serverId = ApiClient.serverId();
-            const normalizeTemplate = (value) => (value || '')
-                .replace(/\$\{kefinTweaksRoot\}/g, kefinTweaksRoot)
-                .replace(/\$\{serverId\}/g, serverId);
-
-            const normalizedItems = sectionConfig.items.map((item, index) => {
-                const posterUrl = normalizeTemplate(item.posterUrl);
-                const thumbUrl = normalizeTemplate(item.thumbUrl);
-                const squareUrl = normalizeTemplate(item.squareUrl);
-                const imageUrl = normalizeTemplate(item.imageUrl);
-                const cardUrl = normalizeTemplate(item.cardUrl);
-
-                return {
-                    Name: item.Name,
-                    Id: item.Id || 'static-' + sectionConfig.id + '-' + index,
-                    Type: item.Type || 'Folder',
-                    posterUrl: posterUrl,
-                    thumbUrl: thumbUrl,
-                    squareUrl: squareUrl,
-                    imageUrl: imageUrl,
-                    cardUrl: cardUrl,
-                    CustomFooterText: item.cardFooter || undefined
-                };
-            });
-            const loadSectionTimerEnd = performance.now();
-            const loadSectionDuration = loadSectionTimerEnd - loadSectionTimerStart;
-            LOG(`Section ${sectionConfig.id} (static items) loaded for rendering in time: ${loadSectionDuration.toFixed(2)}ms`);
-            let postProcessedItems = normalizedItems;
-            if (window.cardBuilder.postProcessItems) {
-                postProcessedItems = window.cardBuilder.postProcessItems(sectionConfig, normalizedItems);
-            }
-
-            return {
-                config: sectionConfig,
-                result: { data: postProcessedItems }
-            };
-        }
-
-        // Ensure queries array exists when section has no static items
-        if (!sectionConfig.queries || !Array.isArray(sectionConfig.queries) || sectionConfig.queries.length === 0) {
-            WARN(`Section ${sectionConfig.id} has no queries array and no static items`);
-            return null;
-        }
-
-        const userId = ApiClient.getCurrentUserId();
-        const serverUrl = ApiClient.serverAddress();
-        const results = [];
-
-        // Process each query in the queries array
-        for (const query of sectionConfig.queries) {
-            let queryResult;
-            
-            if (query.dataSource) {
-                // Handle cache-based data sources
-                queryResult = await ApiHelper.fetchFromDataSource(query.dataSource, query.queryOptions || {});
-            } else {
-                // Build and execute query
-                const queryUrl = ApiHelper.buildQueryFromSection(query, userId, serverUrl, sectionConfig.renderMode === 'Spotlight');
-                
-                if (typeof queryUrl === 'string') {
-                    // Standard query
-                    let sectionTtl = Config.CACHE.DEFAULT_TTL;
-                    if (Number(sectionConfig.ttl) >= 0) {
-                        sectionTtl = Number(sectionConfig.ttl);
-                    }
-
-                    queryResult = await ApiHelper.getQuery(queryUrl, {
-                        useCache: true,
-                        ttl: sectionTtl
-                    });
-                } else {
-                    WARN(`Invalid query URL for section ${sectionConfig.id}`);
-                    continue;
-                }
-            }
-            
-            results.push(queryResult);
-        }
-
-        // If multiple queries, merge results using section-level sortBy/sortOrder
-        if (results.length > 1) {
-            const loadSectionTimerEnd = performance.now();
-            const loadSectionDuration = loadSectionTimerEnd - loadSectionTimerStart;
-            LOG(`Section ${sectionConfig.id} loaded for rendering in time: ${loadSectionDuration.toFixed(2)}ms`);
-            return ApiHelper.mergeMultiQueryResults(results, sectionConfig);
-        }
-
-        const loadSectionTimerEnd = performance.now();
-        const loadSectionDuration = loadSectionTimerEnd - loadSectionTimerStart;
-        LOG(`Section ${sectionConfig.id} loaded for rendering in time: ${loadSectionDuration.toFixed(2)}ms`);
-
-        // SmartSimilar: refresh UserData on cached items and apply watch filter
-        if (sectionConfig.refreshUserData || sectionConfig.postFetchFilter) {
-            const applySmartFilter = async (data) => {
-                if (!data) return data;
-
-                let items = data.Items || data;
-                if (!Array.isArray(items) || items.length === 0) return data;
-
-                // Refresh UserData from server if this is cached data
-                if (sectionConfig.refreshUserData) {
-                    try {
-                        const userId = ApiClient.getCurrentUserId();
-                        const ids = items.map(i => i.Id).filter(Boolean).join(',');
-                        if (ids) {
-                            // RecursiveItemCount is required: Folder.FillUserDataDtoValues
-                            // only computes UserData.PlayedPercentage for Series when the
-                            // request includes that field. Without it, in-progress series
-                            // come back with a null percentage and pass any threshold.
-                            const freshResp = await ApiClient.getJSON(
-                                ApiClient.getUrl(`Users/${userId}/Items`, {
-                                    Ids: ids,
-                                    Fields: 'RecursiveItemCount'
-                                })
-                            );
-                            if (freshResp?.Items) {
-                                const freshMap = new Map(freshResp.Items.map(i => [i.Id, i.UserData]));
-                                for (const item of items) {
-                                    const freshUd = freshMap.get(item.Id);
-                                    if (freshUd) item.UserData = freshUd;
-                                }
-                            }
-                        }
-                    } catch (e) {
-                        WARN('SmartSimilar: Failed to refresh UserData:', e);
-                    }
-                }
-
-                // Apply watch filter
-                if (sectionConfig.postFetchFilter) {
-                    const filtered = sectionConfig.postFetchFilter(items);
-                    if (filtered === null) return null; // Section should be skipped
-                    if (data.Items) {
-                        data.Items = filtered;
-                        data.TotalRecordCount = filtered.length;
-                    } else {
-                        data = filtered;
-                    }
-                }
-
-                return data;
-            };
-
-            for (const result of results) {
-                if (result.data) {
-                    result.data = await applySmartFilter(result.data);
-                    if (result.data === null) return null;
-                }
-                if (result.dataPromise) {
-                    const origPromise = result.dataPromise;
-                    result.dataPromise = origPromise.then(d => applySmartFilter(d));
-                }
-            }
-        }
-
-        const postProcess = (sectionConfig, items) => {
-            let postProcessedItems = items;
-            if (window.cardBuilder.postProcessItems) {
-                postProcessedItems = window.cardBuilder.postProcessItems(sectionConfig, items);
-            }
-            return postProcessedItems;
-        }
-        
-        // Single query result
-        return {
-            config: sectionConfig,
-            queryUrl: null,
-            result: {
-                data: postProcess(sectionConfig, results[0].data),
-                dataPromise: results[0].dataPromise.then(data => postProcess(sectionConfig, data)),
-                isStalePromise: results[0].isStalePromise
-            }
-        };
+        return window.sectionHelper.loadSectionForRendering(sectionConfig);
     }
 
-    function deduplicateItems(items) {
-        const deduplicated = [];
-        const ids = new Set();
-        for (const item of items) {
-            if (!item.ProviderIds) {
-                deduplicated.push(item);
-                continue;
-            }
-
-            if (item.ProviderIds.Imdb && ids.has(item.ProviderIds.Imdb)) continue;
-            if (item.ProviderIds.Tmdb && ids.has(item.ProviderIds.Tmdb)) continue;
-            if (item.ProviderIds.Tvdb && ids.has(item.ProviderIds.Tvdb)) continue;
-
-            deduplicated.push(item);
-            ids.add(item.ProviderIds.Imdb);
-            ids.add(item.ProviderIds.Tmdb);
-            ids.add(item.ProviderIds.Tvdb);
-        }
-        return deduplicated;
-    }
-
-    let _getWatchlistUrlPromise = null;
-
-    async function getWatchlistUrl() {
-        const watchlistTabIndex = localStorage.getItem(`kefinTweaks_watchlistTabIndex_${ApiClient.serverId()}`);
-
-        if (watchlistTabIndex) {
-            return `#/home.html?tab=${watchlistTabIndex}`;
-        }
-
-        LOG('Watchlist tab index not found in local storage');
-        // Fetch the tab in the background so that next time it's available
-        window.KefinTweaksUtils.getWatchlistTabIndex();
-        return null;
-
-
-        let homePageSuffix = '.html';
-        if (window.ApiClient && window.ApiClient.serverInfo && window.ApiClient.serverInfo().Version?.split('.')[1] > 10) {
-             homePageSuffix = '';
-        }
-
-        if (!window.KefinTweaksUtils || !window.KefinTweaksUtils.getWatchlistTabIndex) {
-            WARN('KefinTweaksUtils not available');
-            return null;
-        }
-
-        const visibleWatchlistTabIndex = await window.KefinTweaksUtils.getWatchlistTabIndex();
-
-        if (visibleWatchlistTabIndex) {
-            return `#/home${homePageSuffix}?tab=${visibleWatchlistTabIndex}`;
-        } else {
-            WARN('Watchlist tab not found');
-            return null;
-        }
-    }
-
-    /**
-     * Updated: Resolve view more URL from queryOptions
-     */
-    async function resolveViewMoreUrl(sectionConfig) {
-        if (sectionConfig.viewMoreUrl) return sectionConfig.viewMoreUrl;
-
-        const { id } = sectionConfig;
-
-        // Handle specific section IDs
-        if (id === 'continueWatching') {
-            return `#/tv.html?collectionType=tvshows&tab=1&serverId=${ApiClient.serverId()}`;
-        }
-
-        if (id === 'popularTVNetworks') {
-            return `#/tv.html?collectionType=tvshows&tab=4&serverId=${ApiClient.serverId()}`;
-        }
-        
-        if (id === 'upcoming' || id === 'recentlyReleased.episodes') {
-             return `#/tv.html?collectionType=tvshows&tab=2&serverId=${ApiClient.serverId()}`;
-        }
-
-        if (id === 'nextUp') {
-            return `#/list.html?type=nextup&serverId=${ApiClient.serverId()}`;
-        }
-
-        if (id === 'watchlist') {
-            return await getWatchlistUrl();
-        }
-
-        if (id === 'watchAgain') {
-            const watchlistUrl = await getWatchlistUrl();
-
-            if (watchlistUrl) { 
-                return `${watchlistUrl}&pageTab=history`;
-            }
-            return null;
-        }
-
-        // Infer from queries array
-        if (sectionConfig.queries && sectionConfig.queries.length > 0) {
-            const firstQuery = sectionConfig.queries[0];
-            const queryOptions = firstQuery.queryOptions || {};
-            const serverId = window.ApiClient ? window.ApiClient.serverId() : '';
-
-            // Check for Tags
-            if (queryOptions.Tags) {
-                return `#/list.html?type=tag&tag=${encodeURIComponent(queryOptions.Tags)}&serverId=${serverId}`;
-            }
-
-            // Check for Genres
-            if (queryOptions.Genres) {
-                let genreId = queryOptions.Genres;
-                if (typeof genreId === 'string' && !genreId.match(/^\d+$/)) {
-                    const id = await ApiHelper.getGenreId(genreId);
-                    if (id) {
-                        genreId = id;
-                    }
-                }
-                return `#/list.html?genreId=${genreId}&serverId=${serverId}`;
-            }
-
-            // Check for GenreIds
-            if (queryOptions.GenreIds) {
-                return `#/list.html?genreId=${queryOptions.GenreIds.join(',')}&serverId=${serverId}`;
-            }
-
-            // Check for PersonIds
-            if (queryOptions.PersonIds) {
-                return `#/details?id=${queryOptions.PersonIds.join(',')}&serverId=${serverId}`;
-            }
-
-            // Check for StudioIds
-            if (queryOptions.StudioIds) {
-                return `#/list.html?studioId=${queryOptions.StudioIds.join(',')}&serverId=${serverId}`;
-            }
-
-            // Check for Studios
-/*             if (queryOptions.Studios) {
-                return `#/list.html?studioId=${queryOptions.Studios}&serverId=${serverId}`;
-            } */
-
-            // Check for ParentId
-            if (queryOptions.ParentId) {
-                if (sectionConfig.type === 'Collection' || sectionConfig.type === 'Playlist') {
-                    return `#/details?id=${queryOptions.ParentId}&serverId=${serverId}`;
-                }
-
-                return `#/list.html?parentId=${queryOptions.ParentId}&serverId=${serverId}`;
-            }
-
-            // Check for custom path
-            if (firstQuery.path) {
-                // Derive URL from path if possible
-                if (firstQuery.path.includes('NextUp')) {
-                    return `#/tv.html?collectionType=tvshows&tab=1`;
-                }
-                if (firstQuery.path.includes('Upcoming')) {
-                    return `#/tv.html?collectionType=tvshows&tab=2`;
-                }
-                // SmartSimilar: /SmartSimilar/Items/{itemId}/Similar → details page
-                // Must be checked before the generic Similar handler below,
-                // since 'SmartSimilar' substring-matches 'Similar'.
-                if (firstQuery.path.includes('/SmartSimilar/')) {
-                    const itemId = firstQuery.path.split('/')[3];
-                    return `#/details?id=${itemId}&serverId=${serverId}`;
-                }
-                // If query path is Items/itemid/Similar then return the details page for the item
-                if (firstQuery.path.includes('Similar')) {
-                    const itemId = firstQuery.path.split('/')[2];
-                    return `#/details?id=${itemId}&serverId=${serverId}`;
-                }
-            }
-        }
-        
-        return null;
-    }
-
-    function postProcessItems(sectionConfig, itemsData) {
-        let processed = itemsData?.Items || itemsData || [];
-                 
-        // Flatten Series Episodes
-        if (sectionConfig.flattenSeries === true) {
-            processed = flattenSeriesEpisodes(processed);
-        }
-
-        if (sectionConfig.id === 'upcoming') {
-            // Remove items which aired before today
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            processed = processed.filter(item => {
-                if (!item.PremiereDate || item.LocationType !== 'Virtual')
-                    return false;
-                const premiereDate = new Date(item.PremiereDate);
-                premiereDate.setHours(0, 0, 0, 0);
-                return premiereDate >= today;
-            });
-        }
-
-        // Add Custom Secondary Text for Recently Released Movies
-        if (sectionConfig.id === 'recentlyReleased.movies' || sectionConfig.id === 'upcoming' || sectionConfig.id === 'recentlyReleased.episodes') {
-            processed.forEach(item => {
-                if (item.PremiereDate) {
-                    item.CustomFooterText = formatAirDate(item.PremiereDate);
-                }
-            });
-        }
-
-        // Apply local limits for non-API sources
-        if (sectionConfig.itemLimit) {
-            processed = processed.slice(0, sectionConfig.itemLimit);
-        }
-
-        // Deduplicate items based on ProviderIds. Look for match imdb, tmdb or tvdb ids
-        processed = deduplicateItems(processed);
-
-        return processed;
-    }
-    
-    function resolveCardFormat(sectionConfig) {
-        return sectionConfig.cardFormat || 'Poster';
-    }
-
-    /**
-     * Logic to determine the "Source" for dynamic sections
-     * Returns { id, name, metadata: {} }
-     */
-    async function resolveDynamicSource(config) {
-        switch (config.type) {
-            case 'Genre':
-                const genre = await getRandomGenre();
-                return genre ? { id: genre.Id, name: genre.Name, metadata: { Genre: genre.Name } } : null;
-
-            case 'Person':
-                if (config.sourceType && config.sourceType.includes('watched')) {
-                    const itemType = (config.includeItemTypes && config.includeItemTypes[0]) || 'Movie';
-                    const result = await getRandomPersonFromHistory(config.personType, config.sourceType, itemType);
-                    if (!result) return null;
-                    
-                    return {
-                        id: result.person.id,
-                        name: result.person.name,
-                        excludeItemId: result.sourceItem.Id,
-                        metadata: {
-                            Person: result.person.name,
-                            Actor: result.person.name,
-                            Director: result.person.name,
-                            Writer: result.person.name,
-                            Title: result.sourceItem.Name,
-                            Movie: result.sourceItem.Name,
-                            Show: result.sourceItem.Name
-                        }
-                    };
-                }
-                
-                const person = await getRandomPerson(config.personType);
-                return person ? { 
-                    id: person.Id, 
-                    name: person.Name || person.name, 
-                    metadata: { 
-                        Person: person.Name || person.name,
-                        Actor: person.Name || person.name,
-                        Director: person.Name || person.name,
-                        Writer: person.Name || person.name
-                    } 
-                } : null;
-                
-            case 'Studio':
-                const networks = await StudiosCache.getPopularTVNetworks(); // getPopularTVNetworks();
-                if (!networks || !networks.length) return null;
-                const network = networks[Math.floor(Math.random() * networks.length)];
-                return { id: network.Id, name: network.Name, metadata: { Studio: network.Name } };
-                
-            case 'Similar':
-            case 'SmartSimilar': {
-                const isSeries = config.includeItemTypes && config.includeItemTypes.includes('Series');
-                // Similar and SmartSimilar share one dedup pool per interaction
-                // type, mirroring how the movie pickers already dedup internally
-                // via watchedMovies/likedMovies. This keeps a native-Similar
-                // section and a SmartSimilar section from spotlighting the same
-                // source title in one render pass.
-                const dedupSet = isSeries ? state.renderedDiscoveryIds.watchedSeries : state.renderedDiscoveryIds.watchedMovies;
-                const likedSet = isSeries ? state.renderedDiscoveryIds.likedSeries : state.renderedDiscoveryIds.likedMovies;
-
-                let sourceItem = null;
-
-                if (config.sourceType === 'liked') {
-                    sourceItem = isSeries
-                        ? await _getRandomFavoriteSeries(likedSet)
-                        : await getRandomFavoriteMovie();
-                } else if (config.sourceType === 'watched-recent') {
-                    sourceItem = isSeries
-                        ? await _getRandomRecentSeries(dedupSet)
-                        : await _getRandomRecentMovie();
-                } else {
-                    sourceItem = isSeries
-                        ? await _getRandomWatchedSeries(dedupSet)
-                        : getRandomWatchedMovie();
-                }
-
-                if (!sourceItem) return null;
-
-                return {
-                    id: sourceItem.Id,
-                    metadata: {
-                        Title: sourceItem.Name,
-                        Movie: sourceItem.Name,
-                        Show: sourceItem.Name
-                    }
-                };
-            }
-                
-            case 'Collection':
-                 const selectedCollection = await getRandomCollectionForDiscovery(config.minimumItems || 3);
-                 if (!selectedCollection) return null;
-                 
-                 return {
-                     id: selectedCollection.Id,
-                     name: selectedCollection.Name,
-                     metadata: { Collection: selectedCollection.Name, "Collection Name": selectedCollection.Name }
-                 };
-        }
-        
-        return null;
-    }
-
-    function fillTemplate(template, data) {
-        if (!data || !template) return template;
-
-        // Support both {Key} and [Key] formats, allowing spaces in keys
-        return template.replace(/\{([^}]+)\}|\[([^\]]+)\]/g, (match, key1, key2) => {
-            const key = key1 || key2;
-            return data[key] || match;
-        });
-    }
-
-    /**
-     * Tear down whichever infinite-scroll mechanism is currently armed.
-     * Safe to call when nothing is armed.
-     */
-    function teardownDiscoveryScroll() {
-        if (state.discoveryContainerObserver) {
-            state.discoveryContainerObserver.disconnect();
-            state.discoveryContainerObserver = null;
-        }
-        if (state.discoveryObserver) {
-            state.discoveryObserver.disconnect();
-            state.discoveryObserver = null;
-        }
-        if (state.discoverySentinel) {
-            state.discoverySentinel.remove();
-            state.discoverySentinel = null;
-        }
-        if (state.infiniteScrollHandler) {
-            window.removeEventListener('scroll', state.infiniteScrollHandler);
-            state.infiniteScrollHandler = null;
-        }
+    async function buildDiscoverySectionInstance(template, options = {}) {
+        return window.sectionHelper.buildDiscoverySectionInstance(template, options);
     }
 
     function disconnectDiscoveryInteraction() {
-        // If we are using infinite scroll, tear the observer/sentinel down
-        const usingInfiniteScroll = !!(state.discoveryObserver || state.infiniteScrollHandler);
-        teardownDiscoveryScroll();
-        if (!usingInfiniteScroll) {
-            const loadMoreButton = document.querySelector('.libraryPage:not(.hide) .load-more-discovery-btn');
-            if (loadMoreButton) {
-                loadMoreButton.remove();
-            }
+        removeDiscoveryScrollListeners();
+
+        const loadMoreButton = document.querySelector('.libraryPage:not(.hide) .load-more-discovery-btn');
+        if (loadMoreButton) {
+            loadMoreButton.remove();
         }
 
-        // Remove the discovery loading indicator
-        const loadingIndicator = document.querySelector('.libraryPage:not(.hide) #discovery-loading-indicator');
-        if (loadingIndicator) {
-            loadingIndicator.remove();
+        // Remove the discovery loading indicator (exhausted path keeps it via markDiscoveryExhausted)
+        if (state.discoverySectionsRemain !== false) {
+            const loadingIndicator = document.querySelector('.libraryPage:not(.hide) #discovery-loading-indicator');
+            if (loadingIndicator) {
+                loadingIndicator.remove();
+            }
+            setDiscoveryPageAttrs({ ready: false, infinite: false, exhausted: false });
         }
+
+        state.discoveryMode = null;
     }
 
     /**
@@ -1933,40 +1344,52 @@
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
 
-            return;
+            return state.discoveryBuffer;
         }
         LOG('Ensuring discovery buffer...');
 
         state.ensuringDiscoveryBuffer = true;
 
-        if (state.discoveryBuffer && state.discoveryBuffer.length > 0) {
-            LOG('Discovery buffer already exists...');
-            state.ensuringDiscoveryBuffer = false;
+        try {
+            if (state.discoveryBuffer && state.discoveryBuffer.length > 0) {
+                LOG('Discovery buffer already exists...');
+                return state.discoveryBuffer;
+            }
+
+            LOG('Fetching next discovery group data...');
+
+            const groupSections = await generateDiscoveryGroup();
+
+            if (!groupSections || groupSections.length === 0) {
+                LOG('No more discovery sections available for buffer.');
+                state.discoveryBuffer = [];
+                state.discoverySectionsRemain = false;
+                return state.discoveryBuffer;
+            }
+
+            state.discoveryBuffer = await Promise.all(groupSections.map(async (sectionConfig) => {
+                const isDynamic = !!(sectionConfig.discoveryType || sectionConfig.source === 'Dynamic');
+                if (isDynamic) {
+                    // Sync stub + lazy resolve; do not await ensureData here
+                    return window.sectionHelper.buildDiscoverySectionPromise(sectionConfig, {
+                        order: sectionConfig.order,
+                        pairSpotlight: true
+                    });
+                }
+                return await loadSectionForRendering(sectionConfig);
+            }));
+
+            // Filter hard failures only; progressive stubs that later return empty are removed by cardBuilder enhance
+            state.discoveryBuffer = state.discoveryBuffer.filter(result => result !== null);
+
+            if (!state.discoveryBuffer.length) {
+                state.discoverySectionsRemain = false;
+            }
+
             return state.discoveryBuffer;
-        }
-
-        LOG('Fetching next discovery group data...');
-
-        const groupSections = await generateDiscoveryGroup();
-
-        if (!groupSections || groupSections.length === 0) {
-            LOG('No more discovery sections available for buffer.');
+        } finally {
             state.ensuringDiscoveryBuffer = false;
-            state.discoverySectionsRemain = false;
-            disconnectDiscoveryInteraction();
-            return;
         }
-
-        state.discoveryBuffer = await Promise.all(groupSections.map(async (sectionConfig) => {
-            // Use loadSectionForRendering which handles all queries, multi-query merging, and post-processing
-            return await loadSectionForRendering(sectionConfig);
-        }));
-
-        // Filter out any null results
-        state.discoveryBuffer = state.discoveryBuffer.filter(result => result !== null);
-
-        state.ensuringDiscoveryBuffer = false;
-        return state.discoveryBuffer;
     }
 
 
@@ -1980,7 +1403,7 @@
         }
 
         // Ensure at least 1 discovery section is enabled
-        const discoverySections = getDiscoverySections();
+        const discoverySections = await getDiscoverySections();
         if (!discoverySections || discoverySections.length === 0 || discoverySections.every(section => section.enabled === false)) {
             LOG('No discovery sections enabled in config.');
             state.discoveryEnabled = false;
@@ -1991,6 +1414,12 @@
             WARN('setupDiscoveryInteraction called without a valid container');
             return;
         }
+
+        // getDiscoverySections() above may mark legacy customDiscoverySections; clear only that
+        // so generateDiscoveryGroup can claim them without wiping genre/person/similar dedupe.
+        window.sectionHelper?.getDiscoveryState?.()?.renderedDiscoveryIds?.customDiscoverySections?.clear?.();
+        state.discoverySectionsRemain = true;
+        state.discoveryNeedsMoreScroll = false;
 
         if (PRE_FETCH_DISCOVERY_DATA) {
             ensureDiscoveryBuffer();
@@ -2003,9 +1432,13 @@
         const useInfiniteScroll = userConfig ? (userConfig.infiniteScroll !== false) : true;
         
         if (useInfiniteScroll) {
+            state.discoveryMode = 'infinite';
+            setDiscoveryPageAttrs({ ready: false, infinite: true, exhausted: false });
             setupInfiniteScroll(container);
         } else {
-            setupLoadMoreButton(container);
+            state.discoveryMode = 'chevron';
+            setDiscoveryPageAttrs({ ready: true, infinite: false, exhausted: false });
+            setupChevronDiscoverMore(container);
         }
     }
 
@@ -2013,41 +1446,47 @@
         const container = document.querySelector('.libraryPage:not(.hide) .homeSectionsContainer');
         if (!container) return;
 
+        // Single-flight: set synchronously before any await
         if (state.isRenderingDiscovery) return;
-        state.isRenderingDiscovery = true;
-        container.dataset.loadingDiscovery = 'true';
+        if (state.discoverySectionsRemain === false) return;
 
-        await new Promise(resolve => requestAnimationFrame(resolve));
-        await new Promise(resolve => setTimeout(resolve, 0));
+        state.isRenderingDiscovery = true;
+        // Require another user scroll before auto-loading the next group (infinite mode)
+        state.discoveryNeedsMoreScroll = true;
+        container.dataset.loadingDiscovery = 'true';
+        container.classList.add('loading-discovery');
+        showDiscoveryLoadingIndicator();
 
         try {
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            await new Promise(resolve => setTimeout(resolve, 0));
+
             await ensureDiscoveryBuffer();
             
-            const bufferedSections = state.discoveryBuffer;
+            let bufferedSections = state.discoveryBuffer;
             
             if (!bufferedSections || bufferedSections.length === 0) {
                 LOG('No more discovery sections available.');
-                state.discoveryBuffer = null;
+                markDiscoveryExhausted();
                 return;
             }
+
+            // Stable append: honor pre-assigned section.order after parallel loads
+            bufferedSections = bufferedSections.slice().sort((a, b) => {
+                const ao = Number(a?.config?.order);
+                const bo = Number(b?.config?.order);
+                return (Number.isFinite(ao) ? ao : 0) - (Number.isFinite(bo) ? bo : 0);
+            });
 
             LOG(`Rendering Discovery Group ${state.discoveryGroupIndex + 1} (${bufferedSections.length} sections)...`);
 
             const config = await window.KefinHomeScreen.getConfig();
             const revealSectionsSequentially = config.DISCOVERY_SETTINGS?.fadeInSections === true;
-            await window.cardBuilder.renderProgressiveSections(container, bufferedSections, { revealSectionsSequentially });
-
-            if (!getDiscoverySettings().infiniteScroll) {
-                setupLoadMoreButton(container);
-            } else if (state.discoverySentinel && state.discoveryObserver) {
-                // New sections were appended after the sentinel, so move it back to
-                // the end. Re-observing forces a fresh notification: if the sentinel
-                // never left the root margin, the observer would otherwise stay
-                // silent and infinite scroll would stall after one group.
-                container.appendChild(state.discoverySentinel);
-                state.discoveryObserver.unobserve(state.discoverySentinel);
-                state.discoveryObserver.observe(state.discoverySentinel);
-            }
+            await window.cardBuilder.renderProgressiveSections(container, bufferedSections, {
+                revealSectionsSequentially,
+                enhanceOnVisible: true,
+                showStaleDataBeforeRefresh: config.HOME_SETTINGS?.showStaleDataBeforeRefresh === true
+            });
 
             container.dataset.loadingDiscovery = 'false';
             container.classList.remove('loading-discovery');
@@ -2059,12 +1498,21 @@
                 ensureDiscoveryBuffer();
             }
 
+            // Chevron mode: nudge scroll so newly appended sections start entering the viewport
+            if (state.discoveryMode === 'chevron') {
+                window.scrollBy({ top: 100, behavior: 'smooth' });
+            }
+
         } catch (e) {
             ERR('Error rendering discovery group:', e);
             state.discoveryBuffer = null;
         } finally {
             state.isRenderingDiscovery = false;
-            updateLoadMoreButtonVisibility(); 
+            if (state.discoverySectionsRemain !== false) {
+                hideDiscoveryLoadingIndicator();
+                container.dataset.loadingDiscovery = 'false';
+                container.classList.remove('loading-discovery');
+            }
         }
     }
 
@@ -2100,228 +1548,29 @@
 
         const selectedConfigs = [];
         
-        let discoveryTemplates = getDiscoverySections();
+        let discoveryTemplates = await getDiscoverySections();
         
         if (getDiscoverySettings().randomizeOrder) {
             discoveryTemplates = [...discoveryTemplates].sort(() => 0.5 - Math.random());
         }
         
+        // Collect enabled templates unresolved — progressive resolve happens in ensureDiscoveryBuffer
         for (const template of discoveryTemplates) {
             if (template.enabled === false) continue;
-
-            if (template.queries && template.queries.length > 0) {
-                selectedConfigs.push(template);
-                continue;
-            }
-            
-            const instanceConfig = { 
-                ...template, 
-                id: `${template.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            };
-            
-            const dynamicResult = await resolveDynamicSource(instanceConfig);
-            if (dynamicResult) {
-                instanceConfig.source = dynamicResult.id || dynamicResult.name;
-                instanceConfig.metadata = dynamicResult.metadata;
-                instanceConfig.excludeItemId = dynamicResult.excludeItemId;
-
-                if (getDiscoverySettings().renderSpotlightAboveMatching) {
-                    const configId = instanceConfig.id.split('-')[0];
-
-                    if (configId === 'genreMovies' || configId === 'spotlightGenre') {
-                        if (state.currentDiscoveryGenre) {
-                            instanceConfig.source = state.currentDiscoveryGenre.id;
-                            dynamicResult.metadata = state.currentDiscoveryGenre.metadata;
-                            state.currentDiscoveryGenre = null;
-                        }
-                        else {
-                            state.currentDiscoveryGenre = dynamicResult;
-                        }
-                    }
-                    if (configId === 'studioShows' || configId === 'spotlightNetwork') {
-                        if (state.currentDiscoveryStudio) {
-                            instanceConfig.source = state.currentDiscoveryStudio.id;
-                            dynamicResult.metadata = state.currentDiscoveryStudio.metadata;
-                            state.currentDiscoveryStudio = null;
-                        }
-                        else {
-                            state.currentDiscoveryStudio = dynamicResult;
-                        }
-                    }
-                }
-            
-                // Create queries array with proper queryOptions
-                const queryOptions = {
-                    Recursive: 'true',
-                    Limit: instanceConfig.itemLimit || 20
-                };
-
-                // Add IncludeItemTypes if specified
-                if (instanceConfig.includeItemTypes && instanceConfig.includeItemTypes.length) {
-                    queryOptions.IncludeItemTypes = instanceConfig.includeItemTypes;
-                }
-
-                // Add SortBy and SortOrder if specified
-                if (instanceConfig.sortOrder) {
-                    queryOptions.SortBy = instanceConfig.sortOrder;
-                }
-                if (instanceConfig.sortOrderDirection) {
-                    queryOptions.SortOrder = instanceConfig.sortOrderDirection;
-                }
-
-                    // Handle type-specific query options
-                    const resolvedSource = instanceConfig.source;
-                    if (instanceConfig.type === 'Similar') {
-                        // Similar type uses Jellyfin's built-in Similar API
-                        instanceConfig.queries = [{
-                            path: `/Items/${resolvedSource}/Similar`,
-                            queryOptions: {
-                                Limit: instanceConfig.itemLimit || 20,
-                                Fields: 'PrimaryImageAspectRatio,DateCreated,Overview,Taglines,ProductionYear,RecursiveItemCount,ChildCount,UserData'
-                            }
-                        }];
-                    } else if (instanceConfig.type === 'SmartSimilar') {
-                        // SmartSimilar uses the SmartSimilar plugin (IDF-weighted scoring).
-                        // Endpoint mirrors the native Similar contract:
-                        // /SmartSimilar/Items/{id}/Similar → QueryResult<BaseItemDto>
-                        const baseLimit = instanceConfig.itemLimit || 20;
-                        const smartThreshold = getDiscoverySettings().smartWatchThreshold ?? 0;
-                        // Always over-request — the client-side watch filter below
-                        // still prunes items that were watched after the response
-                        // was cached.
-                        instanceConfig.queries = [{
-                            path: `/SmartSimilar/Items/${resolvedSource}/Similar`,
-                            queryOptions: {
-                                Limit: baseLimit * 2,
-                                Fields: 'PrimaryImageAspectRatio,DateCreated,Overview,Taglines,ProductionYear,RecursiveItemCount,ChildCount,UserData',
-                                // Server pre-filters with the same threshold the
-                                // client filter uses (0 = fully played only), so
-                                // the over-request yields mostly usable items.
-                                // The client filter still runs to catch items
-                                // watched after the response was cached.
-                                ...(smartThreshold >= 0 ? { filterWatched: true, watchedThreshold: smartThreshold } : {})
-                            }
-                        }];
-
-                        // Always refresh UserData for SmartSimilar (cached responses go stale)
-                        instanceConfig.refreshUserData = true;
-                    } else {
-                        // Standard query types
-                        switch (instanceConfig.type) {
-                            case 'Genre':
-                                if (resolvedSource && resolvedSource.match(/^[a-f0-9]{32}$/)) {
-                                    queryOptions.GenreIds = [resolvedSource];
-                                } else if (resolvedSource) {
-                                    queryOptions.Genres = resolvedSource;
-                                }
-                                break;
-                            case 'Tag':
-                                if (resolvedSource) {
-                                    queryOptions.Tags = resolvedSource;
-                                }
-                                break;
-                            case 'Person':
-                                if (resolvedSource) {
-                                    queryOptions.PersonIds = [resolvedSource];
-                                }
-                                if (instanceConfig.excludeItemId) {
-                                    queryOptions.ExcludeItemIds = Array.isArray(instanceConfig.excludeItemId) 
-                                        ? instanceConfig.excludeItemId 
-                                        : [instanceConfig.excludeItemId];
-                                }
-                                break;
-                            case 'Studio':
-                                if (resolvedSource && resolvedSource.match(/^[a-f0-9]{32}$/)) {
-                                    queryOptions.StudioIds = [resolvedSource];
-                                } else if (resolvedSource) {
-                                    queryOptions.Studios = resolvedSource;
-                                }
-                                break;
-                            case 'Collection':
-                            case 'Parent':
-                                if (resolvedSource) {
-                                    queryOptions.ParentId = resolvedSource;
-                                }
-                                break;
-                        }
-
-                    // Add spotlight fields if needed
-                    if (instanceConfig.spotlight || instanceConfig.renderMode === 'Spotlight') {
-                        queryOptions.Fields = 'PrimaryImageAspectRatio,DateCreated,Overview,Taglines,ProductionYear,RecursiveItemCount,ChildCount,UserData,People,Genres,ParentBackdropImageTags,Studios';
-
-                        const spotlightConfig = instanceConfig.spotlightConfig || {};
-                        const adminSpotlightConfig = window.KefinHomeScreen.getConfig()?.SPOTLIGHT_SETTINGS || {};
-
-                        instanceConfig.spotlightConfig = { ...adminSpotlightConfig, ...spotlightConfig };
-                    } else {
-                        queryOptions.Fields = 'PrimaryImageAspectRatio,DateCreated,Overview,Taglines,ProductionYear,RecursiveItemCount,ChildCount,UserData';
-                    }
-
-                    instanceConfig.queries = [{
-                        queryOptions: queryOptions
-                    }];
-                }
-
-                // Generic hideWatched support — applies to any section type
-                if (instanceConfig.hideWatched === true && !instanceConfig.postFetchFilter) {
-                    const threshold = getDiscoverySettings().smartWatchThreshold ?? 0;
-                    const finalLimit = instanceConfig.itemLimit || 20;
-
-                    // Over-request to account for items removed by filtering
-                    // (SmartSimilar already over-requests, skip for those)
-                    if (instanceConfig.type !== 'SmartSimilar' && instanceConfig.queries) {
-                        for (const q of instanceConfig.queries) {
-                            if (q.queryOptions && q.queryOptions.Limit) {
-                                q.queryOptions.Limit = q.queryOptions.Limit * 2;
-                            } else if (q.queryOptions) {
-                                q.queryOptions.Limit = finalLimit * 2;
-                            }
-                        }
-                    }
-
-                    if (threshold >= 0) {
-                        instanceConfig.postFetchFilter = (items) => {
-                            let filtered = items.filter(item => {
-                                if (!item.UserData) return true;
-                                // Fully played is always excluded — Played and
-                                // PlayedPercentage are independent signals (a
-                                // completed movie has Played=true but a reset
-                                // playback position, i.e. no percentage).
-                                if (item.UserData.Played) return false;
-                                // threshold > 0 additionally excludes partial
-                                // progress at/above the threshold (playback
-                                // position for movies, watched episodes for series).
-                                if (threshold > 0) {
-                                    return (item.UserData.PlayedPercentage || 0) < threshold;
-                                }
-                                return true;
-                            });
-                            if (filtered.length < 3) return null;
-                            return filtered.slice(0, finalLimit);
-                        };
-                    }
-
-                    instanceConfig.refreshUserData = true;
-                }
-
-                const sectionName = fillTemplate(instanceConfig.name, dynamicResult.metadata);
-                const cardFormat = resolveCardFormat(instanceConfig);
-                const viewMoreUrl = await resolveViewMoreUrl(instanceConfig);
-
-                instanceConfig.name = sectionName;
-                instanceConfig.cardFormat = cardFormat;
-                instanceConfig.viewMoreUrl = viewMoreUrl;
-
-                selectedConfigs.push(instanceConfig);
-            }
+            selectedConfigs.push(template);
         }
 
         if (getDiscoverySettings().renderSpotlightAboveMatching) {
-            const spotlightGenreSection = selectedConfigs.find(section => section.id.split('-')[0] === 'spotlightGenre');
+            const spotlightGenreSection = selectedConfigs.find((section) => {
+                const id = section.id.split('-')[0];
+                return id === 'spotlightGenre' || id === 'spotlightGenreSeries';
+            });
             const spotlightNetworkSection = selectedConfigs.find(section => section.id.split('-')[0] === 'spotlightNetwork');
 
             if (spotlightGenreSection) {
-                const genreSection = selectedConfigs.find(section => section.id.split('-')[0] === 'genreMovies');
+                const spotlightBaseId = spotlightGenreSection.id.split('-')[0];
+                const genreBaseId = spotlightBaseId === 'spotlightGenreSeries' ? 'genreSeries' : 'genreMovies';
+                const genreSection = selectedConfigs.find(section => section.id.split('-')[0] === genreBaseId);
                 if (genreSection) {
                     const genreSectionIndex = selectedConfigs.indexOf(genreSection);
                     const spotlightGenreSectionIndex = selectedConfigs.indexOf(spotlightGenreSection);
@@ -2351,8 +1600,40 @@
             }
         }
 
+        // Apply user prefs keyed by template prefix for non-custom discovery variants
+        try {
+            const userHomeConfig = window.KefinUserHomeScreenConfig;
+            if (userHomeConfig?.applyUserSectionOverrides && selectedConfigs.length) {
+                const prefs = state.getDisplayPrefernces
+                    ? await state.getDisplayPrefernces()
+                    : null;
+                const homeScreen = userHomeConfig.parseKefinTweaksHomeScreen?.(prefs?.CustomPrefs)
+                    || userHomeConfig.createEmptyHomeScreen?.()
+                    || { sections: [] };
+                const serverSectionsById = new Map();
+                selectedConfigs.forEach((section) => {
+                    const storedId = userHomeConfig.getStoredSectionPrefId?.(section) || section.id;
+                    if (storedId && !serverSectionsById.has(storedId)) {
+                        serverSectionsById.set(storedId, { ...section, id: storedId });
+                    }
+                });
+                const overridden = userHomeConfig.applyUserSectionOverrides(
+                    selectedConfigs,
+                    homeScreen,
+                    { serverSectionsById }
+                );
+                selectedConfigs.length = 0;
+                selectedConfigs.push(...overridden.filter(s => s.enabled !== false));
+            }
+        } catch (e) {
+            WARN('Failed to apply user overrides to discovery sections:', e);
+        }
+
         selectedConfigs.forEach((section) => {
             section.order = state.discoverySectionOrder++;
+            // Mark discovery render set so section roots get data-discovery-section
+            // (templated discovery rows use Genre/Studio/etc. as type, not "discovery").
+            section.discoverySection = true;
         });
 
         //localCache.set('discoveryBuffer', selectedConfigs);
@@ -2360,105 +1641,139 @@
         return selectedConfigs;
     }
 
-    function setupInfiniteScroll() {
-        const container = document.querySelector('.libraryPage:not(.hide) .homeSectionsContainer');
-        if (!container) return;
+    function setupInfiniteScroll(container) {
+        const target = container
+            || document.querySelector('.libraryPage:not(.hide) .homeSectionsContainer');
+        if (!target) return;
 
-        if (container.dataset.discoveryHandler) return;
-        container.dataset.discoveryHandler = 'true';
+        removeDiscoveryScrollListeners();
+        target.dataset.discoveryHandler = 'true';
 
-        // Drop anything left over from a previous .homeSectionsContainer. Jellyfin
-        // recreates that node on navigation back to home, so the dataset guard above
-        // (which lives on the node) cannot catch a stale observer from the last visit.
-        teardownDiscoveryScroll();
+        let lastScrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
 
-        // A scroll listener that measured documentElement.scrollHeight used to live
-        // here. Profiling a 12s home-screen scroll in Chromium showed it costing
-        // ~1.6s of Recalculate Style across 244 calls: reading scrollHeight forces a
-        // synchronous style+layout flush of the whole document, and on this page that
-        // is 20k elements. An IntersectionObserver on a sentinel at the end of the
-        // container answers the same question ("are we near the bottom?") entirely on
-        // the compositor, with no forced flush at all.
-        const sentinel = document.createElement('div');
-        sentinel.className = 'kefin-discovery-sentinel';
-        sentinel.setAttribute('aria-hidden', 'true');
-        // .sections.homeSectionsContainer is `display:flex; flex-direction:column`
-        // (homeScreen.css:3) and every section positions itself with an explicit CSS
-        // `order` (cardBuilder.js:952). In a flex container DOM order is NOT visual
-        // order, so a sentinel with the default `order:0` renders ABOVE every section
-        // — it sits near the top of the page and can never be reached by scrolling
-        // down, which silently kills discovery loading. Order it after everything,
-        // including the loading indicator's 1000000000.
-        sentinel.style.cssText = 'width:100%;height:1px;margin:0;padding:0;pointer-events:none;order:2000000000;';
-        container.appendChild(sentinel);
+        const handleScroll = () => {
+            if (!isDiscoveryHomeContext()) return;
+            if (!target.dataset.sectionsRendered) return;
+            if (state.isRenderingDiscovery) return;
+            if (state.discoverySectionsRemain === false) return;
 
-        const observer = new IntersectionObserver((entries) => {
-            if (!entries.some(e => e.isIntersecting)) return;
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const delta = Math.abs(scrollTop - lastScrollTop);
+            lastScrollTop = scrollTop;
 
-            const currentView = window.KefinTweaksUtils?.getCurrentView();
-            if (currentView !== 'home' && currentView !== 'home.html') return;
+            // After a group loads, ignore threshold until the user scrolls again
+            if (state.discoveryNeedsMoreScroll) {
+                if (delta < 2) return;
+                state.discoveryNeedsMoreScroll = false;
+            }
 
-            const activeTabEl = document.querySelector('.headerTabs .emby-tab-button-active');
-            if (!activeTabEl || activeTabEl.getAttribute('data-index') !== '0') return;
+            const windowHeight = window.innerHeight;
+            const documentHeight = document.documentElement.scrollHeight;
+            const threshold = windowHeight * 1.5;
 
-            if (!container.dataset.sectionsRendered) return;
+            if (scrollTop + windowHeight < documentHeight - threshold) return;
+
+            if (state.discoveryScrollDebounceTimer) {
+                clearTimeout(state.discoveryScrollDebounceTimer);
+            }
+            state.discoveryScrollDebounceTimer = setTimeout(() => {
+                state.discoveryScrollDebounceTimer = null;
+                if (state.isRenderingDiscovery || state.discoveryNeedsMoreScroll) return;
+                if (!isDiscoveryHomeContext()) return;
+                const st = window.pageYOffset || document.documentElement.scrollTop;
+                const wh = window.innerHeight;
+                const dh = document.documentElement.scrollHeight;
+                if (st + wh >= dh - wh * 1.5) {
+                    renderNextDiscoveryGroup();
+                }
+            }, 200);
+        };
+
+        state.infiniteScrollHandler = handleScroll;
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        LOG('Infinite scroll enabled for discovery (debounced + scroll-gated re-arm).');
+    }
+
+    /**
+     * infiniteScroll=false: Discover More + chevron; load when user scrolls again at bottom.
+     */
+    function setupChevronDiscoverMore(container) {
+        const target = container
+            || document.querySelector('.libraryPage:not(.hide) .homeSectionsContainer');
+        if (!target) return;
+
+        removeDiscoveryScrollListeners();
+        target.dataset.discoveryHandler = 'true';
+        createDiscoveryLoadingIndicator(target);
+        hideDiscoveryLoadingIndicator();
+
+        let lastTouchY = null;
+
+        const scheduleLoadFromBottomGesture = () => {
+            if (state.isRenderingDiscovery) return;
+            if (state.discoverySectionsRemain === false) return;
+            if (state.discoveryScrollDebounceTimer) {
+                clearTimeout(state.discoveryScrollDebounceTimer);
+            }
+            state.discoveryScrollDebounceTimer = setTimeout(() => {
+                state.discoveryScrollDebounceTimer = null;
+                if (state.isRenderingDiscovery) return;
+                if (!isDiscoveryHomeContext()) return;
+                LOG('User scrolled at bottom (chevron mode); loading next discovery group...');
+                renderNextDiscoveryGroup();
+            }, 200);
+        };
+
+        const isAtDocumentBottom = () => {
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const windowHeight = window.innerHeight;
+            const documentHeight = document.documentElement.scrollHeight;
+            return scrollTop + windowHeight >= documentHeight - 2;
+        };
+
+        const handleWheel = (event) => {
+            if (!isDiscoveryHomeContext()) return;
+            if (!target.dataset.sectionsRendered) return;
+            if (state.isRenderingDiscovery) return;
+            if (event.deltaY <= 0) return;
+            if (!isAtDocumentBottom()) return;
+            scheduleLoadFromBottomGesture();
+        };
+
+        const handleTouchStart = (event) => {
+            const touch = event.touches && event.touches[0];
+            lastTouchY = touch ? touch.clientY : null;
+        };
+
+        const handleTouchMove = (event) => {
+            if (!isDiscoveryHomeContext()) return;
+            if (!target.dataset.sectionsRendered) return;
             if (state.isRenderingDiscovery) return;
 
-            renderNextDiscoveryGroup();
-        }, {
-            root: null,
-            // Same trigger distance the old scrollTop maths used: 1.5 viewports.
-            rootMargin: '0px 0px 150% 0px',
-            threshold: 0
-        });
-        observer.observe(sentinel);
+            const touch = event.touches && event.touches[0];
+            if (!touch) return;
 
-        // The sentinel only reports "near the bottom" while it IS the bottom, but
-        // renderProgressiveSections() appends new sections with
-        // container.appendChild(fragment) — i.e. AFTER the sentinel — which buries it
-        // mid-page. Once buried it can never intersect again while scrolling down, so
-        // discovery silently stops loading. Watch the container's direct children only
-        // (no subtree: this fires a handful of times, on section appends, not on the
-        // thousands of card insertions underneath) and move the sentinel back to the
-        // end whenever that happens. Re-observing forces a fresh notification, since a
-        // sentinel that never changed intersection state would otherwise stay silent.
-        const keepSentinelLast = () => {
-            if (!state.discoverySentinel || !state.discoveryObserver) return;
-            if (container.lastElementChild === state.discoverySentinel) return;
-            container.appendChild(state.discoverySentinel);
-            state.discoveryObserver.unobserve(state.discoverySentinel);
-            state.discoveryObserver.observe(state.discoverySentinel);
+            if (lastTouchY == null) {
+                lastTouchY = touch.clientY;
+                return;
+            }
+
+            const deltaY = touch.clientY - lastTouchY;
+            lastTouchY = touch.clientY;
+
+            // Upward swipe scrolls content down
+            if (deltaY >= 0) return;
+            if (!isAtDocumentBottom()) return;
+            scheduleLoadFromBottomGesture();
         };
-        const containerObserver = new MutationObserver(keepSentinelLast);
-        containerObserver.observe(container, { childList: true });
 
-        state.discoverySentinel = sentinel;
-        state.discoveryObserver = observer;
-        state.discoveryContainerObserver = containerObserver;
-        keepSentinelLast();
-        LOG('Infinite scroll enabled for discovery (sentinel).');
-    }
-
-    function setupLoadMoreButton(container) {
-        const loadMoreButton = container.querySelector('.load-more-discovery-btn');
-        if (loadMoreButton) return;
-
-        let btn = document.createElement('button');
-        btn.className = 'raised button-submit emby-button load-more-discovery-btn';
-        btn.textContent = 'Discover More';
-        btn.onclick = () => {
-            btn.remove();
-            renderNextDiscoveryGroup(container)
-        };
-        container.appendChild(btn);
-        LOG('Load More button enabled for discovery.');
-    }
-    
-    function updateLoadMoreButtonVisibility() {
-        const btn = document.querySelector('.load-more-discovery-btn');
-        if (btn) {
-            btn.style.display = 'block';
-        }
+        state.discoveryWheelHandler = handleWheel;
+        state.discoveryTouchStartHandler = handleTouchStart;
+        state.discoveryTouchMoveHandler = handleTouchMove;
+        window.addEventListener('wheel', handleWheel, { passive: true });
+        window.addEventListener('touchstart', handleTouchStart, { passive: true });
+        window.addEventListener('touchmove', handleTouchMove, { passive: true });
+        LOG('Chevron Discover More enabled for discovery (scroll-again at bottom).');
     }
 
     function isInSeasonalPeriod(start, end) {
@@ -2501,466 +1816,6 @@
         return isInSeasonalPeriod(activeSection.startDate, activeSection.endDate);        
     }
 
-    const localCache = new window.LocalStorageCache();
-
-    async function getRandomGenre() {
-        let movieGenres = localCache.get('movieGenres');
-        if (!movieGenres) movieGenres = await fetchAndCacheMovieGenres();
-        if (!movieGenres || !movieGenres.length) return null;
-        
-        const minCount = (Config.DISCOVERY_SETTINGS && Config.DISCOVERY_SETTINGS.minGenreMovieCount) 
-                         || (window.KefinTweaksConfig && window.KefinTweaksConfig.homeScreen && window.KefinTweaksConfig.homeScreen.discovery && window.KefinTweaksConfig.homeScreen.discovery.minGenreMovieCount)
-                         || 50;
-
-        const valid = movieGenres.filter(g => !state.renderedDiscoveryIds.genres.has(g.Id) && (g.MovieCount || 0) > minCount);
-        if (!valid.length) return null;
-        
-        const selected = valid[Math.floor(Math.random() * valid.length)];
-        state.renderedDiscoveryIds.genres.add(selected.Id);
-        return selected;
-    }
-
-    async function fetchAndCacheMovieGenres() {
-        try {
-            const userId = ApiClient.getCurrentUserId();
-            const response = await fetch(`${ApiClient.serverAddress()}/Genres?IncludeItemTypes=Movie`, {
-                headers: { 'X-Emby-Token': ApiClient.accessToken() }
-            });
-            const data = await response.json();
-            const genres = (data.Items || []).map(g => ({ Id: g.Id, Name: g.Name, MovieCount: g.MovieCount }));
-            localCache.set('movieGenres', genres);
-            return genres;
-        } catch (e) {
-            ERR('Failed to fetch genres', e);
-            return [];
-        }
-    }
-
-    async function getRandomCollectionForDiscovery(minimumItems) {
-        const collections = await getCollectionsData();
-        if (!collections || !collections.length) return null;
-        const unrenderedCollections = collections.filter(c => !state.renderedDiscoveryIds.collections.has(c.Id));
-        const eligibleCollections = unrenderedCollections.filter(c => c.TotalRecordCount ?? c.RecursiveItemCount ?? c.ChildCount ?? 0 >= minimumItems);
-        if (!eligibleCollections.length) return null;
-        const selected = eligibleCollections[Math.floor(Math.random() * eligibleCollections.length)];
-        state.renderedDiscoveryIds.collections.add(selected.Id);
-        return selected;
-    }
-
-    async function getCollectionsData() {
-        const query = `${ApiClient.serverAddress()}/Items?IncludeItemTypes=BoxSet&Recursive=true&Fields=RecursiveItemCount,ChildCount,TotalRecordCount&StartIndex=0&Limit=500&SortBy=TotalRecordCount`;
-        
-        try {
-            const result = await ApiHelper.getQuery(query, {
-                useCache: true,
-                ttl: Config.CACHE.LONG_TTL
-            });
-            
-            let items = [];
-            if (result.data && result.data.Items) {
-                items = result.data.Items;
-            } else {
-                const fresh = await result.dataPromise;
-                items = fresh.Items || [];
-            }
-            return items;
-        } catch (e) {
-            ERR('Failed to fetch collections', e);
-            return [];
-        }
-    }
-
-    async function getRandomPersonFromHistory(personType, sourceType, itemType) {
-        itemType = itemType || 'Movie';
-        let sourceItems = [];
-        let queryUrl = null;
-
-        const recentMaxDays = getDiscoverySettings().recentMaxDays ?? 30;
-        const recentCutoff = recentMaxDays > 0 ? Date.now() - (recentMaxDays * 24 * 60 * 60 * 1000) : null;
-
-        if (itemType === 'Series') {
-            // For Series: find watched episodes → extract SeriesIds → fetch Series with People
-            const userId = ApiClient.getCurrentUserId();
-            try {
-                const epResp = await ApiClient.getItems(userId, {
-                    IncludeItemTypes: 'Episode',
-                    Recursive: true,
-                    Filters: 'IsPlayed',
-                    Fields: 'SeriesId',
-                    SortBy: 'DatePlayed',
-                    SortOrder: 'Descending',
-                    Limit: 200
-                });
-                let episodes = epResp?.Items || [];
-                // Recently watched: only episodes played within the cutoff window
-                if (sourceType === 'watched-recent' && recentCutoff) {
-                    episodes = episodes.filter(ep => {
-                        const lastPlayed = ep.UserData?.LastPlayedDate ? new Date(ep.UserData.LastPlayedDate).getTime() : 0;
-                        return lastPlayed >= recentCutoff;
-                    });
-                }
-                const seen = new Set();
-                const seriesIds = [];
-                for (const ep of episodes) {
-                    if (ep.SeriesId && !seen.has(ep.SeriesId)) {
-                        seen.add(ep.SeriesId);
-                        seriesIds.push(ep.SeriesId);
-                    }
-                }
-                if (seriesIds.length) {
-                    const seriesResp = await ApiClient.getItems(userId, {
-                        Ids: seriesIds.join(','),
-                        Fields: 'People'
-                    });
-                    sourceItems = seriesResp?.Items || [];
-                }
-            } catch (e) {
-                ERR('Failed to get series from watched history for Person:', e);
-                return null;
-            }
-        } else {
-            if (sourceType === 'watched-recent') {
-                queryUrl = `${ApiClient.serverAddress()}/Items?IncludeItemTypes=Movie&Recursive=true&Filters=IsPlayed&Fields=UserData,People&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1&SortBy=DatePlayed&SortOrder=Descending&Limit=5`;
-            } else if (sourceType === 'watched') {
-                queryUrl = `${ApiClient.serverAddress()}/Items?IncludeItemTypes=Movie&Recursive=true&Filters=IsPlayed&Fields=UserData,People&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1&SortBy=Random&SortOrder=Descending`;
-            }
-
-            if (queryUrl) {
-                const response = await window.apiHelper.getQuery(queryUrl, { useCache: true, ttl: Config.CACHE.LONG_TTL });
-                sourceItems = response?.data?.Items || response?.data || [];
-            }
-
-            // Recently watched: enforce the cutoff window on movies too
-            if (sourceType === 'watched-recent' && recentCutoff) {
-                sourceItems = sourceItems.filter(m => {
-                    const lastPlayed = m.UserData?.LastPlayedDate ? new Date(m.UserData.LastPlayedDate).getTime() : 0;
-                    return lastPlayed >= recentCutoff;
-                });
-            }
-        }
-
-        if (!sourceItems.length) return null;
-
-        sourceItems.sort(() => 0.5 - Math.random());
-
-        for (const item of sourceItems) {
-            if (!item.People || !item.People.length) continue;
-            
-            const candidates = item.People.filter(p => p.Type === personType);
-            if (!candidates.length) continue;
-            
-            for (const person of candidates) {
-                let trackedSet = null;
-                if (personType === 'Director') trackedSet = state.renderedDiscoveryIds.directors;
-                else if (personType === 'Actor') trackedSet = state.renderedDiscoveryIds.actors;
-                else if (personType === 'Writer') trackedSet = state.renderedDiscoveryIds.writers;
-                
-                if (trackedSet && !trackedSet.has(person.Id)) {
-                    trackedSet.add(person.Id);
-                    return {
-                        person: { id: person.Id, name: person.Name },
-                        sourceItem: item
-                    };
-                }
-            }
-        }
-        
-        return null;
-    }
-
-    let _topPeople = null;
-    async function getTopPeople() {
-        if (_topPeople) return _topPeople;
-        _topPeople = await PeopleCache.getTopPeople();
-        return _topPeople;
-    }
-
-    async function getRandomPerson(type) {
-        if (!PeopleCache) return null;
-        
-        const peopleData = await getTopPeople();
-        if (!peopleData) return null;
-        
-        let list = [];
-        let trackedSet = null;
-
-        if (type === 'Director') {
-            list = peopleData.directors;
-            trackedSet = state.renderedDiscoveryIds.directors;
-        } else if (type === 'Actor') {
-            list = peopleData.actors;
-            trackedSet = state.renderedDiscoveryIds.actors;
-        } else if (type === 'Writer') {
-            list = peopleData.writers;
-            trackedSet = state.renderedDiscoveryIds.writers;
-        }
-        
-        if (!list || !list.length || !trackedSet) return null;
-        
-        const valid = list.filter(p => !trackedSet.has(p.Id));
-        if (!valid.length) return null;
-        
-        const selected = valid[Math.floor(Math.random() * valid.length)];
-        if (selected && selected.Id) {
-            trackedSet.add(selected.Id);
-        }
-        return selected;
-    }
-
-    function getRandomWatchedMovie() {
-        const movies = localCache.get('movies') || [];
-        if (!movies.length) return null;
-        const valid = movies.filter(m => !state.renderedDiscoveryIds.watchedMovies.has(m.Id));
-        if (!valid.length) return null;
-        const selected = valid[Math.floor(Math.random() * Math.min(valid.length, 10))];
-        state.renderedDiscoveryIds.watchedMovies.add(selected.Id);
-        return selected;
-    }
-
-    async function getRandomFavoriteMovie() {
-        if (state.cachedFavorites) {
-            const valid = state.cachedFavorites.filter(m => !state.renderedDiscoveryIds.likedMovies.has(m.Id));
-            if (valid.length > 0) {
-                const selected = valid[Math.floor(Math.random() * valid.length)];
-                state.renderedDiscoveryIds.likedMovies.add(selected.Id);
-                return selected;
-            }
-        }
-        const userId = ApiClient.getCurrentUserId();
-        try {
-            const response = await ApiClient.getItems(userId, { IncludeItemTypes: 'Movie', Filters: 'IsFavorite', Limit: 50, SortBy: 'Random', Recursive: true });
-            const items = response.Items || [];
-            if (!items.length) return null;
-            state.cachedFavorites = items;
-            const valid = items.filter(m => !state.renderedDiscoveryIds.likedMovies.has(m.Id));
-            if (!valid.length) return null;
-            const selected = valid[0];
-            state.renderedDiscoveryIds.likedMovies.add(selected.Id);
-            return selected;
-        } catch (e) {
-            ERR('Failed to get favorite movies:', e);
-            return null;
-        }
-    }
-
-    // ── Series Source Selection ────────────────────────────────────
-
-    /**
-     * Shared fetch: all series the user has interacted with.
-     * Computes PlayedPercentage client-side since the server's multi-item
-     * endpoint doesn't reliably return it for Series (RecursiveItemCount
-     * must be populated first, which requires EnableAllFields=true in DtoOptions,
-     * and the /Users/{id}/Items?Ids= endpoint doesn't guarantee that).
-     */
-    async function _fetchInteractedSeries() {
-        if (state._cachedInteractedSeries) return state._cachedInteractedSeries;
-        const userId = ApiClient.getCurrentUserId();
-        try {
-            // Step 1: Fetch played episodes with SeriesId
-            const playedResp = await ApiClient.getItems(userId, {
-                IncludeItemTypes: 'Episode',
-                Recursive: true,
-                Filters: 'IsPlayed',
-                Fields: 'SeriesId',
-                Limit: 500
-            });
-            // Also fetch resumable episodes
-            const resumableResp = await ApiClient.getItems(userId, {
-                IncludeItemTypes: 'Episode',
-                Recursive: true,
-                Filters: 'IsResumable',
-                Fields: 'SeriesId',
-                Limit: 50
-            });
-
-            // Build set of unique series IDs and count played episodes per series
-            const playedPerSeries = new Map(); // seriesId → count of played episodes
-            const allEps = [...(resumableResp?.Items || []), ...(playedResp?.Items || [])];
-            const seriesIdList = [];
-            for (const ep of allEps) {
-                if (!ep.SeriesId) continue;
-                if (!playedPerSeries.has(ep.SeriesId)) {
-                    playedPerSeries.set(ep.SeriesId, 0);
-                    seriesIdList.push(ep.SeriesId);
-                }
-            }
-            // Count played episodes (not resumable) per series
-            for (const ep of (playedResp?.Items || [])) {
-                if (ep.SeriesId && playedPerSeries.has(ep.SeriesId)) {
-                    playedPerSeries.set(ep.SeriesId, playedPerSeries.get(ep.SeriesId) + 1);
-                }
-            }
-
-            if (!seriesIdList.length) { state._cachedInteractedSeries = []; return []; }
-
-            // Step 2: Fetch total episode count per series
-            // Use RecursiveItemCount from Series items to get total episodes.
-            // Chunked: seriesIdList can reach hundreds of GUIDs (500 episodes'
-            // worth), and a single Ids= join at that size risks URL-length
-            // limits on some servers/proxies.
-            const items = [];
-            const IDS_CHUNK_SIZE = 100;
-            for (let i = 0; i < seriesIdList.length; i += IDS_CHUNK_SIZE) {
-                const chunk = seriesIdList.slice(i, i + IDS_CHUNK_SIZE);
-                const seriesResp = await ApiClient.getItems(userId, {
-                    Ids: chunk.join(','),
-                    Fields: 'RecursiveItemCount,UserData'
-                });
-                items.push(...(seriesResp?.Items || []));
-            }
-
-            // Step 3: Compute PlayedPercentage client-side
-            for (const series of items) {
-                const totalEps = series.RecursiveItemCount || 0;
-                const playedEps = playedPerSeries.get(series.Id) || 0;
-                const computedPct = totalEps > 0 ? Math.round((playedEps / totalEps) * 100) : 0;
-
-                // Ensure UserData exists
-                if (!series.UserData) series.UserData = {};
-                // Use server PlayedPercentage if available, otherwise use computed
-                if (series.UserData.PlayedPercentage === undefined || series.UserData.PlayedPercentage === null) {
-                    series.UserData.PlayedPercentage = computedPct;
-                }
-                // Also ensure Played flag is set
-                if (series.UserData.Played === undefined) {
-                    series.UserData.Played = computedPct >= 100;
-                }
-            }
-
-            state._cachedInteractedSeries = items;
-            return state._cachedInteractedSeries;
-        } catch (e) {
-            ERR('Failed to fetch interacted series:', e);
-            return [];
-        }
-    }
-
-    /**
-     * Fully completed series only (Played=true on the Series).
-     */
-    async function _fetchWatchedSeries() {
-        if (state.cachedWatchedSeries) return state.cachedWatchedSeries;
-        const all = await _fetchInteractedSeries();
-        state.cachedWatchedSeries = all.filter(s => s.UserData && s.UserData.Played === true);
-        return state.cachedWatchedSeries;
-    }
-
-    /**
-     * In-progress series only — some episodes watched but NOT fully completed.
-     * Filtered by recentMinPercent and recentMaxDays from discovery settings.
-     */
-    async function _fetchRecentSeries() {
-        if (state.cachedRecentSeries) return state.cachedRecentSeries;
-        const all = await _fetchInteractedSeries();
-        const settings = getDiscoverySettings();
-        const minPercent = settings.recentMinPercent ?? 35;
-        const maxDays = settings.recentMaxDays ?? 30;
-        const cutoffDate = maxDays > 0 ? new Date(Date.now() - maxDays * 24 * 60 * 60 * 1000) : null;
-
-        const inProgress = all.filter(s => !s.UserData || s.UserData.Played !== true);
-
-        state.cachedRecentSeries = inProgress.filter(s => {
-            const pct = s.UserData?.PlayedPercentage || 0;
-            if (pct < minPercent) return false;
-            if (cutoffDate && s.UserData?.LastPlayedDate) {
-                const lastPlayed = new Date(s.UserData.LastPlayedDate);
-                if (lastPlayed < cutoffDate) return false;
-            }
-            return true;
-        });
-        return state.cachedRecentSeries;
-    }
-
-    /**
-     * Recently watched movie: played, last played within recentMaxDays.
-     * recentMaxDays <= 0 disables the time limit. Shares the watchedMovies
-     * dedup pool with the other movie pickers.
-     */
-    async function _getRandomRecentMovie() {
-        if (!state.cachedRecentMovies) {
-            const userId = ApiClient.getCurrentUserId();
-            try {
-                const response = await ApiClient.getItems(userId, {
-                    IncludeItemTypes: 'Movie',
-                    Recursive: true,
-                    Filters: 'IsPlayed',
-                    SortBy: 'DatePlayed',
-                    SortOrder: 'Descending',
-                    Limit: 50
-                });
-                state.cachedRecentMovies = response?.Items || [];
-            } catch (e) {
-                ERR('Failed to fetch recently watched movies:', e);
-                state.cachedRecentMovies = [];
-            }
-        }
-
-        const maxDays = getDiscoverySettings().recentMaxDays ?? 30;
-        const cutoff = maxDays > 0 ? Date.now() - (maxDays * 24 * 60 * 60 * 1000) : null;
-
-        const candidates = state.cachedRecentMovies.filter(m => {
-            if (state.renderedDiscoveryIds.watchedMovies.has(m.Id)) return false;
-            if (!cutoff) return true;
-            const lastPlayed = m.UserData?.LastPlayedDate ? new Date(m.UserData.LastPlayedDate).getTime() : 0;
-            return lastPlayed >= cutoff;
-        });
-
-        if (!candidates.length) return null;
-        const selected = candidates[Math.floor(Math.random() * Math.min(candidates.length, 10))];
-        state.renderedDiscoveryIds.watchedMovies.add(selected.Id);
-        return selected;
-    }
-
-    async function _getRandomWatchedSeries(dedupSet) {
-        const series = await _fetchWatchedSeries();
-        const valid = series.filter(s => !dedupSet.has(s.Id));
-        if (!valid.length) return null;
-        const selected = valid[Math.floor(Math.random() * Math.min(valid.length, 10))];
-        dedupSet.add(selected.Id);
-        return selected;
-    }
-
-    async function _getRandomRecentSeries(dedupSet) {
-        const series = await _fetchRecentSeries();
-        const valid = series.filter(s => !dedupSet.has(s.Id));
-        if (!valid.length) return null;
-        const selected = valid[Math.floor(Math.random() * Math.min(valid.length, 10))];
-        dedupSet.add(selected.Id);
-        return selected;
-    }
-
-    async function _getRandomFavoriteSeries(dedupSet) {
-        if (state.cachedFavoriteSeries) {
-            const valid = state.cachedFavoriteSeries.filter(s => !dedupSet.has(s.Id));
-            if (valid.length > 0) {
-                const selected = valid[Math.floor(Math.random() * valid.length)];
-                dedupSet.add(selected.Id);
-                return selected;
-            }
-        }
-        const userId = ApiClient.getCurrentUserId();
-        try {
-            const response = await ApiClient.getItems(userId, {
-                IncludeItemTypes: 'Series',
-                Filters: 'IsFavorite',
-                Limit: 50,
-                SortBy: 'Random',
-                Recursive: true
-            });
-            const items = response.Items || [];
-            if (!items.length) return null;
-            state.cachedFavoriteSeries = items;
-            const valid = items.filter(s => !dedupSet.has(s.Id));
-            if (!valid.length) return null;
-            const selected = valid[0];
-            dedupSet.add(selected.Id);
-            return selected;
-        } catch (e) {
-            ERR('Failed to get favorite series:', e);
-            return null;
-        }
-    }
-
     async function getPopularTVNetworks() {
         if (!StudiosCache) return [];
 
@@ -2970,99 +1825,32 @@
         return StudiosCache.getPopularTVNetworks();
     }
 
-    window.homeScreen3 = { init: enhanceHomeScreen };
+    async function refreshHomeSections() {
+        const container = document.querySelector('.homePage:not(.hide) #homeTab .sections');
+        if (!container) {
+            LOG('refreshHomeSections: container not found');
+            return;
+        }
+
+        container.querySelectorAll('[data-section-id]').forEach(el => el.remove());
+        delete container.dataset.sectionsRendered;
+        delete container.dataset.kefinHomeScreen;
+
+        sectionCache.renderedSections = [];
+        sectionCache.fragmentCache = null;
+        sectionCache.isInitialRender = true;
+
+        await enhanceHomeScreen();
+    }
+
+    window.homeScreen3 = {
+        init: enhanceHomeScreen,
+        refreshHomeSections,
+        resolveDiscoverySection: buildDiscoverySectionInstance,
+        sectionHelper: () => window.sectionHelper
+    };
 
     //enhanceHomeScreen();
-
-    // True when the home tab is the active view. On the Android WebView the
-    // restored hash after a warm reopen is often bare (#/, #/home, or
-    // #/home.html with the tab in a query param), so match generously rather
-    // than relying on a parsed view-name segment.
-    function isHomeViewActive() {
-        const hash = window.location.hash || '';
-        const path = hash.split('?')[0];
-        const onHomePath = path === '#' || path === '#/' || /#\/home(\.html)?$/.test(path) || path === '#/home';
-        if (!onHomePath) return false;
-        const hashParams = hash.includes('?') ? hash.split('?')[1] : '';
-        const tab = new URLSearchParams(hashParams).get('tab');
-        // Home tab is index 0 (or unspecified).
-        return !tab || parseInt(tab, 10) === 0;
-    }
-
-    // True when KefinTweaks sections are actually present in the DOM right now.
-    // Rendered sections carry data-section-id (see the render observer). This is
-    // the authoritative "is the home screen actually built" check — distinct
-    // from the dataset.kefinHomeScreen flag, which only records that init ran
-    // once and persists across a warm WebView reopen even after the restored
-    // DOM has lost the sections.
-    function kefinSectionsPresent(container) {
-        if (!container) return false;
-        // A completed build that legitimately produced zero sections (nothing
-        // enabled) marks itself; treat that as present so warm reopens don't
-        // re-run the whole build just to render nothing again.
-        if (container.dataset.kefinRenderedEmpty === 'true') return true;
-        if (container.querySelector('[data-section-id]')) return true;
-        // Discovery/home sections may live in a sibling homeSectionsContainer.
-        const scope = container.closest('#homeTab') || document;
-        return !!scope.querySelector('.homeSectionsContainer [data-section-id]');
-    }
-
-    // Media-bar layout sync, exposed by setupMediaBarLayoutSync() below. The home
-    // can be rebuilt on back-navigation without the bar/header resizing, so the
-    // ResizeObserver alone won't re-fire; we re-run the sync after each enhance,
-    // staggered to catch progressive section rendering.
-    let requestMediaBarSync = null;
-    function scheduleMediaBarSync() {
-        if (!requestMediaBarSync) return;
-        requestMediaBarSync();
-        [150, 500, 1200].forEach(d => setTimeout(() => { if (requestMediaBarSync) requestMediaBarSync(); }, d));
-    }
-
-    // Kick off enhancement, retrying until the home DOM is actually present.
-    // The onViewPage replay only fires once at registration and only when
-    // getCurrentView() resolves a matching segment; on a warm WebView reopen
-    // the home view is often already shown with a bare hash and the sections
-    // container not yet restored, so that one-shot call is missed and the home
-    // screen never builds (only the native media bar shows). This bounded
-    // poller closes that gap without depending on the view event.
-    function tryEnhanceHomeScreen(attempt = 0) {
-        const MAX_ATTEMPTS = 40; // ~10s at 250ms
-        const container = document.querySelector('.homePage:not(.hide) #homeTab .sections');
-        if (container) {
-            // Only skip when sections are genuinely on screen. On a warm reopen
-            // the init flag persists but the sections are gone; clear the stale
-            // flag so enhanceHomeScreen (which also guards on it) will re-run.
-            if (container.dataset.kefinHomeScreen) {
-                if (kefinSectionsPresent(container)) return; // already built and intact
-                delete container.dataset.kefinHomeScreen;
-                LOG('Stale kefin init flag with no rendered sections; re-enhancing after warm reopen');
-            }
-            try {
-                manageBodyClasses();
-                enhanceHomeScreen();
-                scheduleMediaBarSync();
-            } catch (err) {
-                ERR('Home screen init failed:', err);
-            }
-            return;
-        }
-        if (!isHomeViewActive()) {
-            // An empty hash means Jellyfin's router hasn't produced a route
-            // yet (early cached-load execution). That's undetermined, not
-            // "another page" — keep waiting instead of exiting, otherwise this
-            // poller dies before the app has even decided where it's going.
-            const routerUndetermined = !(window.location.hash || '');
-            if (!routerUndetermined) return; // genuinely on another page; view event handles it
-            if (attempt >= MAX_ATTEMPTS) return;
-            setTimeout(() => tryEnhanceHomeScreen(attempt + 1), 250);
-            return;
-        }
-        if (attempt >= MAX_ATTEMPTS) {
-            LOG('Home sections container did not appear; giving up warm-reopen retry');
-            return;
-        }
-        setTimeout(() => tryEnhanceHomeScreen(attempt + 1), 250);
-    }
 
     if (window.KefinTweaksUtils && typeof window.KefinTweaksUtils.onViewPage === 'function') {
         window.KefinTweaksUtils.onViewPage((view, element, hash) => {
@@ -3080,138 +1868,13 @@
             try { 
                 manageBodyClasses();
                 enhanceHomeScreen();
-                scheduleMediaBarSync();
             } catch (err) { ERR('Home screen page change handler failed:', err); }
         }, { pages: ['home', 'home.html'] });
     }
 
-    // ===== Media Bar plugin layout sync =====
-    // The Media Bar plugin appends #slides-container to <body> and leaves its
-    // placement to CSS. Two stylesheets fight over it: the plugin's stock
-    // sheet (position: relative) and theme add-ons like ElegantFin's
-    // (position: absolute; top: calc(var(--appBarHeight) * N + 1.25em)) —
-    // same specificity, so document order decides, and the add-on's
-    // breakpoints hard-code assumptions about how many header rows exist.
-    // When either guess is wrong the bar sits partially behind the header
-    // while .homeSectionsContainer keeps its fixed offset, leaving a dead gap.
-    // Measure reality instead: pin the bar directly below the actual header,
-    // then pin the visible sections container directly below the actual bar.
-    let mediaBarSyncInstalled = false;
-    function setupMediaBarLayoutSync() {
-        if (mediaBarSyncInstalled) return;
-        mediaBarSyncInstalled = true;
-
-        let rafPending = false;
-        let barResizeObserver = null;
-
-        const sync = () => {
-            if (rafPending) return;
-            rafPending = true;
-            requestAnimationFrame(() => {
-                rafPending = false;
-                const bar = document.getElementById('slides-container');
-                if (!bar || bar.offsetParent === null) return; // absent or display:none
-
-                const containers = [...document.querySelectorAll('.homePage:not(.hide) #homeTab .homeSectionsContainer')]
-                    .filter(el => el.offsetParent !== null);
-
-                // Measure the CSS-intended layout: drop any override we
-                // applied on a previous pass first, so we always correct the
-                // stylesheet's placement rather than compounding our own.
-                const clearBarOverride = el => {
-                    el.style.removeProperty('top');
-                    el.style.removeProperty('position');
-                };
-                const clearContainerOverride = el => {
-                    el.style.removeProperty('margin-top');
-                    // clean up overrides written by older versions of this sync
-                    el.style.removeProperty('top');
-                    el.style.removeProperty('position');
-                };
-                clearBarOverride(bar);
-                containers.forEach(clearContainerOverride);
-
-                const barStyle = getComputedStyle(bar);
-
-                // Stock plugin layout (position: relative): a full-bleed hero
-                // where the sections intentionally overlay the bar's lower
-                // third and the header overlays its top. That arrangement is
-                // by design — leave it entirely alone.
-                if (barStyle.position !== 'absolute') return;
-
-
-                // Themed layout (e.g. ElegantFin's add-on): a contained bar
-                // meant to clear the actual header element's position.
-                const header = document.querySelector('.skinHeader');
-                if (!header) return;
-
-                const headerRect = header.getBoundingClientRect();
-
-                // Mobile: headroom retracts the header with translateY(-100%)
-                // while scrolling, and mobile browsers fire resize (URL bar
-                // collapse) mid-scroll — so this sync can run while the header
-                // is translated off-screen. A rect taken then reports
-                // bottom ≈ 0 and pins the bar underneath the header. The header
-                // is fixed to the viewport top, so its layout bottom is just
-                // its height; offsetHeight ignores transforms.
-                const headerBottom = Math.max(headerRect.bottom, header.offsetHeight);
-                if (headerBottom <= 0) return; // not laid out yet (cold start); staggered re-syncs will retry
-
-                // Pin the bar directly below the bottom edge of the header
-                bar.style.top = `${headerBottom}px`;
-                bar.style.position = 'absolute';
-
-                // With the bar corrected, measure it to push the sections down.
-                const barRect = bar.getBoundingClientRect();
-
-                // Push the sections below the bar by ADDING TOP MARGIN, keeping
-                // them in normal flow. The previous approach set them to
-                // position:absolute with no width/left/right, which dropped those
-                // to `auto` and collapsed the container width — that is what
-                // scaled the cards down on desktop and broke the mobile layout
-                // (content-driven width + static-position left padding). Margins
-                // leave width/left resolution untouched. Measure every natural
-                // top first (margins already cleared above) so applying one
-                // container's margin can't skew another's measurement.
-                const naturalTops = containers.map(c => c.getBoundingClientRect().top);
-                containers.forEach((container, i) => {
-                    const delta = (barRect.bottom + 20) - naturalTops[i];
-                    container.style.marginTop = delta > 0 ? `${delta}px` : '0px';
-                });
-            });
-        };
-
-        // Use ResizeObserver to detect layout shifts dynamically
-        if (typeof ResizeObserver !== 'undefined') {
-            barResizeObserver = new ResizeObserver(() => sync());
-            
-            const observeElements = () => {
-                const header = document.querySelector('.skinHeader');
-                const bar = document.getElementById('slides-container');
-                
-                if (header) barResizeObserver.observe(header);
-                if (bar) barResizeObserver.observe(bar);
-            };
-            
-            observeElements();
-            // Try again shortly in case the DOM elements are delayed
-            setTimeout(observeElements, 1000);
-        }
-
-        // Fallback for standard window resizing
-        window.addEventListener('resize', sync, { passive: true });
-        
-        // Expose for re-triggering when the home is (re)built (e.g. back nav).
-        requestMediaBarSync = sync;
-
-        // Run initial synchronization
-        sync();
-    }
-
-    // Trigger media bar layout synchronization
-    setupMediaBarLayoutSync();
-
-    // Start the bounded retry loop to enhance the home screen
-    tryEnhanceHomeScreen();
+    /* if (window.KefinTweaksUtils && typeof window.KefinTweaksUtils.onViewPage === 'function') {
+        window.KefinTweaksUtils.onViewPage(manageBodyClasses, { pages: [] });
+    } */
 
 })();
+

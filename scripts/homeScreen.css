@@ -1,10 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@200..700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Anton&family=Changa+One:ital@0;1&family=Exo:ital,wght@0,100..900;1,100..900&family=Orbitron:wght@400..900&family=Oswald:wght@200..700&family=Prata&family=Roboto:ital,wght@0,100..900;1,100..900&family=Unbounded:wght@200..900&family=VT323&display=swap");
 
 .sections.homeSectionsContainer {
-    display: flex;
-    flex-direction: column;
-    padding-bottom: 100px;
-    gap: 1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
 }
 
 /* Was: body[data-seasonal-background]:has(.homePage:not(.hide)) #reactRoot:has(...)
@@ -26,27 +25,28 @@ body[data-seasonal-background="true"].kefin-home-active #reactRoot:has(.libraryP
 }
 
 .snowverlay {
-    display: none;
+	display: none;
 }
 
 body[data-seasonal-animations="true"].kefin-home-active .snowverlay {
     display: block;
 }
 
-/* Scoped by ANCESTOR, not by a body marker class. This rule changes margins, so
-   it must apply on the very first paint. Both the original
+/* Scoped by ANCESTOR rather than by a body marker class. This rule changes
+   margins, so it has to apply on the very first paint, and both the original
    `body:has(.homePage:not(.hide))` and the `.kefin-home-active` marker that
-   replaced it are wrong here for different reasons: :has() was document-scope
+   briefly replaced it were wrong for that: :has() meant document-scope
    invalidation on a class Jellyfin flips every route change, and the marker is
-   applied by JS on a 100ms debounce — so titles rendered with their default
-   margins and then snapped to zero, visibly shifting the gap between a section
-   title and its card row. .homeSectionsContainer only exists on the home page,
-   so it gives the same scoping as static CSS with no timing dependency and no
-   :has() cost. */
-.homeSectionsContainer [data-section-id] h2.sectionTitle,
-.homeSectionsContainer [data-section-id] .sectionTitleTextButton>.material-icons {
-    margin-bottom: 0 !important;
-    margin-top: 0 !important;
+   set by JS on a 100ms debounce, so titles rendered with default margins and
+   then snapped to zero. Upstream arrived at the same answer independently and
+   scopes by .homePage, which is theirs and is used here; they also zero the
+   padding, which this did not. */
+.homePage [data-section-id] h2.sectionTitle,
+.homePage [data-section-id] .sectionTitleTextButton > .material-icons {
+	margin-bottom: 0 !important;
+	margin-top: 0 !important;
+	padding-bottom: 0 !important;
+	padding-top: 0 !important;
 }
 
 /* div#discovery-loading-indicator:not(.show)::before {
@@ -63,24 +63,44 @@ body[data-seasonal-animations="true"].kefin-home-active .snowverlay {
 } */
 
 #indexPage[data-discovery-ready] div#discovery-loading-indicator:not(.show)::before {
-    content: 'Discover More';
+	content: "Discover More";
+}
+
+#indexPage[data-discovery-exhausted] div#discovery-loading-indicator:not(.show)::before {
+	content: "No More Content to Discover";
 }
 
 div#discovery-loading-indicator:not(.show)::after {
-    content: '\E313';
-    font-family: 'Material Icons';
-    position: absolute;
-    top: calc(50% + 0.4em);
-    left: 50%;
-    transform: translateX(-50%) translateY(-50%);
-    font-size: 1.5em;
-    color: #ffffff;
-    visibility: visible;
-    opacity: 1;
+	content: "\E313";
+	font-family: "Material Icons";
+	position: absolute;
+	top: calc(50% + 0.4em);
+	left: 50%;
+	transform: translateX(-50%) translateY(-50%);
+	font-size: 1.5em;
+	color: #ffffff;
+	visibility: visible;
+	opacity: 1;
+}
+
+#indexPage[data-discovery-exhausted] div#discovery-loading-indicator:not(.show)::after {
+	content: "";
 }
 
 [data-loading-discovery="true"] div#discovery-loading-indicator {
-    display: flex;
+	display: flex;
+}
+
+/* Idle Discover More / exhausted prompt (chevron mode) */
+#indexPage[data-discovery-ready] #discovery-loading-indicator:not(.show) {
+	display: flex !important;
+	visibility: visible !important;
+	opacity: 1 !important;
+}
+
+#indexPage[data-discovery-ready] #discovery-loading-indicator:not(.show) .spinner {
+	visibility: hidden;
+	opacity: 0;
 }
 
 /* #indexPage[data-discovery-ready]:not([data-infinite-scroll='true']) div#discovery-loading-indicator {
@@ -88,66 +108,70 @@ div#discovery-loading-indicator:not(.show)::after {
 } */
 
 #indexPage:not([data-discovery-ready]) div#discovery-loading-indicator:not(.show)::after {
-    content: '';
+	content: "";
 }
 
 /* Ensure Editor's Choice Banner appears at top of home screen if enabled */
 .editorsChoiceContainer {
-    order: 1 !important;
+	order: 1 !important;
 }
 .spotlight-section {
-    width: calc(100% - (2 * max(env(safe-area-inset-left),3.3%)));
+	width: calc(100% - (2 * max(env(safe-area-inset-left), 3.3%)));
 }
 
-
 .load-more-discovery-btn {
-    display: block;
-    visibility: visible;
-    order: 99998 !important;
-    margin: 2em auto;
+	display: block;
+	visibility: visible;
+	order: 99998 !important;
+	margin: 2em auto;
 }
 
 .sections.loading-discovery .load-more-discovery-btn {
-    visibility: hidden !important;
+	visibility: hidden !important;
 }
 
 /* Discovery section loading indicator */
 .sections.loading-discovery .discovery-loading-indicator {
-    visibility: visible !important;
-    opacity: 1 !important;
+	visibility: visible !important;
+	opacity: 1 !important;
 }
 
-.discovery-loading-indicator, .load-more-discovery-btn {
-    height: 50px;
+.discovery-loading-indicator,
+.load-more-discovery-btn {
+	height: 50px;
 }
 
 .discovery-loading-indicator {
-    display: none;
-    opacity: 1;
-    flex-direction: column;
-    gap: 10px;
-    justify-content: center;
-    align-items: center;
-    border-radius: 8px;
-    font-size: 14px;
-    color: #666;
-    transition: opacity 0.3s ease;
-    position: relative;
-    justify-content: start;
+	display: none;
+	opacity: 1;
+	flex-direction: column;
+	gap: 10px;
+	justify-content: center;
+	align-items: center;
+	border-radius: 8px;
+	font-size: 14px;
+	color: #666;
+	transition: opacity 0.3s ease;
+	position: relative;
+	justify-content: start;
 }
 
 .discovery-loading-indicator .spinner {
-    width: 30px;
-    height: 30px;
-    border: 2px solid rgba(255,255,255,0.3);
-    border-top-color: var(--theme-primary-color, #3498db);
-    border-radius: 50%;
-    animation: discovery-spin 1s linear infinite;
+	width: 30px;
+	height: 30px;
+	border: 2px solid rgba(255, 255, 255, 0.3);
+	border-top-color: var(--theme-primary-color, #3498db);
+	border-radius: 50%;
+	animation: discovery-spin 1s linear infinite;
 }
 
 @keyframes discovery-spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+	0% {
+		transform: rotate(0deg);
+	}
+	100% {
+		transform: rotate(360deg);
+	}
 }
 
 /* Hide next up section if next up if KefinTweaks next up section is present */
@@ -166,154 +190,205 @@ div#discovery-loading-indicator:not(.show)::after {
     display: none;
 } */
 
-/* Hide scroll buttons on mobile and tablet layouts */
-@media (max-width: 768px) {
-    .emby-scrollbuttons {
-        display: none !important;
-    }
-}
-
 /* Hide scroll buttons on mobile using Jellyfin's layout classes */
 .layout-mobile .emby-scrollbuttons,
 .layout-tv .emby-scrollbuttons {
-    display: none !important;
+	display: none !important;
 }
 
 .load-more-discovery-btn {
-    display: block;
+	display: block;
 }
 
 .sections[data-loading-discovery="true"] .load-more-discovery-btn {
-    display: none !important;
+	display: none !important;
 }
 
 .sections[data-loading-discovery="true"] .discovery-loading-indicator {
-    display: flex !important;
-    opacity: 1 !important;
+	display: flex !important;
+	opacity: 1 !important;
 }
 
 .discovery-loading-indicator {
-    display: none;
-    opacity: 0;
-    flex-direction: column;
-    gap: 10px;
-    justify-content: center;
-    align-items: center;
-    padding: 20px;
-    border-radius: 8px;
-    font-size: 14px;
-    color: #666;
-    transition: opacity 0.3s ease;
-    position: relative;
-    justify-content: start; 
-    min-height: 200px;
+	display: none;
+	opacity: 0;
+	flex-direction: column;
+	gap: 10px;
+	justify-content: center;
+	align-items: center;
+	padding: 20px;
+	border-radius: 8px;
+	font-size: 14px;
+	color: #666;
+	transition: opacity 0.3s ease;
+	position: relative;
+	justify-content: start;
+	min-height: 200px;
 }
 
 .discovery-loading-indicator .spinner {
-    width: 30px;
-    height: 30px;
-    border: 2px solid rgba(255,255,255,0.3);
-    border-top-color: var(--theme-primary-color, #3498db);
-    border-radius: 50%;
-    animation: discovery-spin 1s linear infinite;
+	width: 30px;
+	height: 30px;
+	border: 2px solid rgba(255, 255, 255, 0.3);
+	border-top-color: var(--theme-primary-color, #3498db);
+	border-radius: 50%;
+	animation: discovery-spin 1s linear infinite;
 }
 
 @keyframes discovery-spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+	0% {
+		transform: rotate(0deg);
+	}
+	100% {
+		transform: rotate(360deg);
+	}
 }
 
 .homeSectionsContainer [data-section-id="popularTVNetworks"] .card .cardText {
-    visibility: hidden;
+	visibility: hidden;
 }
 
 /* .homeSectionsContainer:not(.kefinHomeSectionsContainer) {
     display: none !important;
 } */
 
-.pageTabContent:has(.kefinHomeSectionsContainer[data-kefin-home-screen]) .homeSectionsContainer:not([data-kefin-home-screen]) {
-    display: none !important;
+.homeSectionsContainer [data-section-id*="thematic-"] .card[data-type="Folder"] .cardScalable > a.cardImageContainer::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	bottom: 0;
+	right: 0;
+	background: linear-gradient(#000000, rgb(0 0 0 / 0%) 50%);
+	box-shadow: inset 0px 0px 20px 5px black;
 }
 
-.homeSectionsContainer .card[data-type="Folder"] .cardScalable > a.cardImageContainer::after {
-  content: attr(aria-label);
-  font-family: 'Oswald';
-  font-size: 1.5rem;
-  line-height: 1.8rem;
-  max-width: calc(100% - 2rem);
-  white-space: pre-wrap;
-  text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
-  background: none;
+.layout-mobile .homeSectionsContainer [data-section-id*="thematic-"] .card[data-type="Folder"] a.cardImageContainer::after {
+	top: 0.5rem;
+	left: 0.5rem;
+	font-size: 1.5rem !important;
+	line-height: 1.8rem !important;
 }
 
-.homeSectionsContainer .card[data-type="Folder"] .cardScalable > a.cardImageContainer::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  right: 0;
-  background: linear-gradient(#000000, rgb(0 0 0 / 0%) 50%);
-  box-shadow: inset 0px 0px 20px 5px black;
+/* .homeSectionsContainer [data-section-id*="thematic-"] .card[data-type="Folder"] .cardText {
+	display: none;
 }
 
-.layout-mobile .homeSectionsContainer .card[data-type="Folder"] a.cardImageContainer::after {
-    top: 0.5rem;
-    left: 0.5rem;
-    font-size: 1.5rem !important;
-    line-height: 1.8rem !important;
-}
-
-.homeSectionsContainer .card[data-type="Folder"] .cardText {
-    display: none;
-}
-
-[data-card-format="Square"] [data-type="Person"] .cardScalable, 
-[data-card-format="Square"] [data-type="Actor"] .cardScalable, 
-[data-card-format="Square"] [data-type="Writer"] .cardScalable, 
+[data-card-format="Square"] [data-type="Person"] .cardScalable,
+[data-card-format="Square"] [data-type="Actor"] .cardScalable,
+[data-card-format="Square"] [data-type="Writer"] .cardScalable,
 [data-card-format="Square"] [data-type="Director"] .cardScalable {
-    border-radius: 50% !important;
-    overflow: hidden;
+	border-radius: 50% !important;
+	overflow: hidden;
 }
 
 [data-card-format="Square"] [data-type="Actor"] .cardText {
-    display: flex;
-    justify-content: center;
-}
+	display: flex;
+	justify-content: center;
+} */
 
-.homeSectionsContainer .section0,
-.homeSectionsContainer .section1,
-.homeSectionsContainer .section2,
-.homeSectionsContainer .section3,
-.homeSectionsContainer .section4,
-.homeSectionsContainer .section5,
-.homeSectionsContainer .section6,
-.homeSectionsContainer .section7,
-.homeSectionsContainer .section8,
-.homeSectionsContainer .section9 {
-    display: none !important;
+.homeSectionsContainer:has([data-page], [data-section-id])
+	> :is(
+		.section0:not([data-page]),
+		.section1:not([data-page]),
+		.section2:not([data-page]),
+		.section3:not([data-page]),
+		.section4:not([data-page]),
+		.section5:not([data-page]),
+		.section6:not([data-page]),
+		.section7:not([data-page]),
+		.section8:not([data-page]),
+		.section9:not([data-page])
+	) {
+	display: none !important;
 }
 
 .homeSectionsContainer .card[data-type="TvChannel"] a.cardImageContainer:not([style])::after {
-    content: attr(aria-label);
-    font-size: 2rem;
-    text-wrap: auto;
-    text-align: center;
+	content: attr(aria-label);
+	font-size: 2rem;
+	text-wrap: auto;
+	text-align: center;
 }
 
 .emby-scroller-container[data-section-id="liveTv-channels"] .itemsContainer {
-    gap: 4rem
+	gap: 4rem;
 }
 .layout-mobile .emby-scroller-container[data-section-id="liveTv-channels"] .itemsContainer {
-    gap: 2rem;
+	gap: 2rem;
 }
 
 [data-section-id="upcoming"] .missingIndicator {
-    display: none;
+	display: none;
+}
+
+body:not(:has(#slides-container)) .homeSectionsContainer .section9 + .custom-scroller-container {
+	margin-top: 1em;
+}
+
+/* .pageTabContent:has(.kefinHomeSectionsContainer[data-kefin-home-screen]) .homeSectionsContainer:not([data-kefin-home-screen]) {
+    display: none !important;
+}
+
+body[data-seasonal-background="true"]:has(.homePage:not(.hide)) #reactRoot:has(.libraryPage:not(.hide) .pageTabContent.is-active[data-index="0"])>.backgroundContainer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0%;
+    background: linear-gradient(rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.85)), var(--seasonal-background-image);
+    background-position: center;
+    background-size: cover;
+}
+
+body[data-seasonal-animations="true"]:has(.homePage:not(.hide)) .snowverlay {
+    display: block;
+} */
+
+.homePage[data-discovery-ready] div#discovery-loading-indicator:not(.show) {
+	min-height: 50px;
+}
+
+@keyframes fadeInDelayed {
+	0%,
+	99% {
+		opacity: 0;
+		visibility: hidden;
+	}
+	100% {
+		opacity: 1;
+		visibility: visible;
+	}
+}
+
+.homeSectionsContainer:not(:has([data-page]), :has([data-section-id]))::after {
+	content: "Customize your Home Screen from your User Settings > Home in the top right corner.";
+	text-align: center;
+	margin: 3em auto;
+	display: block;
+	animation: fadeInDelayed 0.1s linear 1s forwards;
+	opacity: 0;
+	visibility: hidden;
+}
+
+[data-section-id="browse-by-studio"] .card {
+	width: 8vw !important;
+}
+
+[data-section-id="browse-by-studio"] .card,
+[data-section-id="browse-by-studio"] .card .cardScalable,
+[data-section-id="browse-by-studio"] .card .cardImageContainer,
+[data-section-id="browse-by-studio"] .card .cardPadder {
+	border-radius: 0px !important;
+}
+
+/* Hide scroll buttons on mobile and tablet layouts */
+@media (max-width: 768px) {
+	.emby-scrollbuttons {
+		display: none !important;
+	}
+
+	[data-section-id="browse-by-studio"] .card {
+		width: 30vw !important;
+	}
 }
