@@ -58,6 +58,11 @@
         discoveryEnabled: true,
         discoveryBufferPromise: null,
         discoveryBuffer: [],
+        // Whether the previous discovery group ended on a spotlight, so the next
+        // group knows not to open with one. Without this, separation works inside
+        // a group and breaks at every infinite-scroll boundary, which is exactly
+        // where two spotlights end up back to back.
+        lastDiscoveryEndedWithSpotlight: false,
         discoverySectionOrder: 100000000,
         discoverySectionsRemain: true,
         ensuringDiscoveryBuffer: false,
@@ -1519,6 +1524,57 @@
     /**
      * Generates a balanced group of discovery sections
      */
+    function isSpotlightSection(section) {
+        // Matches sectionHelper: 'Random' is treated as a spotlight there too, with no
+        // roll anywhere, so a Random section is a spotlight every time.
+        return section?.renderMode === 'Spotlight'
+            || section?.renderMode === 'Random'
+            || section?.spotlight === true;
+    }
+
+    /**
+     * Stop two spotlights rendering back to back.
+     *
+     * Runs after pairing, so a spotlight followed by its own matching row is left
+     * alone -- that row is not a spotlight and already separates it from the next.
+     * Only a spotlight sitting directly after another spotlight is moved, and it is
+     * moved by pulling an ordinary row up in front of it rather than by reordering
+     * the spotlights, which would undo the pairing.
+     *
+     * The filler is chosen as a row whose own predecessor is not a spotlight, so a
+     * row acting as a pair partner is not stolen. If no such row exists, any row
+     * will do; if there is no row at all, the group is left as it is rather than
+     * dropping a section.
+     *
+     * @param {Array} sections - Ordered sections for this group, mutated in place
+     * @param {boolean} previousEndedWithSpotlight - Tail of the previous group
+     * @returns {Array} The same array
+     */
+    function separateSpotlights(sections, previousEndedWithSpotlight) {
+        let prevIsSpotlight = previousEndedWithSpotlight === true;
+        for (let i = 0; i < sections.length; i++) {
+            if (!isSpotlightSection(sections[i]) || !prevIsSpotlight) {
+                prevIsSpotlight = isSpotlightSection(sections[i]);
+                continue;
+            }
+            let fillerIndex = -1;
+            for (let j = i + 1; j < sections.length; j++) {
+                if (isSpotlightSection(sections[j])) continue;
+                if (isSpotlightSection(sections[j - 1])) continue;   // a pair partner
+                fillerIndex = j;
+                break;
+            }
+            if (fillerIndex === -1) {
+                fillerIndex = sections.findIndex((s, j) => j > i && !isSpotlightSection(s));
+            }
+            if (fillerIndex === -1) break;                            // nothing left to separate with
+            const [filler] = sections.splice(fillerIndex, 1);
+            sections.splice(i, 0, filler);
+            prevIsSpotlight = false;                                  // the row now sits at i
+        }
+        return sections;
+    }
+
     async function generateDiscoveryGroup() {
 /*         if (state.firstDiscoveryBuffer) {
             const firstBufferConfig = state.firstDiscoveryBuffer;
@@ -1561,42 +1617,33 @@
         }
 
         if (getDiscoverySettings().renderSpotlightAboveMatching) {
-            const spotlightGenreSection = selectedConfigs.find((section) => {
-                const id = section.id.split('-')[0];
-                return id === 'spotlightGenre' || id === 'spotlightGenreSeries';
-            });
-            const spotlightNetworkSection = selectedConfigs.find(section => section.id.split('-')[0] === 'spotlightNetwork');
+            // Pair EVERY spotlight with its matching row, not just the first one found.
+            // This used a single .find() across both genre spotlights, so in a group
+            // holding the movie and the series spotlight only one was ever paired and
+            // the other row stayed wherever it happened to fall -- which is why the two
+            // behaved differently, one with its row below and one with it above.
+            //
+            // The row always lands directly AFTER its spotlight, which is what the
+            // setting means: the spotlight renders above the row it matches.
+            const SPOTLIGHT_PAIRS = [
+                ['spotlightGenre', 'genreMovies'],
+                ['spotlightGenreSeries', 'genreSeries'],
+                ['spotlightNetwork', 'studioShows']
+            ];
+            const baseId = (section) => section.id.split('-')[0];
 
-            if (spotlightGenreSection) {
-                const spotlightBaseId = spotlightGenreSection.id.split('-')[0];
-                const genreBaseId = spotlightBaseId === 'spotlightGenreSeries' ? 'genreSeries' : 'genreMovies';
-                const genreSection = selectedConfigs.find(section => section.id.split('-')[0] === genreBaseId);
-                if (genreSection) {
-                    const genreSectionIndex = selectedConfigs.indexOf(genreSection);
-                    const spotlightGenreSectionIndex = selectedConfigs.indexOf(spotlightGenreSection);
-                    
-                    if (genreSectionIndex < spotlightGenreSectionIndex) {
-                        selectedConfigs.splice(genreSectionIndex, 1);
-                        selectedConfigs.splice(spotlightGenreSectionIndex, 0, genreSection);
-                    } else if (genreSectionIndex > spotlightGenreSectionIndex) {
-                        selectedConfigs.splice(genreSectionIndex, 1);
-                        selectedConfigs.splice(spotlightGenreSectionIndex + 1, 0, genreSection);
-                    }
-                }
-            }
-            if (spotlightNetworkSection) {
-                const studioSection = selectedConfigs.find(section => section.id.split('-')[0] === 'studioShows');
-                if (studioSection) {
-                    const studioSectionIndex = selectedConfigs.indexOf(studioSection);
-                    const spotlightNetworkSectionIndex = selectedConfigs.indexOf(spotlightNetworkSection);
-                    if (studioSectionIndex < spotlightNetworkSectionIndex) {
-                        selectedConfigs.splice(studioSectionIndex, 1);
-                        selectedConfigs.splice(spotlightNetworkSectionIndex, 0, studioSection);
-                    } else if (studioSectionIndex > spotlightNetworkSectionIndex) {
-                        selectedConfigs.splice(studioSectionIndex, 1);
-                        selectedConfigs.splice(spotlightNetworkSectionIndex + 1, 0, studioSection);
-                    }
-                }
+            for (const [spotlightId, rowId] of SPOTLIGHT_PAIRS) {
+                const spotlight = selectedConfigs.find((section) => baseId(section) === spotlightId);
+                if (!spotlight) continue;
+                const row = selectedConfigs.find((section) => baseId(section) === rowId);
+                if (!row) continue;
+
+                const rowIndex = selectedConfigs.indexOf(row);
+                if (rowIndex === selectedConfigs.indexOf(spotlight) + 1) continue;   // already paired
+
+                selectedConfigs.splice(rowIndex, 1);
+                // Re-read the spotlight index: removing the row may have shifted it.
+                selectedConfigs.splice(selectedConfigs.indexOf(spotlight) + 1, 0, row);
             }
         }
 
@@ -1637,6 +1684,11 @@
         });
 
         //localCache.set('discoveryBuffer', selectedConfigs);
+
+        separateSpotlights(selectedConfigs, state.lastDiscoveryEndedWithSpotlight);
+        state.lastDiscoveryEndedWithSpotlight = selectedConfigs.length
+            ? isSpotlightSection(selectedConfigs[selectedConfigs.length - 1])
+            : state.lastDiscoveryEndedWithSpotlight;
 
         return selectedConfigs;
     }

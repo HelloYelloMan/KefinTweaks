@@ -2370,10 +2370,15 @@
         if (!presetEl) return null;
         const presetKey = presetEl.value || 'DEFAULT';
         if (presetKey === 'CUSTOM') {
-            const raw = parseFloat(root.querySelector('#cache-DEFAULT_TTL-custom-value')?.value || '');
+            const rawText = String(root.querySelector('#cache-DEFAULT_TTL-custom-value')?.value ?? '').trim();
+            const raw = parseFloat(rawText);
             const unit = root.querySelector('#cache-DEFAULT_TTL-custom-unit')?.value || 'minutes';
             const unitMs = TTL_UNIT_OPTIONS.find((u) => u.value === unit)?.ms || 60000;
-            if (!Number.isFinite(raw) || raw < 0) return 0;
+            // Empty or half-typed means undecided, not zero. Returning null leaves the
+            // stored TTL alone; returning 0 used to set a zero TTL on every keystroke
+            // that emptied the box, which disables caching for that entry.
+            if (rawText === '') return null;
+            if (!Number.isFinite(raw) || raw < 0) return null;
             return Math.round(raw * unitMs);
         }
         const preset = getDefaultTtlPresets().find((p) => p.key === presetKey);
@@ -2428,17 +2433,43 @@
         const root = dialog?.querySelector('#global-settings-content') || dialog;
         if (!root) return;
 
+        // Numeric fields are read through these rather than with `?.value || '<default>'`.
+        // This panel saves on every `input` event, and an empty box is falsy, so the old
+        // form substituted the field's default on any keystroke that emptied it. Since
+        // clearing the box is how you type a new number, every one of these reverted to
+        // its default as you typed. An empty or half-typed field means "not decided
+        // yet", so it returns undefined and the caller leaves the stored value alone.
+        const numField = (selector, parse) => {
+            const el = root.querySelector(selector);
+            if (!el) return undefined;
+            const raw = String(el.value ?? '').trim();
+            if (raw === '') return undefined;
+            const parsed = parse(raw);
+            return Number.isFinite(parsed) ? parsed : undefined;
+        };
+        const intField = (selector) => numField(selector, (v) => parseInt(v, 10));
+        const floatField = (selector) => numField(selector, parseFloat);
+        const minsField = (selector) => {
+            const n = intField(selector);
+            return n === undefined ? undefined : minutesToMs(n);
+        };
+        // Drop undecided keys so spreading this cannot clobber a stored value.
+        const decided = (obj) => Object.fromEntries(
+            Object.entries(obj).filter(([, v]) => v !== undefined));
+
         if (root.querySelector('#discovery-enabled')) {
             currentConfig.DISCOVERY_SETTINGS = {
                 ...(currentConfig.DISCOVERY_SETTINGS || {}),
                 enabled: root.querySelector('#discovery-enabled')?.checked !== false,
                 infiniteScroll: root.querySelector('#discovery-infiniteScroll')?.checked !== false,
-                minGenreMovieCount: parseInt(root.querySelector('#discovery-minGenreMovieCount')?.value || '50', 10),
-                minGenreSeriesCount: parseInt(root.querySelector('#discovery-minGenreSeriesCount')?.value || '10', 10),
-                spotlightDiscoveryChance: parseFloat(root.querySelector('#discovery-spotlightDiscoveryChance')?.value || '0.5'),
                 renderSpotlightAboveMatching: root.querySelector('#discovery-renderSpotlightAboveMatching')?.checked === true,
                 randomizeOrder: root.querySelector('#discovery-randomizeOrder')?.checked === true,
-                fadeInSections: root.querySelector('#discovery-fadeInSections')?.checked === true
+                fadeInSections: root.querySelector('#discovery-fadeInSections')?.checked === true,
+                ...decided({
+                    minGenreMovieCount: intField('#discovery-minGenreMovieCount'),
+                    minGenreSeriesCount: intField('#discovery-minGenreSeriesCount'),
+                    spotlightDiscoveryChance: floatField('#discovery-spotlightDiscoveryChance')
+                })
             };
         }
 
@@ -2465,12 +2496,14 @@
                 fadeInSections: root.querySelector('#home-fadeInSections')?.checked === true,
                 ensureThumbsForPopularTVNetworks: root.querySelector('#home-ensureThumbsForPopularTVNetworks')?.checked === true,
                 showStaleDataBeforeRefresh: root.querySelector('#home-showStaleDataBeforeRefresh')?.checked === true,
-                minPeopleAppearancesTotal: parseInt(root.querySelector('#home-minPeopleAppearancesTotal')?.value || '10', 10),
-                minPeopleAppearancesMovies: parseInt(root.querySelector('#home-minPeopleAppearancesMovies')?.value || '10', 10),
-                minPeopleAppearancesSeries: parseInt(root.querySelector('#home-minPeopleAppearancesSeries')?.value || '10', 10),
-                minPeopleAppearancesEpisodes: parseInt(root.querySelector('#home-minPeopleAppearancesEpisodes')?.value || '10', 10),
-                maxPeopleCount: parseInt(root.querySelector('#home-maxPeopleCount')?.value || '100', 10),
-                loadPeopleEpisodeData: root.querySelector('#home-loadPeopleEpisodeData')?.checked === true
+                loadPeopleEpisodeData: root.querySelector('#home-loadPeopleEpisodeData')?.checked === true,
+                ...decided({
+                    minPeopleAppearancesTotal: intField('#home-minPeopleAppearancesTotal'),
+                    minPeopleAppearancesMovies: intField('#home-minPeopleAppearancesMovies'),
+                    minPeopleAppearancesSeries: intField('#home-minPeopleAppearancesSeries'),
+                    minPeopleAppearancesEpisodes: intField('#home-minPeopleAppearancesEpisodes'),
+                    maxPeopleCount: intField('#home-maxPeopleCount')
+                })
             };
             syncEnsureThumbsOnPopularStudios(currentConfig);
             currentConfig.USER_HOME_SCREEN_SETTINGS = {
@@ -2497,12 +2530,14 @@
             currentConfig.CACHE = {
                 ...(currentConfig.CACHE || {}),
                 DEFAULT_TTL: defaultTtl != null ? defaultTtl : (currentConfig.CACHE?.DEFAULT_TTL ?? 1800000),
-                VERY_SHORT_TTL: minutesToMs(parseInt(root.querySelector('#cache-VERY_SHORT_TTL')?.value || '1', 10)),
-                SHORT_TTL: minutesToMs(parseInt(root.querySelector('#cache-SHORT_TTL')?.value || '5', 10)),
-                LONG_TTL: minutesToMs(parseInt(root.querySelector('#cache-LONG_TTL')?.value || '1440', 10)),
-                STATIC_TTL: minutesToMs(parseInt(root.querySelector('#cache-STATIC_TTL')?.value || '10080', 10)),
-                DISCOVERY_TTL: minutesToMs(parseInt(root.querySelector('#cache-DISCOVERY_TTL')?.value || '60', 10)),
-                FORCE_REFRESH_TTL: 0
+                FORCE_REFRESH_TTL: 0,
+                ...decided({
+                    VERY_SHORT_TTL: minsField('#cache-VERY_SHORT_TTL'),
+                    SHORT_TTL: minsField('#cache-SHORT_TTL'),
+                    LONG_TTL: minsField('#cache-LONG_TTL'),
+                    STATIC_TTL: minsField('#cache-STATIC_TTL'),
+                    DISCOVERY_TTL: minsField('#cache-DISCOVERY_TTL')
+                })
             };
         }
 
