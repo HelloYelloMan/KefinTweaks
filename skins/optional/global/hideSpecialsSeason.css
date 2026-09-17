@@ -29,7 +29,22 @@
  *
  * Scoped to a detail page, so a Season card appearing anywhere else is untouched.
  * Uses only Jellyfin's own attributes, so it applies under any skin or none.
+ *
+ * LIMITED TO ONE LIBRARY. Nothing on a detail page says which library the item
+ * belongs to -- not the page classes, not a dataset flag, not a parent id -- so
+ * this cannot be expressed in CSS on its own. body.kefin-library-anime is set by
+ * the Library Markers feature, which reads the item's ancestors and publishes the
+ * library it lives in. That feature has to be on, or nothing below applies.
+ *
+ * To target a different library, change `anime` to the library's name lowercased
+ * with non-alphanumerics turned into dashes, or use the id form the same feature
+ * publishes alongside it -- kefin-library-id-<id> -- which survives a rename.
+ * To apply everywhere again, drop the body selector.
+ *
+ * The class arrives after the page renders, because it costs a request. Hiding
+ * something tolerates that; the card is visible for a moment first. A rule that
+ * moved layout would not be safe here.
  */
-#itemDetailPage .card[data-type="Season"][data-prefix="SPE"] {
+body.kefin-library-anime #itemDetailPage .card[data-type="Season"][data-prefix="SPE"] {
     display: none;
 }
