@@ -1,0 +1,35 @@
+/* Hide the Specials card from a series' season row (KefinTweaks global option)
+ *
+ * For a library whose specials are already presented some other way -- the
+ * per-work collections this fork generates, for instance -- the Specials card in
+ * the season row is a second, less useful route to the same episodes, and it sits
+ * first in the row because it sorts before season one.
+ *
+ * HOW THE CARD IS IDENTIFIED, and why there is no better way. jellyfin-web puts
+ * no season number in the markup. A season card carries data-index (its position
+ * in the row, not its season number), data-id, data-type and data-prefix, and
+ * that is all. data-prefix is the first three characters of
+ * `item.SortName || item.Name`, upper-cased.
+ *
+ * The seasons query does not ask for SortName, so the name is what gets used, and
+ * a specials season is named "Specials" by default -- giving SPE. Measured across
+ * 1081 seasons here: all 146 season-zero items produce SPE, and no other season
+ * does, so there are no false positives or negatives.
+ *
+ * DO NOT also match "000", which is what the prefix becomes if SortName is ever
+ * sent. It looks like a safe belt-and-braces addition and is the opposite: 860 of
+ * the ordinary seasons here sort as "0000" too, so that rule would hide nearly
+ * every season in the library.
+ *
+ * Which means this depends on two things: the season being named "Specials", and
+ * the seasons query continuing to omit SortName. Both can change -- a library with
+ * a custom "Season zero display name", or a non-English server, will not match.
+ * The failure is the safe one: the rule stops matching and the card comes back,
+ * rather than hiding something it should not.
+ *
+ * Scoped to a detail page, so a Season card appearing anywhere else is untouched.
+ * Uses only Jellyfin's own attributes, so it applies under any skin or none.
+ */
+#itemDetailPage .card[data-type="Season"][data-prefix="SPE"] {
+    display: none;
+}

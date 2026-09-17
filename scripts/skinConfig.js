@@ -160,6 +160,14 @@
                 enabled: false
             },
             {
+                // Matches the card by its data-prefix, the only thing in the markup
+                // that distinguishes a specials season. See the stylesheet header for
+                // what that depends on and why it fails safe.
+                name: 'Hide Specials From Season Row',
+                url: `${getKefinTweaksRoot()}skins/optional/global/hideSpecialsSeason.css`,
+                enabled: false
+            },
+            {
                 name: '16:9 Episode Thumbnails on Season Page',
                 url: `${getKefinTweaksRoot()}skins/optional/global/episodeThumbnailSize.css`,
                 enabled: false
