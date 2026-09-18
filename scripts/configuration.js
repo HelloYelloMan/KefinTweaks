@@ -1209,8 +1209,16 @@
             { key: 'userManager', label: 'User Manager', desc: 'Create reusable user policy templates and apply them when adding users or bulk-editing existing accounts. Import/export comes later.' }
         ];
 
+        // Filter before building the Map. A registry entry that is null -- or a hole,
+        // which an accidental double comma in SCRIPT_DEFINITIONS creates and
+        // JSON.stringify then bakes into the stored config as null -- would otherwise
+        // throw here and take the entire configuration modal down with it, leaving no
+        // way in to fix the setting that caused it. Skipping the bad entry costs one
+        // feature its version gate; throwing costs the whole menu.
         const defsByName = new Map(
-            (window.KefinTweaks?.getScripts?.() || []).map((def) => [def.name, def])
+            (window.KefinTweaks?.getScripts?.() || [])
+                .filter((def) => def && typeof def.name === 'string')
+                .map((def) => [def.name, def])
         );
         // Prefer cache warmed by await getJellyfinMajorVersion() before opening the modal
         const major = window.KefinTweaks?._jellyfinMajorVersion ?? null;

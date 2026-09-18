@@ -1291,10 +1291,45 @@
     }
 
 
+    /**
+     * Append a cache token derived from the file's own validator.
+     *
+     * The web root serves these files with an ETag and a Last-Modified but no
+     * Cache-Control, so a browser may reuse one for a long time without ever
+     * revalidating. That is how a stale kefinTweaks-loader.js kept a fixed bug
+     * alive: disk, served copy and baked snapshot were all correct while the
+     * browser went on running the version from before the fix.
+     *
+     * One HEAD with cache: 'no-cache' forces a revalidation and hands back the
+     * current validator. Using the validator as the token beats a timestamp --
+     * the URL changes only when the file does, so caching still works.
+     *
+     * Exposed on window so the other loaders in this project can share it, and
+     * falls back to the bare URL on any failure, which is the old behaviour.
+     *
+     * @param {string} url
+     * @returns {Promise<string>} url, with ?v=<validator> when one is available
+     */
+    async function withCacheToken(url) {
+        try {
+            const response = await fetch(url, { method: 'HEAD', cache: 'no-cache' });
+            if (!response.ok) return url;
+            const validator = response.headers.get('etag')
+                || response.headers.get('last-modified');
+            if (!validator) return url;
+            const token = validator.replace(/[^A-Za-z0-9]/g, '').slice(-24);
+            if (!token) return url;
+            return url + (url.includes('?') ? '&' : '?') + 'v=' + token;
+        } catch (e) {
+            return url;
+        }
+    }
+    window.KefinTweaksCacheToken = withCacheToken;
+
     async function ensureKefinTweaksLoader(scriptRoot) {
         if (window.KefinTweaksLoader) return window.KefinTweaksLoader;
         const base = scriptRoot.endsWith('/') ? scriptRoot : scriptRoot + '/';
-        const url = base + 'kefinTweaks-loader.js';
+        const url = await withCacheToken(base + 'kefinTweaks-loader.js');
         await new Promise((resolve, reject) => {
             if (document.querySelector('script[src="' + url + '"]')) {
                 const start = Date.now();

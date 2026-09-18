@@ -2219,8 +2219,11 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
                     : resolvedOrSymbolic + '/';
                 if (root && root !== '/') {
                     if (!window.KefinTweaksLoader) {
+                        // Same cache token the injector uses, so a save never pulls a
+                        // stale registry back in; bare URL when the helper is absent.
+                        const addToken = window.KefinTweaksCacheToken || (async (u) => u);
+                        const url = await addToken(`${root}scripts/kefinTweaks-loader.js`);
                         await new Promise((resolve, reject) => {
-                            const url = `${root}scripts/kefinTweaks-loader.js`;
                             const existing = document.querySelector(`script[src="${url}"]`);
                             if (existing && window.KefinTweaksLoader) {
                                 resolve();

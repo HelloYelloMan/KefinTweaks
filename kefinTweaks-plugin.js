@@ -306,10 +306,46 @@ window.KefinTweaksConfig = ${JSON.stringify(config, null, 2)};`;
         }
     }
 
-    function loadKefinTweaksLoaderFromRoot(root) {
+    /**
+     * Append a cache token derived from the file's own validator, so a changed
+     * script is always picked up while an unchanged one still comes from cache.
+     *
+     * These files are served from the Jellyfin web root with an ETag and a
+     * Last-Modified but NO Cache-Control, which lets a browser reuse them without
+     * revalidating for as long as its heuristic allows. A stale
+     * scripts/kefinTweaks-loader.js is how a fixed bug kept reappearing: the file
+     * on disk, the copy served, and the baked snapshot were all correct while the
+     * browser went on running a version from before the fix.
+     *
+     * A HEAD with cache: 'no-cache' forces one revalidation and gives back the
+     * current validator. Using that as the token is better than a timestamp: the
+     * URL only changes when the file does, so caching still works.
+     *
+     * Falls back to the bare URL on any failure -- a missing token is the old
+     * behaviour, not a broken load.
+     *
+     * @param {string} url
+     * @returns {Promise<string>} url, with ?v=<validator> when one is available
+     */
+    async function withCacheToken(url) {
+        try {
+            const response = await fetch(url, { method: 'HEAD', cache: 'no-cache' });
+            if (!response.ok) return url;
+            const validator = response.headers.get('etag')
+                || response.headers.get('last-modified');
+            if (!validator) return url;
+            const token = validator.replace(/[^A-Za-z0-9]/g, '').slice(-24);
+            if (!token) return url;
+            return url + (url.includes('?') ? '&' : '?') + 'v=' + token;
+        } catch (e) {
+            return url;
+        }
+    }
+
+    async function loadKefinTweaksLoaderFromRoot(root) {
         const normalized = root.endsWith('/') ? root : root + '/';
-        const url = `${normalized}scripts/kefinTweaks-loader.js`;
-        if (window.KefinTweaksLoader) return Promise.resolve(window.KefinTweaksLoader);
+        if (window.KefinTweaksLoader) return window.KefinTweaksLoader;
+        const url = await withCacheToken(`${normalized}scripts/kefinTweaks-loader.js`);
         return new Promise((resolve, reject) => {
             const existing = document.querySelector(`script[src="${url}"]`);
             if (existing) {
@@ -1839,7 +1875,7 @@ window.KefinTweaksConfig = ${JSON.stringify(config, null, 2)};`;
         // Ensure root ends with /
         const rootUrl = root.endsWith('/') ? root : root + '/';
         const resolvedRoot = await resolveRootVersion(rootUrl);
-        const injectorUrl = `${resolvedRoot}injector.js`;
+        const injectorUrl = await withCacheToken(`${resolvedRoot}injector.js`);
 
         if (resolvedRoot !== rootUrl) {
             console.log('[KefinTweaks Installer] Resolved root from', rootUrl, 'to', resolvedRoot);
