@@ -241,10 +241,19 @@
      * @returns {string}
      */
     function getAuthHeaderForToken(token) {
-        const client = typeof ApiClient.applicationName === 'function' ? ApiClient.applicationName() : 'Jellyfin Web';
-        const device = typeof ApiClient.deviceName === 'function' ? ApiClient.deviceName() : (navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Browser');
-        const deviceId = typeof ApiClient.deviceId === 'function' ? ApiClient.deviceId() : '';
-        const version = ApiClient._appVersion || ApiClient._serverVersion || '';
+        // ApiClient may not exist yet. Its caller guards with
+        // `typeof ApiClient !== 'undefined'` and then calls this, which used to
+        // dereference it directly -- and `typeof ApiClient.applicationName` does NOT
+        // protect against that, because the guard only covers the property, not the
+        // undeclared identifier. So this threw ReferenceError on a fast load, from
+        // watchlist.js at startup: it waits for KefinTweaksUtils before adding its
+        // menu link, but nothing waits for ApiClient. Resolving it once here fixes
+        // every caller rather than each of them separately.
+        const api = typeof ApiClient !== 'undefined' ? ApiClient : null;
+        const client = typeof api?.applicationName === 'function' ? api.applicationName() : 'Jellyfin Web';
+        const device = typeof api?.deviceName === 'function' ? api.deviceName() : (navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Browser');
+        const deviceId = typeof api?.deviceId === 'function' ? api.deviceId() : '';
+        const version = api?._appVersion || api?._serverVersion || '';
         const parts = [
             `Client="${encodeURIComponent(client)}"`,
             `Device="${encodeURIComponent(device)}"`,

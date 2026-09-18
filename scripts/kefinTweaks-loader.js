@@ -556,7 +556,7 @@
             css: null,
             dependencies: ['utils', 'modal'],
             description: 'Adds sorting functionality to collection pages'
-        },,
+        },
 
         // ================================================================
         // FORK-ONLY FEATURES -- matching the block in the defaults above
