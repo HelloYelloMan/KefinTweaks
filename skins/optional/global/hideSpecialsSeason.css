@@ -28,8 +28,28 @@
  * rather than hiding something it should not.
  *
  * Scoped to a detail page, so a Season card appearing anywhere else is untouched.
- * Uses only Jellyfin's own attributes, so it applies under any skin or none.
+ *
+ * AND ONLY WHERE SOMETHING REPLACES IT. #animePipelineReleases is the row the
+ * AnimePipeline plugin draws for a series whose specials it has split into
+ * per-work collections. Keying on it says the useful thing literally: hide the
+ * Specials card where the virtual specials row has taken over, and leave it alone
+ * everywhere else. That is a better condition than "this is the anime library",
+ * which is what it looks like from outside -- a series with no pipeline releases
+ * keeps its card even inside that library, and every card returns on its own if
+ * the plugin is disabled. It also needs nothing from the page about which library
+ * it belongs to, which a detail page does not say.
+ *
+ * TWO THINGS TO KNOW. The card is visible until the row arrives, roughly 150ms,
+ * and the plugin then removes and re-adds its section about 900ms in, during
+ * which the selector stops matching and the card blinks back. That redraw is the
+ * same one that turns a click into a card selection; fixing it in the plugin
+ * fixes both. And this depends on the plugin's element id, so renaming it stops
+ * the option working -- safely, by showing the card again.
+ *
+ * On the registered :has(): the subject is #itemDetailPage, already a :has()
+ * subject several times over in ElegantFin, and the argument is an id inserted
+ * once per navigation rather than a class that churns with every card.
  */
-#itemDetailPage .card[data-type="Season"][data-prefix="SPE"] {
+#itemDetailPage:has(#animePipelineReleases) .card[data-type="Season"][data-prefix="SPE"] {
     display: none;
 }
