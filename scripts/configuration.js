@@ -1197,16 +1197,25 @@
             { key: 'seriesInfo', label: 'Series Info+', desc: 'Adds Season and Episode counts to the Series and Season pages. Also adds an "Ends at" time similar to the Episode page.' },
             { key: 'versionPreferences', label: 'Item Version Preferences', desc: 'Manage how different versions and editions of your items are displayed. Reorders and sanitizes the media source dropdown on item details pages by prioritized version and edition terms.' },
             { key: 'collections', label: 'Collection Sorting', desc: 'Collection sorting functionality on the Collection page' },
-            { key: 'virtualSpecials', label: 'Virtual Specials Tweaks', desc: 'Three fixes to collection pages. Borrows a backdrop and logo for collections that have neither, preferring the series that shares the collection\'s AniDB id over the show whose Specials folder it sits in. Fills in the Studios row, which Jellyfin builds but never populates for a collection. Removes the "Special - " that Jellyfin prepends to the title of every episode in a Specials season, on collection pages only.' },
             { key: 'subtitleSearch', label: 'Subtitle Search', desc: 'Search and download subtitles directly from the video OSD' },
             { key: 'backdropLeakFix', label: 'Backdrop Leak Fix', desc: 'Fixes memory leaks from backdrop images when tab isn\'t focused' },
             { key: 'dashboardButtonFix', label: 'Dashboard Button Fix', desc: 'Improved back button behavior on dashboard - prevents navigating back to the new tab browser page' },
             { key: 'thumbnailScrubber', label: 'Thumbnail Scrubber', desc: 'Shows trickplay thumbnail preview when hovering in the bottom 20px of a video card similar to Youtube' },
-            { key: 'themeMediaCastFix', label: 'Theme Media', desc: 'Plays theme songs and videos in the web client, including while casting to an mpv-shim or other remote player. Replaces the native Play Theme Music/Videos toggles and adds subtle on-video controls.' },
-            { key: 'pauseScreen', label: 'Pause Screen', desc: 'Shows a rich overlay with the media\'s logo, plot, details, disc/clear art and playback progress when playback stays paused for a few seconds. Works with the HTML5 web player and external players (mpv-shim etc.).' },
-            { key: 'osdLogo', label: 'Player Logo', desc: 'Shows the media\'s logo (or ClearArt) on the video player OSD while the playback controls are visible, with optional transparency trimming and OSD drop shadows.' },
             { key: 'watchTogether', label: 'Watch Together', desc: 'Link additional Jellyfin accounts to a Watch Together group, then sync watched / in-progress playstate to selected accounts on this device.' },
-            { key: 'userManager', label: 'User Manager', desc: 'Create reusable user policy templates and apply them when adding users or bulk-editing existing accounts. Import/export comes later.' }
+            { key: 'userManager', label: 'User Manager', desc: 'Create reusable user policy templates and apply them when adding users or bulk-editing existing accounts. Import/export comes later.' },
+            // ================================================================
+            // FORK-ONLY FEATURES -- matching the blocks in injector.js,
+            // scripts/kefinTweaks-loader.js and scripts/skinConfig.js.
+            //
+            // The array renders in order, so keeping ours last puts them at the
+            // bottom of the feature list as well as at the bottom of this file,
+            // and an upstream merge lands its additions above the line instead
+            // of among ours.
+            // ================================================================
+            { key: 'osdLogo', label: 'Player Logo', desc: 'Shows the media\'s logo (or ClearArt) on the video player OSD while the playback controls are visible, with optional transparency trimming and OSD drop shadows.' },
+            { key: 'pauseScreen', label: 'Pause Screen', desc: 'Shows a rich overlay with the media\'s logo, plot, details, disc/clear art and playback progress when playback stays paused for a few seconds. Works with the HTML5 web player and external players (mpv-shim etc.).' },
+            { key: 'themeMediaCastFix', label: 'Theme Media', desc: 'Plays theme songs and videos in the web client, including while casting to an mpv-shim or other remote player. Replaces the native Play Theme Music/Videos toggles and adds subtle on-video controls.' },
+            { key: 'virtualSpecials', label: 'Virtual Specials Tweaks', desc: 'Three fixes to collection pages. Borrows a backdrop and logo for collections that have neither, preferring the series that shares the collection\'s AniDB id over the show whose Specials folder it sits in. Fills in the Studios row, which Jellyfin builds but never populates for a collection. Removes the "Special - " that Jellyfin prepends to the title of every episode in a Specials season, on collection pages only.' }
         ];
 
         // Filter before building the Map. A registry entry that is null -- or a hole,
