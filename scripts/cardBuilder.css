@@ -1309,6 +1309,10 @@
 	display: none !important;
 }
 
+.layout-mobile .sectionTitle.sectionCaption {
+	font-size: 0.9em !important;
+}
+
 .sectionTitle.sectionCaption {
 	font-size: 0.9em !important;
 	text-align: left;
@@ -2050,17 +2054,22 @@ body.kefin-borderless-spotlight .homeSectionsContainer > *:not(.spotlight-sectio
 	margin-bottom: 1rem;
 }
 
-.emby-scroller-container[data-card-format="Logo"] .cardScalable,
-.emby-scroller-container[data-card-format="Logo"] .cardPadder,
-.emby-scroller-container[data-card-format="Clear Art"] .cardScalable,
-.emby-scroller-container[data-card-format="Clear Art"] .cardPadder,
-.emby-scroller-container[data-card-format="Disc"] .cardScalable,
-.emby-scroller-container[data-card-format="Disc"] .cardPadder,
-.emby-scroller-container[data-section-id="liveTv-channels"] .cardScalable,
-.emby-scroller-container[data-section-id="liveTv-channels"] .cardPadder {
+.emby-scroller-container[data-card-format="Logo"]:not(.visualCardBox) .cardScalable,
+.emby-scroller-container[data-card-format="Logo"]:not(.visualCardBox) .cardPadder,
+.emby-scroller-container[data-card-format="Clear Art"]:not(.visualCardBox) .cardScalable,
+.emby-scroller-container[data-card-format="Clear Art"]:not(.visualCardBox) .cardPadder,
+.emby-scroller-container[data-card-format="Disc"]:not(.visualCardBox) .cardScalable,
+.emby-scroller-container[data-card-format="Disc"]:not(.visualCardBox) .cardPadder,
+.emby-scroller-container[data-section-id="liveTv-channels"]:not(.visualCardBox) .cardScalable,
+.emby-scroller-container[data-section-id="liveTv-channels"]:not(.visualCardBox) .cardPadder,
+html.sleekfin-main-ui .emby-scroller-container[data-card-format="Logo"]:not(.visualCardBox) .cardPadder,
+html.sleekfin-main-ui .emby-scroller-container[data-card-format="Clear Art"]:not(.visualCardBox) .cardPadder,
+html.sleekfin-main-ui .emby-scroller-container[data-card-format="Disc"]:not(.visualCardBox) .cardPadder,
+html.sleekfin-main-ui .emby-scroller-container[data-section-id="liveTv-channels"]:not(.visualCardBox) .cardPadder {
 	background: transparent !important;
 	box-shadow: none !important;
 	border: none !important;
+	background-color: transparent !important;
 }
 
 /* Skeletons need a visible padder even when Logo/Clear Art/Disc force transparent cards */
@@ -2090,7 +2099,7 @@ body.kefin-borderless-spotlight .homeSectionsContainer > *:not(.spotlight-sectio
 	width: 50vw !important;
 }
 
-.emby-scroller-container[data-card-format="Logo"] .cardImageContainer,
+/* .emby-scroller-container[data-card-format="Logo"] .cardImageContainer,
 .emby-scroller-container[data-card-format="Clear Art"] .cardImageContainer,
 .emby-scroller-container[data-card-format="Disc"] .cardImageContainer {
 	transition: opacity 0.15s ease-in-out;
@@ -2106,18 +2115,18 @@ body.kefin-borderless-spotlight .homeSectionsContainer > *:not(.spotlight-sectio
 .emby-scroller-container[data-card-format="Clear Art"] .cardImageContainer.lazy-loaded,
 .emby-scroller-container[data-card-format="Disc"] .cardImageContainer.lazy-loaded {
 	opacity: 1;
-}
+} */
 
 :not(.layout-mobile) .emby-scroller-container[data-card-format="Logo"]:not([data-border-style]) .itemsContainer,
 :not(.layout-mobile) .emby-scroller-container[data-card-format="Clear Art"]:not([data-border-style]) .itemsContainer,
 :not(.layout-mobile) .emby-scroller-container[data-card-format="Disc"]:not([data-border-style]) .itemsContainer {
-	gap: 4rem;
+	gap: 4rem !important;
 }
 
 .layout-mobile .emby-scroller-container[data-card-format="Logo"]:not([data-border-style]) .itemsContainer,
 .layout-mobile .emby-scroller-container[data-card-format="Clear Art"]:not([data-border-style]) .itemsContainer,
 .layout-mobile .emby-scroller-container[data-card-format="Disc"]:not([data-border-style]) .itemsContainer {
-	gap: 2rem;
+	gap: 2rem !important;
 }
 
 .emby-scroller-container[data-hide-card-footer] .card .cardText {
@@ -3993,6 +4002,19 @@ body.kefin-borderless-spotlight .homeSectionsContainer > *:not(.spotlight-sectio
 
 .cardbuilder-items-fade.is-hidden {
 	opacity: 0;
+}
+
+.cardbuilder-empty-message {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	min-height: 4.5em;
+	padding: 1em 1.25em;
+	box-sizing: border-box;
+	opacity: 0.55;
+	font-size: 1.05em;
+	text-align: center;
 }
 
 .cardbuilder-card-collapse,
