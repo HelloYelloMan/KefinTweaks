@@ -165,3 +165,47 @@
     color: #121212;
     color: oklch(from rgb(var(--abyss-accent)) calc((l - 0.6) * -infinity) 0 0);
 }
+
+/* Give the KefinTweaks theme video the same treatment as the backdrop.
+ *
+ * THE SYMPTOM. With backdrops on, a series or movie page that has a theme video
+ * becomes hard to read: the panels are transparent by design, and the video
+ * plays behind them at full brightness with none of the dimming the backdrop
+ * gets.
+ *
+ * WHY. Stock Jellyfin dims the backdrop with a scrim over the whole viewport --
+ * `.backgroundContainer.withBackdrop { background-color: rgba(0,0,0,0.86) }` in
+ * its dark theme -- which also happens to dim the theme video, since the video
+ * container sits at body.firstChild with z-index auto and paints below it.
+ *
+ * Abyss does it differently. It zeroes that scrim and moves the darkening onto
+ * the image itself:
+ *
+ *     .backgroundContainer.withBackdrop { background-color: rgba(0, 0, 0, 0); }
+ *     .backdropImage { filter: blur(23px) saturate(120%) contrast(120%) brightness(25%); }
+ *
+ * A filter applies to one element, so the theme video -- a different element
+ * entirely -- gets nothing. Measured on a movie page with a theme video:
+ *
+ *     .kefin-theme-video-container   z=auto  fixed   filter: none
+ *     .backdropImage                 z=auto  abs     filter: blur(23px) ... brightness(0.25)
+ *     .backgroundContainer           z=auto  fixed   background: rgba(0, 0, 0, 0)
+ *
+ * So this repeats Abyss's own backdrop filter on the video, using the same
+ * variable -- which means Lite Mode's reduced blur applies to it too, and anyone
+ * changing --abyss-backdrop-blur moves both together.
+ *
+ * Two exclusions match what Abyss and the feature already do: pseudo-fullscreen
+ * is the one time the video is meant to be watched rather than sit behind
+ * things, and .hideMainDrawer drops the filter for the backdrop, so it drops it
+ * here as well.
+ */
+.kefin-theme-video-container:not(.kefin-theme-pseudo-fs) .kefin-theme-video {
+    -webkit-filter: blur(var(--abyss-backdrop-blur)) saturate(120%) contrast(120%) brightness(25%);
+    filter: blur(var(--abyss-backdrop-blur)) saturate(120%) contrast(120%) brightness(25%);
+}
+
+.hideMainDrawer .kefin-theme-video-container .kefin-theme-video {
+    -webkit-filter: none;
+    filter: none;
+}
