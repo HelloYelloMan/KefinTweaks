@@ -276,9 +276,24 @@
         // inside it -- so reserving its width alone left the content 2px under the
         // letters.
         const containerRight = container.getBoundingClientRect().right;
-        const needed = Math.round(containerRight - picker.getBoundingClientRect().left);
+        const needed = Math.round(containerRight - picker.getBoundingClientRect().left) + ALPHA_PICKER_GAP;
         if (!(needed > 0)) return;
-        container.style.setProperty('--kefin-alpha-slack', (needed + ALPHA_PICKER_GAP) + 'px');
+
+        /* Only ever hand room back, never take it.
+         *
+         * The reservation is 7.5% of the width, which is generous on a desktop
+         * and tight on a phone. Measured at a 480px viewport: Jellyfin reserved
+         * less than this calculation asked for, so setting it cost 4px of content
+         * -- and 4px was the difference between three cards across and two.
+         * Reported as exactly that, mobile going from three wide to two.
+         *
+         * Clamping to what is already reserved keeps the desktop win (87px down
+         * to 47px there) and makes the narrow case a no-op.
+         */
+        const current = parseFloat(getComputedStyle(container).paddingRight);
+        if (isFinite(current) && needed >= current) return;
+
+        container.style.setProperty('--kefin-alpha-slack', needed + 'px');
     }
 
     /**
@@ -334,10 +349,31 @@
 
         applyAlphaPickerSlack(container);
 
-        container.style.setProperty('--kefin-card-h', Math.round(rect.height) + 'px');
-        const measured = rect.width / rect.height;
-        container.style.setProperty('--kefin-card-r-default',
-            (isFinite(measured) && measured > 0 ? measured : FANART_RATIO).toFixed(4));
+        /* Size the row so a FANART card fills exactly the slot the ladder gave it.
+         *
+         * Taking the height straight off the probe ties the row to whatever shape
+         * Jellyfin's padder happens to be -- 2:3, measured here. Every fanart
+         * poster is wider than that, so every card grew by a few pixels, and on a
+         * narrow screen that is a whole card per row: mobile went from three
+         * across to two, cards 126px wide into 354px of content where Jellyfin's
+         * were 118.
+         *
+         * Solving the height from the slot instead keeps the count. A 0.7013
+         * poster comes out exactly the ladder width, anything narrower is
+         * narrower, and only a genuinely wide cover is wider -- which is the
+         * point of the feature and rare enough not to cost a column.
+         *
+         * The row ends up slightly shorter than Jellyfin's 2:3 box, because that
+         * is what it costs to fit a wider picture in the same width.
+         */
+        const slotWidth = cardRect.width;
+        const solved = (slotWidth - pad) / FANART_RATIO;
+        const height = solved > 0 ? solved : rect.height;
+
+        container.style.setProperty('--kefin-card-h', Math.round(height) + 'px');
+        // The fallback ratio has to match the basis the height was solved for, or
+        // a card whose ratio is not known yet would not fill its slot.
+        container.style.setProperty('--kefin-card-r-default', FANART_RATIO.toFixed(4));
         container.style.setProperty('--kefin-card-pad', pad + 'px');
         container.dataset.kefinMeasuredAt = String(Math.round(container.getBoundingClientRect().width));
         container.classList.add(ACTIVE_CLASS);
