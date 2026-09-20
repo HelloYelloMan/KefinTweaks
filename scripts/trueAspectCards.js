@@ -325,7 +325,16 @@
          */
         if (wasActive && container.style.getPropertyValue('--kefin-card-h')) {
             const width = Math.round(container.getBoundingClientRect().width);
-            if (String(width) === container.dataset.kefinMeasuredAt) return true;
+            /* The width alone is not enough to know the answer would be the same.
+               A skin change does not alter the container's width, but it does
+               alter both things the measurement depends on: the ladder width a
+               card is given and the padding between the card and its image box.
+               Keyed on width only, switching skins hit this guard and kept the
+               old skin's row height -- cards sized for a height that no longer
+               matched, which is a ratio applied to the wrong box, so art came out
+               cut off, and rows fitted 11-12 cards where 10 was right. */
+            if (String(width) === container.dataset.kefinMeasuredAt
+                && skinSignature() === container.dataset.kefinSkinSig) return true;
         }
 
         if (wasActive) container.classList.remove(ACTIVE_CLASS);
@@ -375,7 +384,76 @@
         // a card whose ratio is not known yet would not fill its slot.
         container.style.setProperty('--kefin-card-r-default', FANART_RATIO.toFixed(4));
         container.style.setProperty('--kefin-card-pad', pad + 'px');
-        container.dataset.kefinMeasuredAt = String(Math.round(container.getBoundingClientRect().width));
+        const settledWidth = Math.round(container.getBoundingClientRect().width);
+        container.dataset.kefinMeasuredAt = String(settledWidth);
+        container.dataset.kefinSkinSig = skinSignature();
+        container.classList.add(ACTIVE_CLASS);
+        rememberMeasurement(settledWidth, Math.round(height), pad);
+        return true;
+    }
+
+    /**
+     * Remember a solved row height so the NEXT container does not have to paint
+     * wrong once to learn it.
+     *
+     * Measuring means reading a card with the class off, which cannot happen
+     * until that card has been laid out at the skin's own ladder width. So the
+     * first container of a given shape necessarily shows one frame at the wrong
+     * size, and every card whose ratio is not the default then moves -- measured
+     * at 27 of 100 cards, worst 9px, with all 100 ratios already known. It was
+     * never missing data; it was the order of events.
+     *
+     * The answer only depends on the skin and the container's width, so it is
+     * worth keeping. sessionStorage carries it across a reload, which is what
+     * makes opening a library steady from the first paint rather than the
+     * second. A stale entry cannot do lasting harm: the sweep re-measures and
+     * corrects it, exactly as it does today.
+     */
+    const MEASURE_STORE = 'kefinTrueAspectMetrics';
+    let measurements = null;
+
+    function measurementKey(width) {
+        return skinSignature() + '@' + width;
+    }
+
+    function loadMeasurements() {
+        if (measurements) return measurements;
+        measurements = new Map();
+        try {
+            const raw = sessionStorage.getItem(MEASURE_STORE);
+            if (raw) Object.entries(JSON.parse(raw)).forEach(([k, v]) => measurements.set(k, v));
+        } catch (e) { /* private mode, or corrupt: start empty */ }
+        return measurements;
+    }
+
+    function rememberMeasurement(width, height, pad) {
+        const store = loadMeasurements();
+        const key = measurementKey(width);
+        const prev = store.get(key);
+        if (prev && prev.h === height && prev.pad === pad) return;
+        store.set(key, { h: height, pad: pad });
+        try {
+            sessionStorage.setItem(MEASURE_STORE, JSON.stringify(Object.fromEntries(store)));
+        } catch (e) { /* quota or private mode: in-memory is still useful */ }
+    }
+
+    /**
+     * Switch a container on from what we already know, before it is painted.
+     * Returns false when this shape has not been solved yet, leaving the normal
+     * measure-then-activate path to do it.
+     */
+    function activateFromCache(container) {
+        if (container.classList.contains(ACTIVE_CLASS)) return false;
+        const width = Math.round(container.getBoundingClientRect().width);
+        if (!width) return false;
+        const known = loadMeasurements().get(measurementKey(width));
+        if (!known) return false;
+        container.style.setProperty('--kefin-card-h', known.h + 'px');
+        container.style.setProperty('--kefin-card-r-default', FANART_RATIO.toFixed(4));
+        container.style.setProperty('--kefin-card-pad', known.pad + 'px');
+        container.dataset.kefinMeasuredAt = String(width);
+        container.dataset.kefinSkinSig = skinSignature();
+        applyAlphaPickerSlack(container);
         container.classList.add(ACTIVE_CLASS);
         return true;
     }
@@ -437,7 +515,23 @@
         if (!containers.size) return;
 
         containers.forEach((container) => {
-            if (!container.classList.contains(ACTIVE_CLASS)) measureAndActivate(container);
+            /* An ACTIVE container still needs re-measuring when its recorded
+               measurement no longer describes the page.
+               Gating on the class alone meant a container was measured exactly
+               once, ever. Invalidating after a skin change deletes
+               kefinMeasuredAt, but the container keeps the class, so this was
+               the line that refused to act on it -- and the resize path is the
+               only other caller. Worse, the invalidation lands while the library
+               page is HIDDEN (the skin is changed from the preferences page, and
+               a hidden page measures zero), so that attempt fails by design and
+               the only chance to recover is here, on the way back.
+               measureAndActivate's own guard makes the settled case a cheap
+               width-and-signature comparison, so calling it every sweep costs
+               nothing when nothing has changed. */
+            const active = container.classList.contains(ACTIVE_CLASS);
+            const stale = !container.dataset.kefinMeasuredAt
+                || container.dataset.kefinSkinSig !== skinSignature();
+            if (!active || stale) measureAndActivate(container);
         });
 
         const todo = cardsNeedingRatio(scope);
@@ -610,6 +704,9 @@
                     ? [node]
                     : node.querySelectorAll?.(CARD_SELECTOR) || [];
                 for (const card of cards) {
+                    // Size the container the same frame its first card arrives,
+                    // so the card is never painted at the ladder width first.
+                    if (card.parentElement) activateFromCache(card.parentElement);
                     if (card.dataset.kefinRatioSet) continue;
                     if (card.getAttribute('data-type') === 'Episode') continue;
                     const id = card.getAttribute('data-id');
@@ -667,6 +764,22 @@
      * Re-measuring waits for the sheet to actually apply -- a stylesheet that has
      * not loaded yet would be measured as the old one.
      */
+    /**
+     * What the current skin is, as far as sizing is concerned.
+     *
+     * The href list is the honest answer: skinManager removes every skin link
+     * and inserts fresh ones on each change, a skin can contribute several
+     * sheets, and the optional per-skin includes are switched independently but
+     * change card metrics just the same. Sorting keeps the signature stable when
+     * only the insertion order moves.
+     */
+    function skinSignature() {
+        return Array.from(document.querySelectorAll('link[data-kefin-skin], link[data-kefin-optional-include]'))
+            .map((l) => l.getAttribute('href') || '')
+            .sort()
+            .join('|');
+    }
+
     function invalidateMeasurements() {
         document.querySelectorAll('.' + ACTIVE_CLASS).forEach((container) => {
             delete container.dataset.kefinMeasuredAt;
@@ -676,16 +789,46 @@
 
     function watchForSkinChanges() {
         const observer = new MutationObserver((records) => {
-            const touchedSkin = records.some((r) =>
-                [...r.addedNodes, ...r.removedNodes].some((n) =>
-                    n.nodeType === 1 && n.matches?.('link[data-kefin-skin], link[data-kefin-optional-include]')));
-            if (!touchedSkin) return;
-            // Give the new sheet a moment to apply; measuring it before it lands
-            // would just record the old skin again.
-            setTimeout(invalidateMeasurements, 250);
-            setTimeout(invalidateMeasurements, 1200);
+            const links = [];
+            let removed = false;
+            records.forEach((r) => {
+                r.addedNodes.forEach((n) => {
+                    if (n.nodeType === 1 && n.matches?.('link[data-kefin-skin], link[data-kefin-optional-include]')) links.push(n);
+                });
+                r.removedNodes.forEach((n) => {
+                    if (n.nodeType === 1 && n.matches?.('link[data-kefin-skin], link[data-kefin-optional-include]')) removed = true;
+                });
+            });
+            if (!links.length && !removed) return;
+
+            /* Wait for the sheets themselves, not for a guessed delay.
+             *
+             * This used to re-measure on 250ms and 1200ms timers. A stylesheet
+             * that has not applied yet measures as the skin being left, so the
+             * timers were a bet on network speed -- and when the 250ms pass won
+             * that bet, it wrote the OLD skin's height back and the container
+             * looked freshly measured. Waiting on each new sheet's own load
+             * event removes the guess. The frame after gives style resolution a
+             * chance to land before anything is read.
+             */
+            const settle = () => requestAnimationFrame(() =>
+                requestAnimationFrame(invalidateMeasurements));
+            if (!links.length) { settle(); return; }
+            let outstanding = links.length;
+            const done = () => { if (--outstanding <= 0) settle(); };
+            links.forEach((l) => {
+                if (l.sheet) { done(); return; }         // already applied
+                l.addEventListener('load', done, { once: true });
+                l.addEventListener('error', done, { once: true });
+            });
+            // A sheet that never fires either event must not strand the sweep.
+            setTimeout(invalidateMeasurements, 2000);
         });
-        observer.observe(document.head, { childList: true });
+        /* Watch the whole document, not just head. skinManager inserts after
+           #cssTheme when it can, but its fallback is `#reactRoot.after(link)`,
+           which puts the link in the BODY -- invisible to a head-only observer,
+           and that is the path a skin change takes when cssTheme is missing. */
+        observer.observe(document.documentElement, { childList: true, subtree: true });
     }
 
     /**
