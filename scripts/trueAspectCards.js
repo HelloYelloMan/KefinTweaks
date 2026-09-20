@@ -651,6 +651,43 @@
         }, 250);
     }
 
+    /**
+     * A skin change invalidates every measurement.
+     *
+     * The row height and the card padding are measured from a real card, so they
+     * describe the skin that was loaded at the time. Skins differ a lot -- Abyss
+     * gives a card 27px of horizontal padding and a 257px row, ElegantFin 11px
+     * and 221px -- and the guard that stops needless re-measuring keys on the
+     * container's width, which a skin change does not alter. So switching skins
+     * left the cards at the old skin's size until the page was reloaded, which is
+     * exactly what was reported.
+     *
+     * Watching for the skin's own link elements is the reliable signal:
+     * skinManager tags them data-kefin-skin, and swaps them on every change.
+     * Re-measuring waits for the sheet to actually apply -- a stylesheet that has
+     * not loaded yet would be measured as the old one.
+     */
+    function invalidateMeasurements() {
+        document.querySelectorAll('.' + ACTIVE_CLASS).forEach((container) => {
+            delete container.dataset.kefinMeasuredAt;
+        });
+        scheduleSweep();
+    }
+
+    function watchForSkinChanges() {
+        const observer = new MutationObserver((records) => {
+            const touchedSkin = records.some((r) =>
+                [...r.addedNodes, ...r.removedNodes].some((n) =>
+                    n.nodeType === 1 && n.matches?.('link[data-kefin-skin], link[data-kefin-optional-include]')));
+            if (!touchedSkin) return;
+            // Give the new sheet a moment to apply; measuring it before it lands
+            // would just record the old skin again.
+            setTimeout(invalidateMeasurements, 250);
+            setTimeout(invalidateMeasurements, 1200);
+        });
+        observer.observe(document.head, { childList: true });
+    }
+
     function initializeHook() {
         if (window.__kefinTrueAspectActive) return;
         window.__kefinTrueAspectActive = true;
@@ -663,6 +700,7 @@
         });
         observer.observe(document.body, { childList: true, subtree: true });
         window.addEventListener('resize', onResize, { passive: true });
+        watchForSkinChanges();
         // Card images are set lazily as they come into view, and that is a style
         // change rather than a DOM insertion, so the observer above does not see
         // it. Scrolling is what reveals them; the sweep is debounced either way.
