@@ -3060,6 +3060,39 @@
      * @param {string} customFooterText - Optional custom footer text (e.g., air date for episodes)
      * @returns {HTMLElement} - The constructed card element
      */
+    /**
+     * Portrait fill parameters, derived from the item rather than fixed at 2:3.
+     *
+     * This used to be the constant `fillHeight=446&fillWidth=297` -- a 2:3 box.
+     * fill with both axes crops, so every poster came back centre-cropped to a
+     * shape almost nothing in the library actually is: fanart posters are
+     * 1000x1426 (0.701), and Jellyfin's own card builder has always derived the
+     * box from the item, requesting fillWidth=220&fillHeight=330 style pairs off
+     * PrimaryImageAspectRatio. Ours was the odd one out, and on a library page
+     * you scroll through, both builders are in play -- the first screen is
+     * Jellyfin's, everything infiniteScroll appends is ours.
+     *
+     * Two things follow from fixing it. The picture arrives at its own shape, so
+     * nothing is thrown away; and trueAspectCards no longer has to rewrite the
+     * URL after the fact, which is what made cards visibly reload and resize
+     * after their first paint.
+     *
+     * FANART IS THE FALLBACK, not 2:3, because that is what the artwork here is
+     * ranked to prefer. An item with no ratio recorded is far likelier to be a
+     * 1000x1426 poster than a true 2:3 one, so guessing 0.701 moves fewer cards
+     * than guessing 0.667 did.
+     */
+    const FANART_RATIO = 1000 / 1426;   // 0.7013
+    const PORTRAIT_FILL_WIDTH = 297;
+
+    function portraitImageParams(item) {
+        const ratio = typeof item?.PrimaryImageAspectRatio === 'number' && item.PrimaryImageAspectRatio > 0
+            ? item.PrimaryImageAspectRatio
+            : FANART_RATIO;
+        const height = Math.round(PORTRAIT_FILL_WIDTH / ratio);
+        return `fillHeight=${height}&fillWidth=${PORTRAIT_FILL_WIDTH}`;
+    }
+
     function createJellyfinCardElement(item, overflowCard = false, cardFormat = null, customFooterText = null) {
         cardFormat = cardFormat?.toLowerCase() || null;
         if (cardFormat === 'button') {
@@ -3104,7 +3137,7 @@
                 // portrait / poster / series poster (default)
                 cardClass = overflowCard ? 'overflowPortraitCard' : 'portraitCard';
                 padderClass = 'cardPadder-portrait';
-                imageParams = 'fillHeight=446&fillWidth=297';
+                imageParams = portraitImageParams(item);
             }
         } else {
             // Use item type to determine card type
@@ -3120,7 +3153,7 @@
                 // Default poster style for Movies, Series, etc.
                 cardClass = overflowCard ? 'overflowPortraitCard' : 'portraitCard';
                 padderClass = 'cardPadder-portrait';
-                imageParams = 'fillHeight=446&fillWidth=297';
+                imageParams = portraitImageParams(item);
             }
         }
         

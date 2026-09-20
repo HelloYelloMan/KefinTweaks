@@ -17,10 +17,33 @@
  *                   measured 187 wide against a 166 wide image box, which turned
  *                   a requested 0.68 into 0.623 on screen.
  */
+/* The fallback is fanart's 1000x1426, not 2:3.
+ *
+ * Almost everything here is 0.68-0.72 -- 80% of the movies and 74% of the
+ * series measured -- because fanart is the preferred artwork source. Starting
+ * from 0.701 means the common case is already correct when the card is first
+ * painted and never moves; starting from 0.667 meant nearly every card had to
+ * be corrected, which is what made entering a library look choppy.
+ *
+ * --kefin-card-r-default still overrides it, measured per container, so a row
+ * that really is 2:3 behaves as before.
+ */
 .kefin-true-aspect > .card.portraitCard,
 .kefin-true-aspect > .card.overflowPortraitCard {
-    width: calc(var(--kefin-card-h) * var(--kefin-card-ratio, var(--kefin-card-r-default))
+    width: calc(var(--kefin-card-h) * var(--kefin-card-ratio, var(--kefin-card-r-default, 0.7013))
                 + var(--kefin-card-pad, 0px));
+    /* When a card does have to change, ease it instead of snapping. Short
+       enough not to feel laggy while cards stream in, and width only -- the row
+       height does not change, so animating it would only cost paint work.
+       Anyone who has asked not to see motion gets none. */
+    transition: width 140ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .kefin-true-aspect > .card.portraitCard,
+    .kefin-true-aspect > .card.overflowPortraitCard {
+        transition: none;
+    }
 }
 
 /* The padder is Jellyfin's pre-aspect-ratio height mechanism: a percentage

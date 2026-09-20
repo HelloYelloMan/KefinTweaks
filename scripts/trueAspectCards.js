@@ -72,6 +72,11 @@
     // Clear space left between the last card and the A-Z letters.
     const ALPHA_PICKER_GAP = 12;
 
+    // Fanart's poster shape, 1000x1426. The fallback when a container cannot be
+    // measured, and the shape the card builder now requests images at, so the
+    // common case needs no correction after first paint.
+    const FANART_RATIO = 1000 / 1426;
+
     /**
      * itemId -> PrimaryImageAspectRatio, kept for the tab rather than the view.
      *
@@ -135,14 +140,45 @@
             .replace(/[?&]$/, '');
     }
 
-    function applyUncroppedImage(card) {
+    /**
+     * Only rewrite a URL that is actually asking for a crop.
+     *
+     * fillWidth+fillHeight crops to that box -- but only if the box disagrees
+     * with the image. Jellyfin's own card builder derives the box from the item:
+     * a 0.701 poster is requested as fillWidth=220&fillHeight=314, which is
+     * 0.7006, so nothing is cropped and rewriting it changes nothing except
+     * forcing the browser to fetch the same picture again.
+     *
+     * That refetch was the choppiness: entering a library, cards painted, then
+     * visibly reloaded. Measured before this check -- 180 Primary image requests
+     * for 103 items, 77 of them fetched twice, every double being
+     * `fillHeight=314&fillWidth=220` followed by `fillHeight=314`.
+     *
+     * So the box is compared against the item's ratio first, and left alone when
+     * they already agree. What remains rewritten is the genuine case: a card
+     * whose requested box is a different shape from its picture.
+     */
+    function applyUncroppedImage(card, ratio) {
         const holder = card.querySelector('.cardImageContainer');
         if (!holder || holder.dataset.kefinUncropped) return;
         const bg = holder.style.backgroundImage || '';
         const match = bg.match(/url\(["']?(.*?)["']?\)/);
         if (!match) return;
-        const next = uncroppedUrl(match[1]);
-        if (next !== match[1]) holder.style.backgroundImage = `url("${next}")`;
+
+        const url = match[1];
+        const w = parseInt((url.match(/fillWidth=(\d+)/) || [])[1], 10);
+        const h = parseInt((url.match(/fillHeight=(\d+)/) || [])[1], 10);
+        if (w && h && ratio) {
+            const requested = w / h;
+            if (Math.abs(requested - ratio) / ratio <= 0.02) {
+                // Already asking for the right shape; a rewrite would only refetch.
+                holder.dataset.kefinUncropped = '1';
+                return;
+            }
+        }
+
+        const next = uncroppedUrl(url);
+        if (next !== url) holder.style.backgroundImage = `url("${next}")`;
         holder.dataset.kefinUncropped = '1';
     }
 
@@ -236,7 +272,9 @@
         applyAlphaPickerSlack(container);
 
         container.style.setProperty('--kefin-card-h', Math.round(rect.height) + 'px');
-        container.style.setProperty('--kefin-card-r-default', (rect.width / rect.height).toFixed(4));
+        const measured = rect.width / rect.height;
+        container.style.setProperty('--kefin-card-r-default',
+            (isFinite(measured) && measured > 0 ? measured : FANART_RATIO).toFixed(4));
         container.style.setProperty('--kefin-card-pad', pad + 'px');
         container.classList.add(ACTIVE_CLASS);
         return true;
@@ -262,7 +300,7 @@
         if (!ratio || !isFinite(ratio) || ratio <= 0) return;
         if (containerDefault && Math.abs(ratio - containerDefault) < MIN_DELTA) return;
         card.style.setProperty(RATIO_PROP, ratio.toFixed(4));
-        applyUncroppedImage(card);
+        applyUncroppedImage(card, ratio);
     }
 
     async function fetchRatios(ids) {
