@@ -83,3 +83,46 @@
     border: 1px solid rgba(255, 255, 255, 0.2) !important;
     color: rgba(255, 255, 255, 0.9) !important;
 }
+
+/* Stop an over-tall title block from overflowing up into the backdrop.
+ *
+ * THE SYMPTOM. On an episode page that has an original title, the show title
+ * ends up drawn over the backdrop instead of below it. Measured under Abyss on
+ * a Violet Evergarden special: .nameContainer at 255..367 against a ribbon
+ * starting at 286 -- 31px above where it should begin. The same page for an
+ * episode with no original title sits correctly at 292..369.
+ *
+ * THE CAUSE IS JELLYFIN'S, not the theme's (librarybrowser.scss):
+ *
+ *     .detailRibbon {
+ *         display: flex;
+ *         align-items: center;
+ *         .layout-desktop & { margin-top: -7.2em; height: 7.2em; }
+ *     }
+ *
+ * The ribbon is a fixed 7.2em band pulled up over the backdrop by exactly its
+ * own height. jellyfin-web appends the original title as a third line --
+ * <h4 class="itemName originalTitle"> after the <h1> and <h3> -- and the
+ * .infoWrapper becomes taller than the band: 184px against 107. Because the
+ * items are centre-aligned, the excess overflows equally above and below, and
+ * the half above lands in the backdrop. (184 - 122) / 2 = 31, the number
+ * measured.
+ *
+ * It is not Abyss's fault, but Abyss is where it shows: it cuts the backdrop to
+ * 20vh, so the boundary is close and crisp rather than a soft gradient.
+ *
+ * THE FIX. Let the band grow instead of centring the overflow. `min-height`
+ * keeps the normal case pixel-identical -- a short block still gets the full
+ * 7.2em, so every other detail page is untouched -- while a tall one extends
+ * downward and pushes the content below it down, which is the direction with
+ * somewhere to go. Measured after: 293..405 inside a ribbon of 286..484, and
+ * the no-original-title control moves by one pixel.
+ *
+ * Not `align-items: flex-start`: that fixes the upward overflow by sending all
+ * of it downward INTO the following content instead, which overlaps rather than
+ * reflows.
+ */
+#itemDetailPage .detailRibbon {
+    height: auto !important;
+    min-height: 7.2em;
+}
