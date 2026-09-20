@@ -30,8 +30,13 @@
  */
 .kefin-true-aspect > .card.portraitCard,
 .kefin-true-aspect > .card.overflowPortraitCard {
+    /* !important because ElegantFin sizes cards with
+       `.card { width: var(--cardWidth) !important }` -- its own ladder, built
+       from --cardCount. Without this the whole feature silently did nothing
+       under that skin: every card kept ElegantFin's uniform width, which is
+       exactly how it was reported. */
     width: calc(var(--kefin-card-h) * var(--kefin-card-ratio, var(--kefin-card-r-default, 0.7013))
-                + var(--kefin-card-pad, 0px));
+                + var(--kefin-card-pad, 0px)) !important;
     /* When a card does have to change, ease it instead of snapping. Short
        enough not to feel laggy while cards stream in, and width only -- the row
        height does not change, so animating it would only cost paint work.
