@@ -16,6 +16,14 @@
  * an unscoped rule cannot be defeated by a layout that puts the tiles somewhere
  * else -- which is the answer to "make sure it is hidden on mobile" as well.
  *
+ * data-type is the ONLY thing matched. An earlier version also matched
+ * `.card[data-collectiontype]`, which was redundant -- every library tile
+ * carries both attributes, measured 8 of 8 -- and redundant in a direction that
+ * could bite: BoxSets are collections too, and a rule keyed on anything broader
+ * than the library tile risks stripping the buttons from every collection in
+ * the library. CollectionFolder means a LIBRARY, not a collection, and that is
+ * the whole of what should lose its buttons.
+ *
  * KefinTweaks' own my-media section already sets showPlayButton,
  * showMoreButton, showMarkPlayedButton and showFavoriteButton to false, so this
  * stylesheet is the same intent expressed for the cards Jellyfin builds itself,
@@ -34,8 +42,6 @@
  * itself carries the link, and only the button strip is hidden.
  */
 .card[data-type="CollectionFolder"] .cardOverlayButton,
-.card[data-type="CollectionFolder"] .cardOverlayButton-br,
-.card[data-collectiontype] .cardOverlayButton,
-.card[data-collectiontype] .cardOverlayButton-br {
+.card[data-type="CollectionFolder"] .cardOverlayButton-br {
     display: none !important;
 }
