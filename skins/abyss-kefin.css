@@ -127,57 +127,41 @@
     min-height: 7.2em;
 }
 
-/* Give the episode-count and played pills the look the theme documents.
+/* Pick the count / played pill text colour from the accent it sits on.
  *
- * THE BUG. On a light cover the unwatched-count pill is unreadable. Measured on
- * the Shows library, 100 of them on one page, every one identical:
+ * abyss.css paints both pills with the accent and sets no colour, so the digits
+ * inherit the page's white and vanish on the near-white default:
  *
- *     background  rgba(245, 245, 247, 0.8)     <- the accent, near-white, at 80%
- *     color       rgb(255, 255, 255)           <- pure white
+ *     .countIndicator  { background: rgba(var(--abyss-accent), 0.8); }
+ *     .playedIndicator { background: rgb(var(--abyss-accent)); }
  *
- * White on translucent near-white. abyss.css paints both pills with the accent:
+ * A fixed dark value would be wrong the moment the accent is dark, and the
+ * accent is a knob -- the schemes in skinConfig set it, and so can anyone
+ * editing --abyss-accent by hand. So the colour is derived from the background
+ * instead of guessed.
  *
- *     .countIndicator  { background: rgba(var(--abyss-accent), 0.8); ... }
- *     .playedIndicator { background: rgb(var(--abyss-accent)); ... }
+ * HOW IT WORKS. Relative colour syntax reads the accent's own perceptual
+ * lightness, and multiplying by infinity snaps the result to one end or the
+ * other: above the threshold the expression goes negative and clamps to L=0,
+ * black; below it, positive, clamping to L=1, white. Chroma and hue are zeroed
+ * so the result is neutral either way.
  *
- * and never sets a colour, so the glyph inherits the page's white.
+ * OKLCH rather than HSL because HSL lightness is not perceptual and gets the
+ * mid tones wrong -- the Teal scheme sits at exactly 49% there, which would flip
+ * it to white text on a colour that plainly wants black. Measured across the
+ * schemes, threshold 0.6:
  *
- * WHAT IT SHOULD BE, from the theme's own evidence rather than taste. Its README
- * documents the knob:
+ *     245,245,247  default   -> black      50,200,180  teal    -> black
+ *     255,250,240  warm      -> black     255,100,120  rose    -> black
+ *     100,160,255  blue      -> black     170, 92,195  purple  -> black
+ *      40, 40, 40  (a dark accent)        -> white
  *
- *     --abyss-indicator: 55, 55, 55;   /* default: dark grey *\/
- *
- * and its published screenshots show exactly that. Sampling the count pills in
- * docs/assets/images/shows-1.png: background rgb(44, 44, 44), glyph
- * rgb(255, 255, 255). rgba(55, 55, 55, 0.8) composited over black is 44 -- the
- * documented value, to the pixel.
- *
- * So this is a dark pill with light text, and the near-white one is a
- * regression: --abyss-indicator does not appear anywhere in abyss.css. Checked
- * against the current source on GitHub, not a cached copy -- 67523 bytes, zero
- * occurrences -- so the variable the README tells you to set does nothing, and
- * .countIndicator reaches for --abyss-accent instead.
- *
- * Defining the variable here as well as using it keeps the documented knob
- * working: change --abyss-indicator and the pills follow.
- *
- * !important, because these also have to survive our own accent schemes; the
- * hover state abyss.css defines keeps winning either way, being one class more
- * specific.
- *
- * ON .playedIndicator: the pixel evidence above is for the count pill only --
- * nothing in the screenshots is marked watched. It gets the same treatment
- * because the README names this variable for indicators as a family and
- * abyss.css styles the two together in its hover rule. Its shipped state is
- * broken in the same way regardless: an opaque near-white circle holding a
- * white tick.
+ * The plain declaration first is the fallback: a browser without relative colour
+ * syntax drops the second line and keeps #121212, which is right for the
+ * near-white default and for every scheme shipped here.
  */
-:root {
-    --abyss-indicator: 55, 55, 55;
-}
-
 .countIndicator,
 .playedIndicator {
-    background: rgba(var(--abyss-indicator), 0.8) !important;
-    color: #fff !important;
+    color: #121212;
+    color: oklch(from rgb(var(--abyss-accent)) calc((l - 0.6) * -infinity) 0 0);
 }
