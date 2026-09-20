@@ -1,0 +1,35 @@
+/* Backdrop and theme video: keep the dimming, drop the blur.
+ *
+ * Abyss blurs the backdrop heavily and darkens it in the same declaration:
+ *
+ *     .backdropImage { filter: blur(23px) saturate(120%) contrast(120%) brightness(25%); }
+ *
+ * and skins/abyss-kefin.css repeats that filter on the KefinTweaks theme video,
+ * because with backdrops on there is nothing else left to dim it and the text
+ * over it becomes unreadable. That part is a fix. Whether either is blurred is
+ * a preference, which is what this toggle is.
+ *
+ * The blur comes off both; saturate, contrast and brightness stay. Legibility
+ * is unaffected -- brightness(25%) is what was doing that work, not the blur --
+ * so what changes is only that the backdrop and the video read as picture
+ * rather than as a colour wash.
+ *
+ * Because the filter is a single property, "remove the blur" means restating
+ * the rest of it rather than unsetting one function. Keeping the values
+ * identical to Abyss's is what makes this a blur switch and nothing more.
+ *
+ * Order, not force: optional includes load after both abyss.css and the
+ * companion sheet, so equal-specificity selectors win on their own. Abyss's own
+ * `.hideMainDrawer .backdropImage { filter: none }` is more specific and still
+ * applies, and pseudo-fullscreen stays excluded because that is the one time
+ * the video is meant to be watched, already unfiltered.
+ */
+.backdropImage {
+    -webkit-filter: saturate(120%) contrast(120%) brightness(25%);
+    filter: saturate(120%) contrast(120%) brightness(25%);
+}
+
+.kefin-theme-video-container:not(.kefin-theme-pseudo-fs) .kefin-theme-video {
+    -webkit-filter: saturate(120%) contrast(120%) brightness(25%);
+    filter: saturate(120%) contrast(120%) brightness(25%);
+}
