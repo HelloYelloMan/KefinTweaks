@@ -93,6 +93,33 @@
     }
 
     /**
+     * What is this card actually showing?
+     *
+     * The ratio has to describe the PICTURE on the card, which is not always the
+     * card's own item. A Recently Added episode is drawn as a portrait card
+     * holding its SERIES poster, so sizing it by the episode's
+     * PrimaryImageAspectRatio -- the 16:9 still -- turned every one of them into
+     * a letterbox. Reported as exactly that, and measured: overflowPortraitCard
+     * episodes carrying --kefin-card-ratio 1.7778.
+     *
+     * So the id and the image type come from the URL the card is displaying,
+     * not from data-id. An episode showing its series' poster is then looked up
+     * as the series, which is the right answer rather than a special case.
+     *
+     * Returns null when the card has no image yet -- cards load lazily, and a
+     * card that is not ready must be retried rather than settled, or it keeps
+     * whatever default it started with forever.
+     *
+     * @returns {{ id: string, type: string }|null}
+     */
+    function displayedImage(card) {
+        const holder = card.querySelector('.cardImageContainer');
+        const bg = holder ? (holder.style.backgroundImage || '') : '';
+        const m = bg.match(/\/Items\/([a-f0-9-]+)\/Images\/([A-Za-z]+)/);
+        return m ? { id: m[1], type: m[2] } : null;
+    }
+
+    /**
      * Switch a container on, remembering the height its cards had first.
      *
      * The measurement has to happen before the class lands: afterwards every
@@ -134,9 +161,14 @@
     function cardsNeedingRatio(scope) {
         const out = [];
         scope.querySelectorAll(CARD_SELECTOR).forEach((card) => {
-            const id = card.getAttribute('data-id');
-            if (!id || card.dataset.kefinRatioSet) return;
-            out.push({ card, id });
+            if (card.dataset.kefinRatioSet) return;
+            const shown = displayedImage(card);
+            if (!shown) return;                 // not loaded yet: try again next sweep
+            if (shown.type !== 'Primary') {     // a thumb or backdrop is not a poster
+                card.dataset.kefinRatioSet = '1';
+                return;
+            }
+            out.push({ card, id: shown.id });
         });
         return out;
     }
@@ -238,6 +270,10 @@
         const observer = new MutationObserver(() => scheduleSweep());
         observer.observe(document.body, { childList: true, subtree: true });
         window.addEventListener('resize', onResize, { passive: true });
+        // Card images are set lazily as they come into view, and that is a style
+        // change rather than a DOM insertion, so the observer above does not see
+        // it. Scrolling is what reveals them; the sweep is debounced either way.
+        window.addEventListener('scroll', scheduleSweep, { passive: true, capture: true });
 
         if (window.KefinTweaksUtils?.onViewPage) {
             window.KefinTweaksUtils.onViewPage(() => scheduleSweep(), { pages: [] });
