@@ -48,6 +48,7 @@
         jeSidebarMemo: true,      // Memoise Jellyfin Enhanced's getSidebarContainer (forced style flush on every DOM mutation)
         jeSpoilerGuardScope: true, // Scope Jellyfin Enhanced's Spoiler Guard image refresh to the item that changed
         mediaTags: true,          // Add a Tags row to the item-details metadata table
+        specialEpisodePrefix: true, // Drop the "Special - " prefix from season-zero episode titles
         osdLogo: true,            // Media logo/ClearArt on the video OSD
         pauseScreen: true,        // Rich pause screen overlay (logo, plot, artwork, progress)
         themeMediaCastFix: true,  // Theme media playback while a remote/cast target is connected
@@ -603,6 +604,13 @@
             css: null,
             dependencies: ['utils'],
             description: 'Adds a Tags row to the item-details metadata table, matching the Genres/Studios rows.'
+        },
+        {
+            name: 'specialEpisodePrefix',
+            script: 'specialEpisodePrefix.js',
+            css: null,
+            dependencies: ['utils'],
+            description: 'Removes the "Special - " prefix Jellyfin puts on the title of every season-zero episode, everywhere it appears. The prefix is localized, so the wording is learned once from the server rather than assumed.'
         },
         {
             name: 'osdLogo',
