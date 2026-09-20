@@ -189,7 +189,11 @@
                 // stock one, and which renders depends on configuration.
                 name: 'Hide Buttons On Library Cards (My Media)',
                 url: `${getKefinTweaksRoot()}skins/optional/global/hideHomeCardOverlayButtons.css`,
-                enabled: false
+                // On by default. Neither the user nor the admin config carries an
+                // entry for a brand new key, so isOptionalIncludeEnabled falls
+                // through to this -- which is what makes it take effect without
+                // anyone having to go and switch it on.
+                enabled: true
             }
         ],
         

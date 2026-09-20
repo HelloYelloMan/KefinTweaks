@@ -4,11 +4,17 @@
  * full overlay, which is where those buttons are actually wanted.
  *
  * Matched on `data-type="CollectionFolder"`, which is what Jellyfin stamps on a
- * library tile, rather than on the section it sits in. Scoping by section was
- * the wrong idea: KefinTweaks builds its own My Media section, Jellyfin has a
- * stock one (`verticalSection section0`), and which of them renders depends on
- * configuration -- so a section-based rule hits the buttons under one setup and
- * misses them under the other. The data-type is on the card either way.
+ * library tile, rather than on the section or the page it sits in. Scoping by
+ * section was the wrong idea: KefinTweaks builds its own My Media section,
+ * Jellyfin has a stock one (`verticalSection section0`), and which of them
+ * renders depends on configuration -- so a section-based rule hits the buttons
+ * under one setup and misses them under the other. The data-type is on the card
+ * either way.
+ *
+ * Not scoped to .homePage either. A library tile is a link into a library
+ * wherever it appears, so there is nowhere its overlay buttons are wanted, and
+ * an unscoped rule cannot be defeated by a layout that puts the tiles somewhere
+ * else -- which is the answer to "make sure it is hidden on mobile" as well.
  *
  * KefinTweaks' own my-media section already sets showPlayButton,
  * showMoreButton, showMarkPlayedButton and showFavoriteButton to false, so this
@@ -27,9 +33,9 @@
  * rather than a decision. The card stays clickable -- the overlay container
  * itself carries the link, and only the button strip is hidden.
  */
-.homePage .card[data-type="CollectionFolder"] .cardOverlayButton,
-.homePage .card[data-type="CollectionFolder"] .cardOverlayButton-br,
-.homePage .card[data-collectiontype] .cardOverlayButton,
-.homePage .card[data-collectiontype] .cardOverlayButton-br {
+.card[data-type="CollectionFolder"] .cardOverlayButton,
+.card[data-type="CollectionFolder"] .cardOverlayButton-br,
+.card[data-collectiontype] .cardOverlayButton,
+.card[data-collectiontype] .cardOverlayButton-br {
     display: none !important;
 }
