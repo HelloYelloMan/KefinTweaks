@@ -265,7 +265,38 @@
         }
     };
 
+    /**
+     * Wait for jellyfin-web to define ApiClient, rather than assuming it already has.
+     *
+     * In a browser it always has: index.html loads main.<hash>.bundle.js as a
+     * deferred tag, so the app bootstraps before DOMContentLoaded and long before
+     * anything here runs. The Jellyfin Android app breaks that guarantee. Its
+     * WebView intercepts the request for that bundle and serves its own
+     * injectionScript.js instead, which re-adds the real bundle by creating a
+     * <script> element and appending it -- and `defer` has no effect on a
+     * script-inserted script, so what was a deferred load becomes an async one
+     * that races us.
+     *
+     * We lose that race often enough to matter: three runs of the same page with
+     * the substitution simulated gave 0, 22 and 0 discovery sections. When we lose,
+     * this threw `ApiClient is not available`, __libraries stayed null, and the
+     * failure surfaced much later as a home screen that never took over.
+     *
+     * Waiting costs nothing in the browser -- ApiClient is already there and the
+     * first check passes immediately.
+     *
+     * @returns {Promise<void>}
+     */
+    async function waitForApiClient(maxWaitMs = 15000, checkInterval = 50) {
+        const start = Date.now();
+        while (typeof ApiClient === 'undefined' || !ApiClient) {
+            if (Date.now() - start > maxWaitMs) return;
+            await new Promise((resolve) => setTimeout(resolve, checkInterval));
+        }
+    }
+
     async function initialize() {
+        await waitForApiClient();
         ensureApiClient();
         
         if (__libraries) {

@@ -52,6 +52,48 @@
     }
 
     /**
+     * Keep looking for Emby.Page rather than giving up after one check.
+     *
+     * DOMContentLoaded used to be a safe moment to hook: index.html loads
+     * jellyfin-web's main.<hash>.bundle.js as a deferred tag, and deferred scripts
+     * run before that event, so Emby.Page was always there by the time we looked.
+     *
+     * The Jellyfin Android app breaks that. Its WebView intercepts the request for
+     * that bundle and serves its own injectionScript.js instead, which re-adds the
+     * real bundle by creating a <script> and appending it -- and `defer` is ignored
+     * on a script-inserted script, so the load becomes async and races us. When we
+     * win the race the single check found nothing, printed the warning above, and
+     * that was that: no hook, so no handler ever fired again, and every view-driven
+     * feature was dead for the session while the rest of KefinTweaks looked fine.
+     * The home screen not taking over -- no enhanced sections, no discovery -- was
+     * this, one warning line earlier.
+     *
+     * Polling instead costs nothing where the guarantee still holds: Emby.Page is
+     * already defined, the first check passes, and no timer is ever created.
+     *
+     * The window is generous because it is the app's network fetch of the bundle we
+     * are waiting on, not a local initialisation. On timeout we warn exactly as
+     * before -- a genuinely absent Emby.Page should still be visible.
+     */
+    function initializeWhenEmbyReady(maxWaitMs = 15000, checkInterval = 50) {
+        if (window.Emby && window.Emby.Page) {
+            initialize();
+            return;
+        }
+        const start = Date.now();
+        const timer = setInterval(() => {
+            if (window.Emby && window.Emby.Page) {
+                clearInterval(timer);
+                LOG(`Emby.Page appeared after ${Date.now() - start}ms; hooking now`);
+                initialize();
+            } else if (Date.now() - start > maxWaitMs) {
+                clearInterval(timer);
+                initialize(); // warns, as it always did
+            }
+        }, checkInterval);
+    }
+
+    /**
      * Build MediaBrowser Authorization header
      * @returns {string} - Authorization header
      */
@@ -300,11 +342,11 @@
         LOG('Cleared all onViewPage handlers');
     }
     
-    // Initialize when DOM is ready
+    // Initialize when DOM is ready -- then wait for Emby.Page if it is not there yet
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initialize);
+        document.addEventListener('DOMContentLoaded', () => initializeWhenEmbyReady());
     } else {
-        initialize();
+        initializeWhenEmbyReady();
     }
     
     // ----- Custom menu links (placements: side / top main|right / userMenu) -----
