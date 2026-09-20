@@ -30,6 +30,15 @@
  */
 .kefin-true-aspect > .card.portraitCard,
 .kefin-true-aspect > .card.overflowPortraitCard {
+    /* The width formula is `height x ratio + pad`, which is only true if the
+       width we set INCLUDES the padding. Jellyfin's cards are border-box, so it
+       is; ElegantFin's are content-box with `padding: var(--padding)`, so the
+       browser added that padding on top and every card came out too wide -- not
+       shrinking, and stretching the picture past the ratio it was given, which
+       is art getting cut off. Normalising the box model makes the formula mean
+       the same thing under any skin. */
+    box-sizing: border-box !important;
+
     /* !important because ElegantFin sizes cards with
        `.card { width: var(--cardWidth) !important }` -- its own ladder, built
        from --cardCount. Without this the whole feature silently did nothing
