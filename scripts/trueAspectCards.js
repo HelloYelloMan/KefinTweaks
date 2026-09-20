@@ -688,11 +688,76 @@
         observer.observe(document.head, { childList: true });
     }
 
+    /**
+     * Take the ratios out of Jellyfin's own replies, before it builds the cards.
+     *
+     * A library page renders about a hundred cards in one go, and until now we
+     * knew nothing about any of them: they were painted at the default and then
+     * corrected once our own lookup came back. Measured, that was 75 of 100
+     * visibly moving, the worst by 301px.
+     *
+     * But Jellyfin has already asked for exactly what we need. Its item queries
+     * include PrimaryImageAspectRatio, because setCardData takes the median of
+     * it to choose the row's shape. So the numbers arrive in a response that
+     * lands BEFORE a single card exists -- we simply were not listening.
+     *
+     * Reading them on the way past fills the cache in time for
+     * applyKnownRatiosNow, which runs in the observer microtask ahead of the
+     * frame being painted. No extra request, no new API surface.
+     *
+     * DELIBERATELY TIMID. It only looks at same-origin item replies, only reads,
+     * never alters the response or the timing, and any failure is swallowed --
+     * the worst case is an empty cache and today's behaviour. json() gives a
+     * promise on a CLONE, so the caller's body is untouched.
+     */
+    const ITEM_RESPONSE = /\/(Items|Users\/[^/]+\/Items|Shows\/NextUp|Shows\/Upcoming)(\?|$)/;
+
+    function harvestRatios(payload) {
+        const items = payload && (payload.Items || (Array.isArray(payload) ? payload : null));
+        if (!Array.isArray(items)) return;
+        let added = 0;
+        for (const item of items) {
+            if (!item || !item.Id) continue;
+            if (typeof item.PrimaryImageAspectRatio !== 'number') continue;
+            if (ratioCache.has(item.Id)) continue;
+            ratioCache.set(item.Id, item.PrimaryImageAspectRatio);
+            added++;
+        }
+        if (added) persistRatioCache();
+    }
+
+    function watchItemResponses() {
+        const nativeFetch = window.fetch;
+        if (typeof nativeFetch !== 'function' || nativeFetch.__kefinTrueAspect) return;
+
+        const wrapped = function (...args) {
+            const result = nativeFetch.apply(this, args);
+            try {
+                const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
+                if (url && ITEM_RESPONSE.test(url) && !/^https?:\/\//.test(url.replace(location.origin, ''))) {
+                    return result.then((response) => {
+                        try {
+                            response.clone().json().then(harvestRatios).catch(() => {});
+                        } catch (e) { /* not json, or already consumed */ }
+                        return response;
+                    });
+                }
+            } catch (e) {
+                // Never let this get between the caller and its response.
+            }
+            return result;
+        };
+        wrapped.__kefinTrueAspect = true;
+        window.fetch = wrapped;
+        LOG('Reading aspect ratios from Jellyfin\'s own item responses');
+    }
+
     function initializeHook() {
         if (window.__kefinTrueAspectActive) return;
         window.__kefinTrueAspectActive = true;
 
         loadRatioCache();
+        watchItemResponses();
 
         const observer = new MutationObserver((records) => {
             applyKnownRatiosNow(records);   // before paint
