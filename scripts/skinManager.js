@@ -890,7 +890,7 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
             const isEnabled = isOptionalIncludeEnabled(key, include.enabled || false, userConfig);
             
             if (isEnabled && include.url) {
-                loadOptionalIncludeCSS(include.url, 'global');
+                withSkinCacheToken(include.url).then((url) => loadOptionalIncludeCSS(url, 'global'));
             }
         });
         
@@ -904,7 +904,7 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
                 const isEnabled = isOptionalIncludeEnabled(key, include.enabled || false, userConfig);
                 
                 if (isEnabled && include.url) {
-                    loadOptionalIncludeCSS(include.url, skin.name);
+                    withSkinCacheToken(include.url).then((url) => loadOptionalIncludeCSS(url, skin.name));
                 }
             });
         }
@@ -2883,11 +2883,13 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
             
             if (cssUrls && cssUrls.length > 0) {
                 LOG(`Loading skin with ${cssUrls.length} CSS files: ${skin.name}`);
-                cssUrls.forEach(url => {
-                    if (url) { // Skip null/empty URLs
-                        loadSkinCSS(url, skin.name);
-                    }
-                });
+                // Resolve every token first, then insert in order: loadSkinCSS places
+                // each link after the last one, so awaiting inside the loop would let
+                // them land out of order and change the cascade.
+                const tokenized = await Promise.all(
+                    cssUrls.filter(Boolean).map((url) => withSkinCacheToken(url))
+                );
+                tokenized.forEach((url) => loadSkinCSS(url, skin.name));
             }
 
             // Load optional includes for this skin
@@ -2898,6 +2900,53 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
         });
     }
     
+    /**
+     * Append a cache token to a stylesheet URL, derived from the file's own validator.
+     *
+     * Skin stylesheets are the last thing here still served from a stable URL with
+     * nothing to say when it changes. The web root sends an ETag and a
+     * Last-Modified but no Cache-Control, so a browser is free to reuse a copy for
+     * as long as its heuristic allows.
+     *
+     * And a hard reload does not reliably clear it, which is what makes this so
+     * confusing to diagnose: these <link> elements are created by script after the
+     * page has loaded, so they are not part of the navigation Ctrl+Shift+R forces
+     * to revalidate. Editing a skin file, redeploying and hard-refreshing can leave
+     * the old rules in place indefinitely -- measured: a browser reporting 2 rules
+     * for a file the server had at 4, across repeated hard refreshes.
+     *
+     * Same approach as withCacheToken in injector.js, which this reuses when it is
+     * there: one HEAD with cache: 'no-cache' to read the current validator, used as
+     * ?v=. The URL then changes only when the file does, so caching still works.
+     * Any failure returns the bare URL, which is the old behaviour.
+     *
+     * @param {string} url
+     * @returns {Promise<string>}
+     */
+    async function withSkinCacheToken(url) {
+        if (!url) return url;
+        const shared = window.KefinTweaksCacheToken;
+        if (typeof shared === 'function') {
+            try {
+                return await shared(url);
+            } catch (e) {
+                return url;
+            }
+        }
+        try {
+            const response = await fetch(url, { method: 'HEAD', cache: 'no-cache' });
+            if (!response.ok) return url;
+            const validator = response.headers.get('etag')
+                || response.headers.get('last-modified');
+            if (!validator) return url;
+            const token = validator.replace(/[^A-Za-z0-9]/g, '').slice(-24);
+            if (!token) return url;
+            return url + (url.includes('?') ? '&' : '?') + 'v=' + token;
+        } catch (e) {
+            return url;
+        }
+    }
+
     /**
      * Load CSS for a specific skin using link tags
      * @param {string} url - The CSS URL
