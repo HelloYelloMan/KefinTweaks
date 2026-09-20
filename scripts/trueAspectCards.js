@@ -40,6 +40,21 @@
 // fixes it at the source; nothing here can tell the difference without
 // downloading every image to measure it.
 
+// THE EPISODE STILLS SETTING. Off by default, in this feature's own settings
+// panel. Jellyfin draws episodes as portrait cards carrying their SERIES poster,
+// so every episode of a show looks identical and the card says nothing about the
+// episode. Switched on, the card is repointed at the episode's own Primary -- a
+// 16:9 still -- and moved to the backdrop shape at the same time.
+//
+// Both halves are needed: swapping the image alone leaves a 16:9 still cropped
+// into a 2:3 box, and changing the shape alone letterboxes the poster.
+//
+// It lives here rather than as a feature of its own because it is the same
+// question this feature already answers -- what shape should this card be, given
+// the picture on it -- and because the two have to agree: once a card is moved
+// to the backdrop family the ratio pass stops looking at it, which is what keeps
+// them from fighting over the same card.
+
 (function () {
     'use strict';
 
@@ -240,12 +255,136 @@
         if (applied) LOG(`Sized ${applied} card(s) to their own aspect ratio`);
     }
 
+
+    function settings() {
+        return (window.KefinTweaksConfig && window.KefinTweaksConfig.trueAspectCards) || {};
+    }
+
+    function episodeStillsEnabled() {
+        return settings().episodeStills === true;
+    }
+
+    // ---- episode stills -------------------------------------------------
+    // Off unless the setting says otherwise; see the note at the top of the file.
+
+    const EPISODE_DONE_ATTR = 'data-kefin-episode-thumb';
+    /** @type {Map<string, boolean>} episodeId -> has a Primary image of its own */
+    const hasStill = new Map();
+    const stillPending = new Set();
+
+    function episodeCandidates(scope) {
+        const out = [];
+        scope.querySelectorAll('.card[data-type="Episode"]').forEach((card) => {
+            if (card.hasAttribute(EPISODE_DONE_ATTR)) return;
+            if (!card.classList.contains('portraitCard')
+                && !card.classList.contains('overflowPortraitCard')) return;
+            const id = card.getAttribute('data-id');
+            if (!id) return;
+            const holder = card.querySelector('.cardImageContainer');
+            const bg = holder ? (holder.style.backgroundImage || '') : '';
+            if (!bg || bg === 'none') return;   // lazy: retry once it loads
+            out.push({ card, id, holder, bg });
+        });
+        return out;
+    }
+
+    async function fetchStillFlags(ids) {
+        const wanted = ids.filter((id) => !hasStill.has(id) && !stillPending.has(id));
+        if (!wanted.length) return;
+        wanted.forEach((id) => stillPending.add(id));
+        try {
+            const result = await ApiClient.getItems(ApiClient.getCurrentUserId(), {
+                Ids: wanted.join(','),
+                Fields: 'PrimaryImageAspectRatio',
+                EnableUserData: false,
+                EnableTotalRecordCount: false
+            });
+            (result?.Items || []).forEach((item) => {
+                hasStill.set(item.Id, !!(item.ImageTags && item.ImageTags.Primary));
+            });
+            wanted.forEach((id) => { if (!hasStill.has(id)) hasStill.set(id, false); });
+        } catch (err) {
+            WARN('Episode image lookup failed:', err);
+        } finally {
+            wanted.forEach((id) => stillPending.delete(id));
+        }
+    }
+
+    /**
+     * Repoint the background at this episode's own Primary.
+     *
+     * The existing URL is edited rather than rebuilt, so the server address, the
+     * size parameters and the quality the card already asked for carry over.
+     * The tag has to go with it: it belongs to the series' image and would
+     * return a stale or missing file against the episode.
+     */
+    function repointImage(holder, bg, episodeId) {
+        const match = bg.match(/url\(["']?(.*?)["']?\)/);
+        if (!match) return false;
+        const url = match[1];
+        const next = url
+            .replace(/\/Items\/[a-f0-9-]+\/Images\/[A-Za-z]+/, `/Items/${episodeId}/Images/Primary`)
+            .replace(/[?&]tag=[^&]*/, (m) => (m[0] === '?' ? '?' : ''))
+            .replace(/\?&/, '?')
+            .replace(/[?&]$/, '');
+        if (next === url) return false;
+        holder.style.backgroundImage = `url("${next}")`;
+        return true;
+    }
+
+    /**
+     * portrait -> backdrop, on the card and on its padder.
+     *
+     * Swapping the class families Jellyfin already uses means the card picks up
+     * every backdrop rule that exists rather than needing a parallel set. The
+     * padder matters as much as the card: its percentage padding is what sets
+     * the height.
+     */
+    function reshapeToBackdrop(card) {
+        const overflow = card.classList.contains('overflowPortraitCard');
+        card.classList.remove('portraitCard', 'overflowPortraitCard');
+        card.classList.add(overflow ? 'overflowBackdropCard' : 'backdropCard');
+
+        const padder = card.querySelector('.cardPadder');
+        if (padder) {
+            padder.classList.remove('cardPadder-portrait', 'cardPadder-overflowPortrait');
+            padder.classList.add(overflow ? 'cardPadder-overflowBackdrop' : 'cardPadder-backdrop');
+        }
+    }
+
+    async function applyEpisodeStills(scope) {
+        const todo = episodeCandidates(scope);
+        if (!todo.length) return;
+
+        const ids = [...new Set(todo.map((t) => t.id))];
+        for (let i = 0; i < ids.length; i += 100) {
+            await fetchStillFlags(ids.slice(i, i + 100));
+        }
+
+        let changed = 0;
+        todo.forEach(({ card, id, holder, bg }) => {
+            card.setAttribute(EPISODE_DONE_ATTR, '1');
+            // No still of its own: keep the series poster. A card with no picture
+            // is worse than a repeated one.
+            if (!hasStill.get(id)) return;
+            if (!repointImage(holder, bg, id)) return;
+            reshapeToBackdrop(card);
+            changed++;
+        });
+        if (changed) LOG(`Switched ${changed} episode card(s) to their own still`);
+    }
+
     let sweepTimer = null;
     function scheduleSweep() {
         if (sweepTimer) return;
         sweepTimer = setTimeout(() => {
             sweepTimer = null;
-            visibleScopes().forEach((scope) => { processScope(scope); });
+            visibleScopes().forEach(async (scope) => {
+                // Stills first: a card it reshapes leaves the portrait family, so
+                // the ratio pass below correctly ignores it.
+                if (episodeStillsEnabled()) await applyEpisodeStills(scope);
+                processScope(scope);
+            });
         }, 200);
     }
 

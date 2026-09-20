@@ -250,7 +250,6 @@
         mediaTags: true,          // Add a Tags row to the item-details metadata table
         specialEpisodePrefix: true, // Drop the "Special - " prefix from season-zero episode titles
         trueAspectCards: false,   // Size poster cards to their own aspect ratio instead of one fixed shape
-        episodeThumbCards: false, // Episode cards show their own 16:9 still instead of the series poster
         osdLogo: true,            // Media logo/ClearArt on the video OSD
         pauseScreen: true,        // Rich pause screen overlay (logo, plot, artwork, progress)
         themeMediaCastFix: true,  // Theme media playback while a remote/cast target is connected
@@ -417,6 +416,13 @@
             css: null,
             dependencies: ['modal', 'toaster', 'utils'],
             description: 'Series info configuration for KefinTweaks'
+        },
+        {
+            name: 'trueAspectCards-configuration',
+            script: '../configuration/trueAspectCards-configuration.js',
+            css: null,
+            dependencies: ['modal', 'toaster', 'utils'],
+            description: 'True aspect poster cards configuration for KefinTweaks'
         },
         {
             name: 'versionPreferences-configuration',
@@ -814,13 +820,6 @@
             css: 'trueAspectCards.css',
             dependencies: ['utils'],
             description: 'Sizes each poster card to its own image instead of cropping everything to one shape. Cards keep a single row height and take their width from the image aspect ratio, so wider covers get wider cards.'
-        },
-        {
-            name: 'episodeThumbCards',
-            script: 'episodeThumbCards.js',
-            css: null,
-            dependencies: ['utils'],
-            description: 'Shows an episode\'s own still on its card instead of the series poster, as a 16:9 backdrop card. Episodes with no still of their own keep the poster.'
         },
         {
             name: 'episodeSeasonTitle',
@@ -1376,7 +1375,7 @@
     }
 
     async function loadConfigurationJS() {
-        const configDependencyNames = ['modal', 'toaster', 'utils', 'homeScreenConfig2', 'ui', 'homeScreen-migration', 'homeScreen-configuration', 'search-configuration', 'seriesEpisodes-configuration', 'seriesInfo-configuration', 'versionPreferences-configuration', 'skinManager-configuration', 'customMenuLinks-configuration', 'thumbnailScrubber-configuration', 'watchTogether-configuration', 'userManager-configuration', 'apiHelper'];
+        const configDependencyNames = ['modal', 'toaster', 'utils', 'homeScreenConfig2', 'ui', 'homeScreen-migration', 'homeScreen-configuration', 'search-configuration', 'seriesEpisodes-configuration', 'seriesInfo-configuration', 'trueAspectCards-configuration', 'versionPreferences-configuration', 'skinManager-configuration', 'customMenuLinks-configuration', 'thumbnailScrubber-configuration', 'watchTogether-configuration', 'userManager-configuration', 'apiHelper'];
         for (const depName of configDependencyNames) {
             const depScript = SCRIPT_DEFINITIONS.find(script => script.name === depName);
             if (depScript) {
