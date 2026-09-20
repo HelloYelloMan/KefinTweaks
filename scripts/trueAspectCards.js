@@ -71,6 +71,10 @@
 
     // Clear space left between the last card and the A-Z letters.
     const ALPHA_PICKER_GAP = 12;
+    // How much daylight to leave between the last card and the picker.
+    // Smaller than ALPHA_PICKER_GAP because this one is paid for out of
+    // card size rather than out of padding the layout already reserved.
+    const PICKER_CLEARANCE = 4;
 
     // Fanart's poster shape, 1000x1426. The fallback when a container cannot be
     // measured, and the shape the card builder now requests images at, so the
@@ -387,6 +391,9 @@
         const settledWidth = Math.round(container.getBoundingClientRect().width);
         container.dataset.kefinMeasuredAt = String(settledWidth);
         container.dataset.kefinSkinSig = skinSignature();
+        // The height before any picker correction. fitInsidePicker always works
+        // from this, so the correction cannot compound on itself each sweep.
+        container.dataset.kefinBaseH = String(Math.round(height));
         container.classList.add(ACTIVE_CLASS);
         rememberMeasurement(settledWidth, Math.round(height), pad);
         return true;
@@ -453,9 +460,109 @@
         container.style.setProperty('--kefin-card-pad', known.pad + 'px');
         container.dataset.kefinMeasuredAt = String(width);
         container.dataset.kefinSkinSig = skinSignature();
+        container.dataset.kefinBaseH = String(known.h);
         applyAlphaPickerSlack(container);
         container.classList.add(ACTIVE_CLASS);
         return true;
+    }
+
+    /**
+     * Keep the end of a row clear of the A-Z picker, without costing a card.
+     *
+     * On a phone there is no .padded-right-withalphapicker, the container's
+     * padding-right is 0, and the picker simply floats over the content -- so
+     * the last card in a row sat under the letters. Measured on an S25 Ultra
+     * viewport (412x883): picker starting at x387, worst card reaching x391.
+     *
+     * The obvious fix, reserving padding, is the wrong one and was tried: the
+     * row is packed to within 2px of the container edge, so taking the ~15px
+     * the picker wants pushes the third card onto the next line -- the
+     * three-across-becomes-two regression, which is far worse than a 5px sliver.
+     *
+     * So take it out of the HEIGHT instead. Every card's width is derived from
+     * the row height, so shaving a little off the height narrows the whole row
+     * proportionally -- around 1.7px per card here, which is invisible -- and
+     * the row ends before the picker with all three cards still on it.
+     * Shrinking cannot pull an extra card onto the row either: at these sizes a
+     * fourth would need nearly another 120px.
+     *
+     * Always computed from kefinBaseH rather than from the current height, so
+     * repeated sweeps converge instead of ratcheting the cards ever smaller.
+     */
+    function fitInsidePicker(container) {
+        const base = parseFloat(container.dataset.kefinBaseH);
+        if (!(base > 0)) return;
+
+        const readH = () => parseFloat(container.style.getPropertyValue('--kefin-card-h')) || base;
+
+        const picker = document.querySelector('[data-role="page"]:not(.hide) .alphaPicker')
+            || document.querySelector('.alphaPicker');
+        if (!picker) return;
+        const pr = picker.getBoundingClientRect();
+        if (!pr.width) return;
+
+        const cards = container.querySelectorAll(CARD_SELECTOR);
+        if (!cards.length) return;
+
+        const limit = pr.left - PICKER_CLEARANCE;
+
+        // The row that reaches furthest right is the one that has to fit, and
+        // how many cards are on it decides how much each has to give up.
+        let worstRight = 0;
+        let worstTop = null;
+        cards.forEach((c) => {
+            const r = c.getBoundingClientRect();
+            if (r.right > worstRight) { worstRight = r.right; worstTop = Math.round(r.top); }
+        });
+        if (!worstRight) return;
+
+        let rowCount = 0;
+        cards.forEach((c) => {
+            if (Math.round(c.getBoundingClientRect().top) === worstTop) rowCount++;
+        });
+        if (rowCount < 1) return;
+
+        const ratio = parseFloat(container.style.getPropertyValue('--kefin-card-r-default')) || FANART_RATIO;
+        const current = readH();
+        const overhang = worstRight - limit;
+
+        /* Solve the shrink instead of scaling by a ratio of spans.
+         *
+         * Scaling the height by room/span under-corrects, and measurably so:
+         * 4.9px of overlap became 2.8px rather than none. A card's width is
+         * `height x ratio + pad`, and the pad is a fixed number of pixels that
+         * does not shrink with the height, so a proportional scale never removes
+         * a proportional amount of width.
+         *
+         * Going the other way is exact. To pull the row in by `overhang`, each
+         * of the n cards on it must lose overhang/n of width, and width comes
+         * from height through the ratio -- so the height gives up
+         * (overhang / n) / ratio. Computed from the CURRENT height, so a row
+         * that is still over after one pass keeps closing on the next.
+         */
+        if (overhang > 0.5) {
+            const deltaH = (overhang / rowCount) / ratio;
+            const floorH = Math.floor(base * 0.9);   // never shrink beyond a tenth
+            const next = Math.max(floorH, Math.floor(current - deltaH));
+            if (next > 0 && next < Math.round(current)) {
+                container.style.setProperty('--kefin-card-h', next + 'px');
+            }
+            return;
+        }
+
+        /* Give the height back when the row is comfortably clear.
+         *
+         * The 8px deadband is what stops this fighting the branch above:
+         * restoring the moment the overlap is gone would re-create it, and the
+         * two would trade places every sweep.
+         */
+        if (worstRight < limit - 8 && Math.round(current) < Math.round(base)) {
+            const gain = (limit - 8 - worstRight) / rowCount / ratio;
+            const next = Math.min(Math.round(base), Math.floor(current + gain));
+            if (next > Math.round(current)) {
+                container.style.setProperty('--kefin-card-h', next + 'px');
+            }
+        }
     }
 
     function cardsNeedingRatio(scope) {
@@ -532,6 +639,7 @@
             const stale = !container.dataset.kefinMeasuredAt
                 || container.dataset.kefinSkinSig !== skinSignature();
             if (!active || stale) measureAndActivate(container);
+            fitInsidePicker(container);
         });
 
         const todo = cardsNeedingRatio(scope);
