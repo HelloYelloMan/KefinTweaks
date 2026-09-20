@@ -184,10 +184,10 @@
                 enabled: false
             },
             {
-                // Targets the buttons by their `is` attribute (emby-playstatebutton,
-                // emby-ratingbutton) because their class lists are identical to the
-                // Play and More buttons'. Leaves those two alone.
-                name: 'Hide Watched/Watchlist/Like Buttons On Home Screen',
+                // Scoped by data-type=CollectionFolder rather than by section:
+                // KefinTweaks builds its own My Media section and Jellyfin has a
+                // stock one, and which renders depends on configuration.
+                name: 'Hide Buttons On Library Cards (My Media)',
                 url: `${getKefinTweaksRoot()}skins/optional/global/hideHomeCardOverlayButtons.css`,
                 enabled: false
             }

@@ -1,29 +1,35 @@
-/* Hide the watched, watchlist and like buttons on home screen cards.
+/* Hide the hover-overlay buttons on LIBRARY cards (the My Media tiles).
  *
- * Jellyfin hangs three toggles off the bottom-right of a card's hover overlay,
- * and on the home screen they are mostly noise: the rows there are for picking
- * something to watch, not for editing state, and every one of them is reachable
- * from the item page or the card's own More menu.
+ * Only library cards. Media cards -- movies, series, episodes -- keep their
+ * full overlay, which is where those buttons are actually wanted.
  *
- * Matched by their `is` attribute rather than a class, because that is what
- * actually identifies them -- Jellyfin's custom elements are emby-playstatebutton
- * and emby-ratingbutton, and their class lists are the same generic
- * `cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light
- * emby-button` as every other overlay button. Keying on the class would take the
- * Play and More buttons with them. The watchlist button is KefinTweaks' own and
- * does carry a distinguishing class.
+ * Matched on `data-type="CollectionFolder"`, which is what Jellyfin stamps on a
+ * library tile, rather than on the section it sits in. Scoping by section was
+ * the wrong idea: KefinTweaks builds its own My Media section, Jellyfin has a
+ * stock one (`verticalSection section0`), and which of them renders depends on
+ * configuration -- so a section-based rule hits the buttons under one setup and
+ * misses them under the other. The data-type is on the card either way.
  *
- * Deliberately NOT hidden:
- *   [data-action="resume"] -- Play, the point of the card
- *   [data-action="menu"]   -- More, which still offers mark-watched and favourite
+ * KefinTweaks' own my-media section already sets showPlayButton,
+ * showMoreButton, showMarkPlayedButton and showFavoriteButton to false, so this
+ * stylesheet is the same intent expressed for the cards Jellyfin builds itself,
+ * where those flags do not reach.
  *
- * Scoped to .homePage so library and detail pages keep the full set. That class
- * sits on the page element Jellyfin shows for the home route
- * (`page homePage libraryPage allLibraryPage ...`), and the cards are inside it,
- * so no :has() and nothing that depends on card markup is needed.
+ * Both the .cardOverlayButton-br strip AND the buttons themselves are matched.
+ * Hiding only the strip changed nothing -- a library tile's buttons are not
+ * always inside it, unlike a media card's, so the wrapper rule missed them
+ * entirely (16 visible before, 16 after). Matching the buttons directly works
+ * whichever way the card is assembled.
+ *
+ * The whole group goes, not three named buttons: a
+ * library tile is a link to a library, so there is no state on it worth
+ * toggling, and leaving one lone More button behind looks like an oversight
+ * rather than a decision. The card stays clickable -- the overlay container
+ * itself carries the link, and only the button strip is hidden.
  */
-.homePage .cardOverlayContainer .watchlist-button,
-.homePage .cardOverlayContainer [is="emby-playstatebutton"],
-.homePage .cardOverlayContainer [is="emby-ratingbutton"] {
+.homePage .card[data-type="CollectionFolder"] .cardOverlayButton,
+.homePage .card[data-type="CollectionFolder"] .cardOverlayButton-br,
+.homePage .card[data-collectiontype] .cardOverlayButton,
+.homePage .card[data-collectiontype] .cardOverlayButton-br {
     display: none !important;
 }
