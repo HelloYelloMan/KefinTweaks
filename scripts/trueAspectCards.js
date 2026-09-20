@@ -141,6 +141,45 @@
     }
 
     /**
+     * Believe the picture, not the metadata.
+     *
+     * PrimaryImageAspectRatio is a recorded field, and it goes stale when an
+     * item's image is replaced without a metadata refresh. Reported on "Black
+     * Lagoon: Roberta's Blood Trail": the field says 1.7778, the stored image is
+     * 600x900, and the card was drawn 16:9 around a portrait cover.
+     *
+     * The image itself settles it. This only runs for cards whose requested box
+     * disagreed with the metadata enough that the URL was rewritten -- so the
+     * picture being measured is the one already being displayed, and reading it
+     * costs a cache hit rather than a request.
+     *
+     * A correction is written back to the cache as well as the card, so every
+     * other card for the same item, and the rest of the session, uses the truth
+     * rather than repeating the measurement.
+     */
+    function verifyAgainstImage(card, url, claimed) {
+        const probe = new Image();
+        probe.onload = () => {
+            const w = probe.naturalWidth, h = probe.naturalHeight;
+            if (!w || !h) return;
+            const actual = w / h;
+            if (!isFinite(actual) || actual <= 0) return;
+            if (Math.abs(actual - claimed) / claimed <= 0.02) return;
+
+            const id = card.getAttribute('data-id');
+            const shown = displayedImage(card);
+            const key = shown ? shown.id : id;
+            if (key) {
+                ratioCache.set(key, actual);
+                persistRatioCache();
+            }
+            card.style.setProperty(RATIO_PROP, actual.toFixed(4));
+            LOG(`Metadata said ${claimed.toFixed(3)}, the image is ${actual.toFixed(3)} - corrected`);
+        };
+        probe.src = url;
+    }
+
+    /**
      * Only rewrite a URL that is actually asking for a crop.
      *
      * fillWidth+fillHeight crops to that box -- but only if the box disagrees
@@ -178,7 +217,12 @@
         }
 
         const next = uncroppedUrl(url);
-        if (next !== url) holder.style.backgroundImage = `url("${next}")`;
+        if (next !== url) {
+            holder.style.backgroundImage = `url("${next}")`;
+            // The box and the metadata disagreed, which is exactly when the
+            // metadata is worth checking against the picture itself.
+            if (ratio) verifyAgainstImage(card, next, ratio);
+        }
         holder.dataset.kefinUncropped = '1';
     }
 
