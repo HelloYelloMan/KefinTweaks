@@ -69,9 +69,48 @@
     // closer is visually identical and not worth a reflow.
     const MIN_DELTA = 0.005;
 
-    /** @type {Map<string, number>} itemId -> PrimaryImageAspectRatio */
+    // Clear space left between the last card and the A-Z letters.
+    const ALPHA_PICKER_GAP = 12;
+
+    /**
+     * itemId -> PrimaryImageAspectRatio, kept for the tab rather than the view.
+     *
+     * Ratios do not change while you browse, and the same items come back on
+     * every navigation -- home, then a library, then back. Holding them in
+     * sessionStorage means the lookup happens once per item per tab instead of
+     * once per page, which is most of this feature's request cost on a session
+     * that moves around.
+     *
+     * @type {Map<string, number>}
+     */
     const ratioCache = new Map();
     const pending = new Set();
+    const RATIO_STORE = 'kefinTweaks_cardRatios';
+
+    function loadRatioCache() {
+        try {
+            const raw = sessionStorage.getItem(RATIO_STORE);
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            Object.entries(parsed).forEach(([id, r]) => ratioCache.set(id, r));
+            LOG(`Reusing ${ratioCache.size} cached ratio(s) from this session`);
+        } catch (e) {
+            // A corrupt or blocked store costs a refetch, nothing more.
+        }
+    }
+
+    let persistTimer = null;
+    function persistRatioCache() {
+        if (persistTimer) return;
+        persistTimer = setTimeout(() => {
+            persistTimer = null;
+            try {
+                sessionStorage.setItem(RATIO_STORE, JSON.stringify(Object.fromEntries(ratioCache)));
+            } catch (e) {
+                // Full or blocked: the in-memory cache still works for this page.
+            }
+        }, 2000);
+    }
 
     function visibleScopes() {
         const pages = document.querySelectorAll('[data-role="page"]:not(.hide)');
@@ -135,6 +174,34 @@
     }
 
     /**
+     * Hand back the space the A-Z picker reserves but does not use.
+     *
+     * A library page pads its right edge by 7.5% for the picker, which is 21px
+     * wide. That leaves tens of pixels idle -- 52 at 1167px, and proportionally
+     * more on a bigger screen -- while the row next to it is a pixel or two short
+     * of fitting one more card. Measuring the picker and reserving only what it
+     * occupies returns that room to the row.
+     *
+     * The gap is deliberate: the cards stop short of the letters rather than
+     * running into them.
+     */
+    function applyAlphaPickerSlack(container) {
+        if (!container.classList.contains('padded-right-withalphapicker')) return;
+        const picker = document.querySelector('[data-role="page"]:not(.hide) .alphaPicker')
+            || document.querySelector('.alphaPicker');
+        if (!picker) return;
+
+        // Measure to the picker's LEFT EDGE from the container's right edge, not
+        // the picker's width. The picker is not flush to that edge -- it sits 14px
+        // inside it -- so reserving its width alone left the content 2px under the
+        // letters.
+        const containerRight = container.getBoundingClientRect().right;
+        const needed = Math.round(containerRight - picker.getBoundingClientRect().left);
+        if (!(needed > 0)) return;
+        container.style.setProperty('--kefin-alpha-slack', (needed + ALPHA_PICKER_GAP) + 'px');
+    }
+
+    /**
      * Switch a container on, remembering the height its cards had first.
      *
      * The measurement has to happen before the class lands: afterwards every
@@ -165,6 +232,8 @@
         // on the card and not on the picture.
         const cardRect = probe.getBoundingClientRect();
         const pad = Math.max(0, Math.round(cardRect.width - rect.width));
+
+        applyAlphaPickerSlack(container);
 
         container.style.setProperty('--kefin-card-h', Math.round(rect.height) + 'px');
         container.style.setProperty('--kefin-card-r-default', (rect.width / rect.height).toFixed(4));
@@ -214,6 +283,7 @@
             });
             // Remember the misses too, so they are not asked for again.
             wanted.forEach((id) => { if (!ratioCache.has(id)) ratioCache.set(id, 0); });
+            persistRatioCache();
         } catch (err) {
             WARN('Ratio lookup failed:', err);
         } finally {
@@ -405,6 +475,8 @@
     function initializeHook() {
         if (window.__kefinTrueAspectActive) return;
         window.__kefinTrueAspectActive = true;
+
+        loadRatioCache();
 
         const observer = new MutationObserver(() => scheduleSweep());
         observer.observe(document.body, { childList: true, subtree: true });

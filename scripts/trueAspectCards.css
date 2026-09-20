@@ -51,3 +51,32 @@
 .kefin-true-aspect > .card.overflowPortraitCard .cardImageContainer {
     background-size: cover;
 }
+
+/* Give a library row the room that was already sitting unused.
+ *
+ * THE PROBLEM, and it is a cliff rather than a trade. Jellyfin's width ladder is
+ * tuned so a row fits exactly, with nothing spare. Vary the widths even slightly
+ * and the last card of the row falls off the end -- measured at 1167px, a row
+ * leaves 205.7px over against a card needing 207.5px. It misses by 1.7px, and
+ * the result is a row of nine with an obvious gap where a tenth plainly fits.
+ *
+ * WHERE THE ROOM IS. A library page reserves 7.5% of its width on the right for
+ * the A-Z picker (.padded-right-withalphapicker). The picker is 21px wide.
+ * Measured on the same page: 87px reserved, content ending at x1074, picker at
+ * x1126 -- 52px of dead space. The reservation is proportional, so it is 144px
+ * on a 1920 screen and 192px on a 2560 one, against the same 21px picker.
+ *
+ * So the padding is set from what the picker actually needs, measured at runtime
+ * and written to --kefin-alpha-slack, rather than from a percentage. That
+ * returns 54px at 1167, 111px at 1920 and 159px at 2560 -- in every case more
+ * than the row was short by.
+ *
+ * The fallback covers the moment before the measurement lands, and any page
+ * where the picker is not found.
+ *
+ * Scoped to containers this feature has switched on, so a library page without
+ * it keeps Jellyfin's spacing exactly.
+ */
+.kefin-true-aspect.padded-right-withalphapicker {
+    padding-right: var(--kefin-alpha-slack, 4%) !important;
+}
