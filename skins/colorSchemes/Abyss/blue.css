@@ -1,0 +1,5 @@
+/* Abyss accent: Soft blue. From the theme's own documented palette. */
+:root {
+    --abyss-accent: 100, 160, 255;
+    --abyss-accent-channel: 100 160 255;
+}

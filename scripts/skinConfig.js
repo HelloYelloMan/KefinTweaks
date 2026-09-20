@@ -1358,6 +1358,19 @@
                 // `#selectTheme option[value="dark"]:checked`, so on any other base
                 // theme you get Abyss painted over the wrong palette.
                 requiresBaseTheme: 'dark',
+                // Abyss is themed off one variable, --abyss-accent, so a scheme is
+                // three lines of CSS rather than a restyle. The first four values are
+                // the theme's own documented palette; Jellyfin Purple is #AA5CC3, the
+                // left stop of Jellyfin's brand gradient, and ours. 'Default' first,
+                // because getDefaultColorScheme takes colorSchemes[0].
+                colorSchemes: [
+                    { name: 'Default', url: '' },
+                    { name: 'Warm White', url: `${getKefinTweaksRoot()}skins/colorSchemes/Abyss/warm.css` },
+                    { name: 'Soft Blue', url: `${getKefinTweaksRoot()}skins/colorSchemes/Abyss/blue.css` },
+                    { name: 'Teal', url: `${getKefinTweaksRoot()}skins/colorSchemes/Abyss/teal.css` },
+                    { name: 'Rose', url: `${getKefinTweaksRoot()}skins/colorSchemes/Abyss/rose.css` },
+                    { name: 'Jellyfin Purple', url: `${getKefinTweaksRoot()}skins/colorSchemes/Abyss/jellyfin-purple.css` }
+                ],
                 // The overrides Abyss publishes for specific plugins. It pins these to
                 // plugin versions and warns they can lag; checked against what is
                 // installed here, they have held up -- every selector in the Media Bar

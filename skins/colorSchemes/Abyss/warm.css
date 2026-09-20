@@ -1,0 +1,7 @@
+/* Abyss accent: Warm white. From the theme's own documented palette.
+ * Both variables are set: --abyss-accent is the comma form its rgb() calls use,
+ * --abyss-accent-channel the space-separated twin Jellyfin 12's MUI variables take. */
+:root {
+    --abyss-accent: 255, 250, 240;
+    --abyss-accent-channel: 255 250 240;
+}

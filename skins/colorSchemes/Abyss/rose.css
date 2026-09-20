@@ -1,0 +1,5 @@
+/* Abyss accent: Rose. From the theme's own documented palette. */
+:root {
+    --abyss-accent: 255, 100, 120;
+    --abyss-accent-channel: 255 100 120;
+}

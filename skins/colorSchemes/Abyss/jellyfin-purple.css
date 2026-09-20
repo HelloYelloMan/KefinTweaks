@@ -1,0 +1,6 @@
+/* Abyss accent: Jellyfin purple, #AA5CC3 -- the left-hand stop of Jellyfin's own
+ * brand gradient (#AA5CC3 -> #00A4DC), not part of Abyss's documented set. */
+:root {
+    --abyss-accent: 170, 92, 195;
+    --abyss-accent-channel: 170 92 195;
+}

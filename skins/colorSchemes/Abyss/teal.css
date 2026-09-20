@@ -1,0 +1,5 @@
+/* Abyss accent: Teal. From the theme's own documented palette. */
+:root {
+    --abyss-accent: 50, 200, 180;
+    --abyss-accent-channel: 50 200 180;
+}

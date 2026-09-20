@@ -126,3 +126,43 @@
     height: auto !important;
     min-height: 7.2em;
 }
+
+/* Give the episode-count and played pills readable text.
+ *
+ * THE BUG. On a light cover the unwatched-count pill is unreadable. Measured on
+ * the Shows library, 100 of them on one page, every one identical:
+ *
+ *     background  rgba(245, 245, 247, 0.8)     <- the accent, near-white, at 80%
+ *     color       rgb(255, 255, 255)           <- pure white
+ *
+ * White on translucent near-white. abyss.css paints the pill with the accent:
+ *
+ *     .countIndicator  { background: rgba(var(--abyss-accent), 0.8); ... }
+ *     .playedIndicator { background: rgb(var(--abyss-accent)); ... }
+ *
+ * and never sets a colour, so the number inherits the page's white.
+ *
+ * IT IS AN OVERSIGHT, NOT THE INTENT, and abyss.css says so itself two hundred
+ * lines earlier, where the hover state of these very elements sets exactly what
+ * the resting state is missing:
+ *
+ *     .listItem:hover .countIndicator,
+ *     .listItem:hover .playedIndicator { background: rgba(0,0,0,.15); color: #121212 }
+ *
+ * #121212 on an accent fill is the theme's convention everywhere else too -- its
+ * buttons, its detail-page play button, the Media Bar overrides. So this is the
+ * resting state catching up with the hover state rather than a new choice.
+ *
+ * Worth knowing if you go looking: the README documents `--abyss-indicator`
+ * ("Episode count / indicator pill colour", default 55, 55, 55) as the knob for
+ * this. It is not defined or referenced anywhere in abyss.css -- setting it does
+ * nothing. The pill is hardcoded to the accent.
+ *
+ * Dark text stays the right answer under the accent schemes below: every one of
+ * them is a light or mid tone, and #121212 clears 4.5:1 on all of them.
+ */
+#itemDetailPage .countIndicator,
+.countIndicator,
+.playedIndicator {
+    color: #121212;
+}
