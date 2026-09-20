@@ -1,0 +1,29 @@
+/* Hide the watched, watchlist and like buttons on home screen cards.
+ *
+ * Jellyfin hangs three toggles off the bottom-right of a card's hover overlay,
+ * and on the home screen they are mostly noise: the rows there are for picking
+ * something to watch, not for editing state, and every one of them is reachable
+ * from the item page or the card's own More menu.
+ *
+ * Matched by their `is` attribute rather than a class, because that is what
+ * actually identifies them -- Jellyfin's custom elements are emby-playstatebutton
+ * and emby-ratingbutton, and their class lists are the same generic
+ * `cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light
+ * emby-button` as every other overlay button. Keying on the class would take the
+ * Play and More buttons with them. The watchlist button is KefinTweaks' own and
+ * does carry a distinguishing class.
+ *
+ * Deliberately NOT hidden:
+ *   [data-action="resume"] -- Play, the point of the card
+ *   [data-action="menu"]   -- More, which still offers mark-watched and favourite
+ *
+ * Scoped to .homePage so library and detail pages keep the full set. That class
+ * sits on the page element Jellyfin shows for the home route
+ * (`page homePage libraryPage allLibraryPage ...`), and the cards are inside it,
+ * so no :has() and nothing that depends on card markup is needed.
+ */
+.homePage .cardOverlayContainer .watchlist-button,
+.homePage .cardOverlayContainer [is="emby-playstatebutton"],
+.homePage .cardOverlayContainer [is="emby-ratingbutton"] {
+    display: none !important;
+}

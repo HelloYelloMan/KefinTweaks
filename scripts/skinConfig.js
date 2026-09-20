@@ -182,6 +182,14 @@
                 name: 'Hide Specials From Season Row',
                 url: `${getKefinTweaksRoot()}skins/optional/global/hideSpecialsSeason.css`,
                 enabled: false
+            },
+            {
+                // Targets the buttons by their `is` attribute (emby-playstatebutton,
+                // emby-ratingbutton) because their class lists are identical to the
+                // Play and More buttons'. Leaves those two alone.
+                name: 'Hide Watched/Watchlist/Like Buttons On Home Screen',
+                url: `${getKefinTweaksRoot()}skins/optional/global/hideHomeCardOverlayButtons.css`,
+                enabled: false
             }
         ],
         
