@@ -249,6 +249,7 @@
         jeSpoilerGuardScope: true, // Scope Jellyfin Enhanced's Spoiler Guard image refresh to the item that changed
         mediaTags: true,          // Add a Tags row to the item-details metadata table
         specialEpisodePrefix: true, // Drop the "Special - " prefix from season-zero episode titles
+        trueAspectCards: false,   // Size poster cards to their own aspect ratio instead of one fixed shape
         osdLogo: true,            // Media logo/ClearArt on the video OSD
         pauseScreen: true,        // Rich pause screen overlay (logo, plot, artwork, progress)
         themeMediaCastFix: true,  // Theme media playback while a remote/cast target is connected
@@ -805,6 +806,13 @@
             css: null,
             dependencies: ['utils'],
             description: 'Removes the "Special - " prefix Jellyfin puts on the title of every season-zero episode, everywhere it appears. The prefix is localized, so the wording is learned once from the server rather than assumed.'
+        },
+        {
+            name: 'trueAspectCards',
+            script: 'trueAspectCards.js',
+            css: 'trueAspectCards.css',
+            dependencies: ['utils'],
+            description: 'Sizes each poster card to its own image instead of cropping everything to one shape. Cards keep a single row height and take their width from the image aspect ratio, so wider covers get wider cards.'
         },
         {
             name: 'episodeSeasonTitle',

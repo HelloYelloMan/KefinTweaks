@@ -1,0 +1,53 @@
+/* True-aspect cards: one row height, width from each poster's own ratio.
+ *
+ * Only active on a container the script has measured and switched on, and only
+ * for portrait-family cards -- backdrop, square and banner cards keep their
+ * shapes, which are deliberate rather than derived from artwork.
+ *
+ * --kefin-card-h    the row height, measured from an untouched card before this
+ *                   was switched on, so a 2:3 poster ends up exactly the size it
+ *                   was before.
+ * --kefin-card-ratio one card's own ratio, set from PrimaryImageAspectRatio.
+ *                   Falls back to the container's measured ratio, so a card
+ *                   whose ratio is not known yet does not jump.
+ * --kefin-card-pad  the horizontal difference between the card and the image box
+ *                   inside it. .cardScalable sits inside .cardBox, which is
+ *                   padded, so the card has to be that much wider than
+ *                   height x ratio or the IMAGE ends up at the wrong ratio --
+ *                   measured 187 wide against a 166 wide image box, which turned
+ *                   a requested 0.68 into 0.623 on screen.
+ */
+.kefin-true-aspect > .card.portraitCard,
+.kefin-true-aspect > .card.overflowPortraitCard {
+    width: calc(var(--kefin-card-h) * var(--kefin-card-ratio, var(--kefin-card-r-default))
+                + var(--kefin-card-pad, 0px));
+}
+
+/* The padder is Jellyfin's pre-aspect-ratio height mechanism: a percentage
+   padding-bottom on a zero-height box. Height comes from --kefin-card-h now, so
+   the padder has to stop contributing or it adds its 150% on top. */
+.kefin-true-aspect > .card.portraitCard .cardPadder,
+.kefin-true-aspect > .card.overflowPortraitCard .cardPadder {
+    padding-bottom: 0 !important;
+    height: 100%;
+}
+
+/* aspect-ratio: auto overrides the fixed poster ratio that skins and custom CSS
+   put here -- that is the whole point -- while the explicit height keeps the box
+   definite. !important because the rules it has to beat are themselves
+   !important, and this file cannot rely on load order against a user's own
+   custom CSS. */
+.kefin-true-aspect > .card.portraitCard .cardScalable,
+.kefin-true-aspect > .card.overflowPortraitCard .cardScalable {
+    height: var(--kefin-card-h) !important;
+    width: 100% !important;
+    aspect-ratio: auto !important;
+}
+
+/* The box now matches the image, so cover crops nothing and simply fills it
+   exactly. Kept as cover rather than contain so a card whose ratio is still
+   unknown, or slightly stale, fills its box instead of showing bars. */
+.kefin-true-aspect > .card.portraitCard .cardImageContainer,
+.kefin-true-aspect > .card.overflowPortraitCard .cardImageContainer {
+    background-size: cover;
+}
