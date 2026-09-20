@@ -2774,7 +2774,95 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
      * Load a specific skin
      * @param {Object} skin - The skin configuration object
      */
+    /**
+     * Apply the base Jellyfin theme a skin declares it needs.
+     *
+     * Skins and base themes are separate things in KefinTweaks: a skin is CSS we
+     * load over the top, the base theme is Jellyfin's own palette under it. For
+     * most skins that is fine. Abyss is dark-only and its SETUP guide makes "Set
+     * Theme to Dark" a required step -- its installer sets it and then locks the
+     * selectors -- and abyss.css keys several rules off
+     * `#selectTheme option[value="dark"]:checked`, so on any other base theme you
+     * get Abyss painted over the wrong palette. A skin can now say so with
+     * `requiresBaseTheme`.
+     *
+     * HOW THE BASE THEME IS STORED, since it is not where you would guess.
+     * jellyfin-web keeps it per-device, not on the server: userSettings.theme()
+     * calls set('appTheme', val, false), and that false routes it to appSettings,
+     * which writes localStorage under `<userId>-appTheme`. Nothing lands in
+     * DisplayPreferences. So this both writes that key -- the same one the
+     * Display preferences dropdown reads -- and sets data-theme on <html>, which
+     * is what themeManager.setTheme does to make the change visible without a
+     * reload.
+     *
+     * Deliberately not idempotent-by-reload: it runs before loadSkin's
+     * already-loaded early return, so a base theme changed out from under the skin
+     * is corrected on the next navigation rather than only on a skin switch.
+     *
+     * This overwrites a user preference, so it is narrow on purpose: only for a
+     * skin that declares the requirement, only when the value differs, and it says
+     * so in the log. Switching to a skin with no requirement leaves the base theme
+     * alone -- we do not try to restore a previous one, because we have no way to
+     * tell a value we wrote from one the user chose.
+     *
+     * @param {Object} skin
+     */
+    function applyRequiredBaseTheme(skin) {
+        const required = skin?.requiresBaseTheme;
+        if (!required) return;
+
+        // data-theme needs no user and makes the change visible immediately.
+        if (document.documentElement.getAttribute('data-theme') !== required) {
+            document.documentElement.setAttribute('data-theme', required);
+        }
+
+        // The stored key is per user, so it has to wait for one. The skin loads
+        // before login completes on a cold start -- and loadSkin will not run again
+        // afterwards, because by then the CSS is attached and it returns early --
+        // so give up only after a real timeout, not on the first miss.
+        const currentUserId = () => {
+            try {
+                return window.ApiClient?.getCurrentUserId?.() || null;
+            } catch (e) {
+                return null;
+            }
+        };
+
+        const persist = (userId) => {
+            const key = `${userId}-appTheme`;
+            try {
+                if (localStorage.getItem(key) !== required) {
+                    localStorage.setItem(key, required);
+                    LOG(`Skin '${skin.name}' requires the '${required}' base theme - set ${key}`);
+                }
+            } catch (e) {
+                WARN('Could not persist the required base theme:', e);
+            }
+        };
+
+        const userId = currentUserId();
+        if (userId) {
+            persist(userId);
+            return;
+        }
+
+        const start = Date.now();
+        const timer = setInterval(() => {
+            const id = currentUserId();
+            if (id) {
+                clearInterval(timer);
+                persist(id);
+            } else if (Date.now() - start > 30000) {
+                clearInterval(timer);
+            }
+        }, 250);
+    }
+
     function loadSkin(skin) {
+        // Before the early return below: a skin that needs a particular base theme
+        // needs it on every load, not only when the CSS is (re)attached.
+        applyRequiredBaseTheme(skin);
+
         // Check if this skin is already loaded by looking at the DOM
         const currentSkinLink = document.querySelector('link[data-kefin-skin="true"]');
         const currentSkinName = currentSkinLink ? currentSkinLink.getAttribute('data-skin') : null;

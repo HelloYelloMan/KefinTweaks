@@ -1351,6 +1351,42 @@
                         ]
                     },
                 ],
+                // Abyss is a dark-only theme and its SETUP guide makes "Set Theme to
+                // Dark" a required step, not a suggestion -- its one-click installer
+                // sets it and then locks the selectors. abyss.css assumes that has
+                // happened: several of its rules key off
+                // `#selectTheme option[value="dark"]:checked`, so on any other base
+                // theme you get Abyss painted over the wrong palette.
+                requiresBaseTheme: 'dark',
+                // The overrides Abyss publishes for specific plugins. It pins these to
+                // plugin versions and warns they can lag; checked against what is
+                // installed here, they have held up -- every selector in the Media Bar
+                // file is still present in 3.8.0.0, and 18 of 19 in the Jellyfin
+                // Enhanced file are still present in 12.8.0.0 (only .panel-main-content
+                // is gone). Both default on: a stale rule stops matching, it does not
+                // misfire, and without them those plugins' own surfaces sit unstyled in
+                // the middle of the theme.
+                optionalIncludes: [
+                    {
+                        name: 'Jellyfin Enhanced Support',
+                        url: 'https://cdn.jsdelivr.net/gh/AumGupta/abyss-jellyfin@main/styles/abyss-je.css',
+                        enabled: true
+                    },
+                    {
+                        name: 'Media Bar Enhanced Support',
+                        url: 'https://cdn.jsdelivr.net/gh/AumGupta/abyss-jellyfin@main/styles/abyss-mbe.css',
+                        enabled: true
+                    },
+                    {
+                        // Abyss's own low-power variant: same colours, typography and
+                        // spacing, with the blur radii cut and the entrance animations
+                        // and will-change hints dropped. Off by default -- it is a
+                        // trade, not a fix.
+                        name: 'Lite Mode (reduced blur and motion)',
+                        url: 'https://cdn.jsdelivr.net/gh/AumGupta/abyss-jellyfin@main/styles/abyss-lite.css',
+                        enabled: false
+                    }
+                ]
             },
             // Add more skins here as needed
         ]
