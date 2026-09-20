@@ -7318,6 +7318,33 @@ In the Custom Tabs plugin, add a new tab with the following HTML content:
 			return _watchlistTabIndex;
 		}
 
+		/* Wait for ApiClient before asking the server anything.
+		 *
+		 * This runs from addCustomMenuLink during startup, and jellyfin-web has not
+		 * necessarily defined ApiClient by then. When it has not,
+		 * `${ApiClient._serverAddress}/CustomTabs/Config` builds the relative URL
+		 * "undefined/CustomTabs/Config", the request 404s, response.json() throws,
+		 * and the catch below reports "CustomTabs plugin not found." -- which is a
+		 * misleading diagnosis for a plugin that is installed and working.
+		 *
+		 * The consequence is visible, not cosmetic: a null index sends
+		 * addCustomMenuLink down its `options.topNavigation = 'main'` branch, which
+		 * adds a second "Watchlist" button to the header beside the Custom Tabs
+		 * plugin's real tab. Observed on every load:
+		 *
+		 *     Adding custom menu link for Watchlist
+		 *     CustomTabs plugin not found.
+		 *     Added Watchlist menu link (#/watchlist)
+		 *
+		 * while the same lookup run later returns 2. With the wait the index is
+		 * found, the URL becomes #/home?tab=2, and the duplicate is not created.
+		 */
+		const start = Date.now();
+		while (typeof ApiClient === 'undefined' || !ApiClient || !ApiClient._serverAddress) {
+			if (Date.now() - start > 15000) break;
+			await new Promise((resolve) => setTimeout(resolve, 50));
+		}
+
 		const authHeader = apiHelper.getAuthHeader();
 
 		// Fetch the tab index as we do in addCustomMenuLink

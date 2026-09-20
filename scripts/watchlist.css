@@ -2231,6 +2231,23 @@ div[data-tab="watchlist"] .loading-message {
 		"opsz" 48;
 }
 .slide .watchlist-button {
+	/* State the colour pair, the way every Media Bar Enhanced button beside this
+	   one does: .play-button, .detail-button, .trailer-button and .favorite-button
+	   all set `background-color: rgb(255,255,255)` with an explicit colour.
+
+	   This set neither, so it fell through to the UA defaults for <button>,
+	   ButtonFace and ButtonText -- system colours, whose light or dark variant is
+	   chosen by `color-scheme`. Nothing in jellyfin-web declares one, so the light
+	   variants applied and the button passed for its neighbours by accident. The
+	   moment a skin or custom CSS declares `color-scheme: dark`, this was the only
+	   button in the row that inverted: measured at rgb(233,233,237) on black while
+	   the rest stayed white on black.
+
+	   Skins may restyle it further -- Abyss gives it the glass treatment its
+	   favourite button gets, from a higher-specificity rule. The active state stays
+	   green either way: that rule is !important. */
+	background-color: rgb(255, 255, 255);
+	color: rgb(0, 0, 0);
 	border-radius: 50%;
 	height: 50px;
 	width: 50px;

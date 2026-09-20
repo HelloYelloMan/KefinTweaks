@@ -1,0 +1,37 @@
+/* Give KefinTweaks' Media Bar watchlist button Abyss's secondary-button look.
+ *
+ * Media Bar Enhanced builds four buttons and Abyss styles all of them; ours is
+ * appended alongside and it styled none of it, because abyss-mbe.css has never
+ * heard of `.watchlist-button`. Measured on the page, under Abyss:
+ *
+ *   .play-button      rgb(245,245,247)        #121212       r12px  -            -
+ *   .trailer-button   rgb(245,245,247)        #121212       r12px  -            -
+ *   .detail-button    rgba(255,255,255,.12)   rgba(255,255,255,.9)  r12px  1px  blur(8px)
+ *   .favorite-button  rgba(255,255,255,.12)   rgba(255,255,255,.9)  r50%   1px  blur(8px)
+ *   .watchlist-button rgb(233,233,237)        rgb(0,0,0)            r50%   -    -
+ *
+ * That last background is not a choice anyone made: it is ButtonFace, the UA
+ * system colour, because `.slide .watchlist-button` set no background or colour
+ * of its own. Which also made it the one button that flipped when a
+ * `color-scheme` was declared -- see darkFormControls.css.
+ *
+ * It is the same shape and role as the favourite button, a round icon button, so
+ * it takes the same treatment: Abyss's glass, not its accent fill. The accent
+ * fill belongs to the primary action, which is what .play-button and
+ * .trailer-button get, and what abyss.css gives #itemDetailPage .btnPlay.
+ *
+ * Values copied from abyss-mbe.css's own `.favorite-button, .detail-button` rule
+ * rather than approximated, so this tracks that file if it is restyled.
+ *
+ * `#slides-container` keeps the specificity above `.slide .watchlist-button` in
+ * scripts/watchlist.css whatever order the sheets load in. The active (green)
+ * state is left alone -- that rule is !important and says "on your watchlist",
+ * which is worth more than matching the row.
+ */
+#slides-container .watchlist-button {
+    background: rgba(255, 255, 255, 0.12) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+}
