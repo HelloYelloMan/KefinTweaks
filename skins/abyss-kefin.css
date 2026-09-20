@@ -127,7 +127,7 @@
     min-height: 7.2em;
 }
 
-/* Give the episode-count and played pills readable text.
+/* Give the episode-count and played pills the look the theme documents.
  *
  * THE BUG. On a light cover the unwatched-count pill is unreadable. Measured on
  * the Shows library, 100 of them on one page, every one identical:
@@ -135,34 +135,49 @@
  *     background  rgba(245, 245, 247, 0.8)     <- the accent, near-white, at 80%
  *     color       rgb(255, 255, 255)           <- pure white
  *
- * White on translucent near-white. abyss.css paints the pill with the accent:
+ * White on translucent near-white. abyss.css paints both pills with the accent:
  *
  *     .countIndicator  { background: rgba(var(--abyss-accent), 0.8); ... }
  *     .playedIndicator { background: rgb(var(--abyss-accent)); ... }
  *
- * and never sets a colour, so the number inherits the page's white.
+ * and never sets a colour, so the glyph inherits the page's white.
  *
- * IT IS AN OVERSIGHT, NOT THE INTENT, and abyss.css says so itself two hundred
- * lines earlier, where the hover state of these very elements sets exactly what
- * the resting state is missing:
+ * WHAT IT SHOULD BE, from the theme's own evidence rather than taste. Its README
+ * documents the knob:
  *
- *     .listItem:hover .countIndicator,
- *     .listItem:hover .playedIndicator { background: rgba(0,0,0,.15); color: #121212 }
+ *     --abyss-indicator: 55, 55, 55;   /* default: dark grey *\/
  *
- * #121212 on an accent fill is the theme's convention everywhere else too -- its
- * buttons, its detail-page play button, the Media Bar overrides. So this is the
- * resting state catching up with the hover state rather than a new choice.
+ * and its published screenshots show exactly that. Sampling the count pills in
+ * docs/assets/images/shows-1.png: background rgb(44, 44, 44), glyph
+ * rgb(255, 255, 255). rgba(55, 55, 55, 0.8) composited over black is 44 -- the
+ * documented value, to the pixel.
  *
- * Worth knowing if you go looking: the README documents `--abyss-indicator`
- * ("Episode count / indicator pill colour", default 55, 55, 55) as the knob for
- * this. It is not defined or referenced anywhere in abyss.css -- setting it does
- * nothing. The pill is hardcoded to the accent.
+ * So this is a dark pill with light text, and the near-white one is a
+ * regression: --abyss-indicator does not appear anywhere in abyss.css. Checked
+ * against the current source on GitHub, not a cached copy -- 67523 bytes, zero
+ * occurrences -- so the variable the README tells you to set does nothing, and
+ * .countIndicator reaches for --abyss-accent instead.
  *
- * Dark text stays the right answer under the accent schemes below: every one of
- * them is a light or mid tone, and #121212 clears 4.5:1 on all of them.
+ * Defining the variable here as well as using it keeps the documented knob
+ * working: change --abyss-indicator and the pills follow.
+ *
+ * !important, because these also have to survive our own accent schemes; the
+ * hover state abyss.css defines keeps winning either way, being one class more
+ * specific.
+ *
+ * ON .playedIndicator: the pixel evidence above is for the count pill only --
+ * nothing in the screenshots is marked watched. It gets the same treatment
+ * because the README names this variable for indicators as a family and
+ * abyss.css styles the two together in its hover rule. Its shipped state is
+ * broken in the same way regardless: an opaque near-white circle holding a
+ * white tick.
  */
-#itemDetailPage .countIndicator,
+:root {
+    --abyss-indicator: 55, 55, 55;
+}
+
 .countIndicator,
 .playedIndicator {
-    color: #121212;
+    background: rgba(var(--abyss-indicator), 0.8) !important;
+    color: #fff !important;
 }
