@@ -126,23 +126,50 @@
      * A home page holding 873 card titles and no specials is the case that makes
      * the difference.
      */
+    /**
+     * Only ever look at the page that is actually on screen.
+     *
+     * Jellyfin is a single-page app and keeps previous views in the DOM with
+     * .hide rather than removing them, so after browsing the home screen the
+     * document holds 1500+ elements carrying data-id, of which about 24 belong to
+     * the page you are looking at. Scanning the document therefore sampled the
+     * home screen's library cards -- "Anime", "Anime Movies", "Collections" --
+     * and never reached the specials on the episode page, whatever the budget.
+     * That is what made the prefix survive when arrived at by navigation but not
+     * on a direct load.
+     */
+    function visibleScopes() {
+        const pages = document.querySelectorAll('[data-role="page"]:not(.hide)');
+        return pages.length ? Array.from(pages) : [document];
+    }
+
     const triedIds = new Set();
     // A library with no specials would otherwise keep probing for the life of the
     // page as new cards scroll in. Five batches is plenty to find one where any
     // exist, and an episode or season page derives from the first round anyway.
+    //
+    // PER VIEW, not per page load. This is a single-page app: browsing home and
+    // then opening an episode is one page load, so a session-wide budget spent on
+    // a home screen full of ordinary cards left nothing for the episode page --
+    // where the specials actually are. Reported as the prefix surviving on the
+    // episode page and its More from Specials row, with template: [] and nothing
+    // marked, while a direct load of that same page derived on the first round.
     const MAX_TRIED_IDS = 200;
 
     async function deriveFromVisibleCard() {
         if (triedIds.size >= MAX_TRIED_IDS) return false;
         const candidates = [];
-        for (const card of document.querySelectorAll('[data-id]')) {
-            const id = card.getAttribute('data-id');
-            if (!id || triedIds.has(id)) continue;
-            const el = card.querySelector('.cardText-first, .cardText > bdi, .listItemBodyText:not(.secondary)');
-            const rendered = (el ? el.textContent : '').trim();
-            if (!rendered) continue;
-            candidates.push({ id, rendered });
-            if (candidates.length >= 40) break;
+        outer:
+        for (const scope of visibleScopes()) {
+            for (const card of scope.querySelectorAll('[data-id]')) {
+                const id = card.getAttribute('data-id');
+                if (!id || triedIds.has(id)) continue;
+                const el = card.querySelector('.cardText-first, .cardText > bdi, .listItemBodyText:not(.secondary)');
+                const rendered = (el ? el.textContent : '').trim();
+                if (!rendered) continue;
+                candidates.push({ id, rendered });
+                if (candidates.length >= 40) break outer;
+            }
         }
         if (!candidates.length) return false;
 
@@ -188,23 +215,56 @@
         }
     }
 
-    function stripInUnobserved(root) {
-        const scope = root && root.querySelectorAll ? root : document;
+    /**
+     * Rewrite TEXT NODES, never elements.
+     *
+     * Two shapes have to survive this, and writing textContent on the matched
+     * element wrecks both:
+     *
+     *   a card title   div.cardText-first > bdi > a.itemAction > "Special - Title"
+     *   the subtitle   h3.itemName.subtitle > bdi > [ a "Specials", " - Special - Title" ]
+     *
+     * On the card, assigning to the div or the bdi replaces the <a> with a text
+     * node and the card stops being a link. On the subtitle the prefix is not in
+     * any element at all -- it is in a text node sitting next to the season link,
+     * so there is nothing to assign to and an element-level pass skips it
+     * entirely. Both were reported: the title still prefixed on the episode page,
+     * and the More from Specials row with it.
+     *
+     * Walking to the text nodes handles both, changes nothing structural, and
+     * leaves every link intact.
+     */
+    function stripTextNodes(container) {
+        const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
         let changed = 0;
-        scope.querySelectorAll(TEXT_SELECTORS).forEach((el) => {
-            if (el.hasAttribute(DONE_ATTR)) return;
-            const text = el.textContent;
-            if (!text) return;
+        const pending = [];
+        let node;
+        while ((node = walker.nextNode())) {
+            const text = node.nodeValue;
+            if (!text) continue;
             const next = text.replace(pattern, '$1');
-            if (next !== text) {
-                el.textContent = next;
-                changed++;
+            if (next !== text) pending.push([node, next]);
+        }
+        pending.forEach(([n, value]) => { n.nodeValue = value; changed++; });
+        return changed;
+    }
+
+    function stripInUnobserved(root) {
+        const scopes = root && root.querySelectorAll ? [root] : visibleScopes();
+        let changed = 0;
+        const seen = new Set();
+        scopes.forEach((scope) => scope.querySelectorAll(TEXT_SELECTORS).forEach((el) => {
+            if (seen.has(el) || el.hasAttribute(DONE_ATTR)) return;
+            seen.add(el);
+            if (!pattern.test(el.textContent || '')) {
+                // Nothing here now, and it cannot start matching without being
+                // rebuilt -- and a rebuilt node arrives without the marker.
+                el.setAttribute(DONE_ATTR, '1');
+                return;
             }
-            // Mark either way: an element whose text does not match is not going
-            // to start matching without being rebuilt, and rebuilt elements are
-            // new nodes without the attribute.
+            changed += stripTextNodes(el);
             el.setAttribute(DONE_ATTR, '1');
-        });
+        }));
         return changed;
     }
 
@@ -253,7 +313,10 @@
         observer.observe(document.body, OBSERVE_OPTIONS);
 
         if (window.KefinTweaksUtils?.onViewPage) {
-            window.KefinTweaksUtils.onViewPage(() => scheduleSweep(), { pages: [] });
+            window.KefinTweaksUtils.onViewPage(() => {
+                if (!pattern) triedIds.clear(); // a fresh budget for each view
+                scheduleSweep();
+            }, { pages: [] });
         }
 
         scheduleSweep();
