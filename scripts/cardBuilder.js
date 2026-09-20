@@ -3086,7 +3086,22 @@
     const PORTRAIT_FILL_WIDTH = 297;
 
     function portraitImageParams(item) {
-        const ratio = typeof item?.PrimaryImageAspectRatio === 'number' && item.PrimaryImageAspectRatio > 0
+        /* The ratio has to describe the picture being fetched, not the item.
+         *
+         * An Episode on a portrait card carries its SERIES poster, while its own
+         * PrimaryImageAspectRatio describes its 16:9 still. Feeding that in asked
+         * for fillHeight=167&fillWidth=297 -- a 297x167 box -- and the server
+         * duly returned the tall poster squeezed into it, which the card then
+         * stretched back to full height. Reported as the cover art looking low
+         * resolution on episode cards.
+         *
+         * Episodes therefore use the portrait default. Everything else uses its
+         * own ratio, which is the whole point.
+         */
+        const usesOwnPrimary = item?.Type !== 'Episode';
+        const ratio = usesOwnPrimary
+            && typeof item?.PrimaryImageAspectRatio === 'number'
+            && item.PrimaryImageAspectRatio > 0
             ? item.PrimaryImageAspectRatio
             : FANART_RATIO;
         const height = Math.round(PORTRAIT_FILL_WIDTH / ratio);
