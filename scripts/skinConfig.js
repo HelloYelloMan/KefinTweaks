@@ -1385,18 +1385,6 @@
                         name: 'Lite Mode (reduced blur and motion)',
                         url: 'https://cdn.jsdelivr.net/gh/AumGupta/abyss-jellyfin@main/styles/abyss-lite.css',
                         enabled: false
-                    },
-                    // Ours, and both fixes rather than options -- listed after the
-                    // files above so they win the cascade where they overlap.
-                    {
-                        name: 'Dark Form Controls (fixes dropdown text)',
-                        url: `${getKefinTweaksRoot()}skins/optional/Abyss/darkFormControls.css`,
-                        enabled: true
-                    },
-                    {
-                        name: 'Media Bar Watchlist Button',
-                        url: `${getKefinTweaksRoot()}skins/optional/Abyss/mediaBarWatchlistButton.css`,
-                        enabled: true
                     }
                 ]
             },

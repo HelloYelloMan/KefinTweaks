@@ -4,3 +4,82 @@
 .MuiDrawer-root > .MuiDrawer-paper {
 	width: auto !important;
 }
+
+/* ===========================================================================
+ * FORK ADDITIONS -- everything below this line is ours.
+ *
+ * Same role as skins/elegant-kefin.css: the KefinTweaks companion sheet for a
+ * skin, loaded from the skin's own urls list. These are fixes, not choices, so
+ * they belong here rather than behind a toggle in optionalIncludes.
+ * =========================================================================== */
+
+/* Make native form controls render dark.
+ *
+ * THE BUG. Open any dropdown -- Skin, Language, Theme -- and the popup is dark
+ * text on dark rows, unreadable.
+ *
+ * WHY. jellyfin-web never declares `color-scheme` anywhere (grepped: zero hits),
+ * so native controls are light-schemed regardless of how dark the UI looks. Most
+ * themes get away with that because Jellyfin's dark theme styles the select as a
+ * matched, opaque pair:
+ *
+ *     .emby-select-withcolor         { color: inherit; background: #292929; }
+ *     .emby-select-withcolor > option { color: inherit; background: #222; }
+ *
+ * Abyss replaces the first with a translucent WHITE fill
+ * (`background: rgba(255,255,255,0.12)`) and never touches `> option`. The
+ * browser reads the control as light and paints the popup text dark, while the
+ * untouched option rule keeps the rows at #222. Dark on dark.
+ *
+ * Declaring the scheme is the fix, and it is what the themes that avoid this bug
+ * already do -- GlassFin, NeutralFin and better-jellyfin-ui all ship
+ * `color-scheme: dark`. Of twelve skins surveyed, Abyss, Zesty, zombie_revived,
+ * Jamfin and scyfin are the ones that restyle selects without it.
+ *
+ * It sits in this file rather than in the global list precisely because it is
+ * per-skin: as a global rule it would force dark controls on a genuinely light
+ * skin (catppuccin-latte, scyfin-snow). Abyss is dark-only -- it declares
+ * requiresBaseTheme: 'dark' -- so here there is no such case.
+ */
+:root {
+    color-scheme: dark;
+}
+
+/* Give KefinTweaks' Media Bar watchlist button Abyss's secondary-button look.
+ *
+ * Media Bar Enhanced builds four buttons and Abyss styles all of them; ours is
+ * appended alongside and abyss-mbe.css has never heard of `.watchlist-button`.
+ * Measured on the page, under Abyss:
+ *
+ *   .play-button      rgb(245,245,247)        #121212               r12px  -    -
+ *   .trailer-button   rgb(245,245,247)        #121212               r12px  -    -
+ *   .detail-button    rgba(255,255,255,.12)   rgba(255,255,255,.9)  r12px  1px  blur(8px)
+ *   .favorite-button  rgba(255,255,255,.12)   rgba(255,255,255,.9)  r50%   1px  blur(8px)
+ *   .watchlist-button rgb(233,233,237)        rgb(0,0,0)            r50%   -    -
+ *
+ * That last background is not a choice anyone made: it is ButtonFace, the UA
+ * system colour, because `.slide .watchlist-button` set no background or colour
+ * of its own. Which also made it the one button that flipped when a
+ * `color-scheme` was declared -- by the rule directly above, among others.
+ *
+ * It is the same shape and role as the favourite button, a round icon button, so
+ * it takes the same treatment: Abyss's glass, not its accent fill. The accent
+ * fill belongs to the primary action, which is what .play-button and
+ * .trailer-button get, and what abyss.css gives #itemDetailPage .btnPlay.
+ *
+ * Values copied from abyss-mbe.css's own `.favorite-button, .detail-button` rule
+ * rather than approximated, so this tracks that file if it is restyled.
+ *
+ * `#slides-container` keeps this above `.slide .watchlist-button` in
+ * scripts/watchlist.css on specificity, so it does not depend on load order --
+ * which matters, because abyss-mbe.css is an optional include and loads after
+ * this file. The active (green) state is left alone: that rule is !important and
+ * says "on your watchlist", which is worth more than matching the row.
+ */
+#slides-container .watchlist-button {
+    background: rgba(255, 255, 255, 0.12) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+}
