@@ -1398,6 +1398,15 @@
                         name: 'Lite Mode (reduced blur and motion)',
                         url: 'https://cdn.jsdelivr.net/gh/AumGupta/abyss-jellyfin@main/styles/abyss-lite.css',
                         enabled: false
+                    },
+                    {
+                        // Ours. The companion sheet blurs the theme video because Abyss
+                        // leaves nothing else to dim it; this keeps the dimming and drops
+                        // the blur, which is a preference rather than a fix -- hence a
+                        // toggle rather than a line in abyss-kefin.css.
+                        name: 'Unblurred Theme Video',
+                        url: `${getKefinTweaksRoot()}skins/optional/Abyss/themeVideoUnblurred.css`,
+                        enabled: false
                     }
                 ]
             },
