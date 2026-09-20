@@ -294,6 +294,25 @@
         if (!probe) return false;
 
         const wasActive = container.classList.contains(ACTIVE_CLASS);
+
+        /* Do not re-measure a container that is already set up at this width.
+         *
+         * Measuring means taking the class off, reading a card, and putting it
+         * back -- which reverts every card to the ladder width and returns it,
+         * one frame later. Jellyfin keeps pages in the DOM and re-shows them, so
+         * coming back to a library ran that again and made all hundred cards
+         * visibly jump. Measured: 100 of 100 cards changing width on a second
+         * visit, none on the first.
+         *
+         * The measurement only depends on the container's width, so recording it
+         * is enough to know when the answer would be the same. A real resize
+         * still re-measures, via the resize handler.
+         */
+        if (wasActive && container.style.getPropertyValue('--kefin-card-h')) {
+            const width = Math.round(container.getBoundingClientRect().width);
+            if (String(width) === container.dataset.kefinMeasuredAt) return true;
+        }
+
         if (wasActive) container.classList.remove(ACTIVE_CLASS);
 
         const scalable = probe.querySelector('.cardScalable');
@@ -320,6 +339,7 @@
         container.style.setProperty('--kefin-card-r-default',
             (isFinite(measured) && measured > 0 ? measured : FANART_RATIO).toFixed(4));
         container.style.setProperty('--kefin-card-pad', pad + 'px');
+        container.dataset.kefinMeasuredAt = String(Math.round(container.getBoundingClientRect().width));
         container.classList.add(ACTIVE_CLASS);
         return true;
     }
@@ -526,6 +546,47 @@
         if (changed) LOG(`Switched ${changed} episode card(s) to their own still`);
     }
 
+    /**
+     * Apply ratios we already know, before the frame is painted.
+     *
+     * A MutationObserver callback is a microtask: it runs at the end of the task
+     * that inserted the cards, ahead of the next paint. Setting the variable here
+     * means a card whose ratio is already known is never drawn at the wrong size
+     * -- as opposed to the debounced sweep below, which by definition runs a
+     * couple of hundred milliseconds after the card is on screen, which is the
+     * resize you can see.
+     *
+     * Only cards whose ratio is already cached, and never Episodes. Their image
+     * is usually a parent's poster, so their own ratio describes the wrong
+     * picture; the unhurried pass resolves those from the image URL once it has
+     * loaded. Everything else -- movies, series, collections -- lands immediately
+     * on a second visit, and on the first from the session cache.
+     *
+     * Cards our own builder made already carry the variable and the done flag
+     * from build time, so they are skipped here and never touched at all.
+     */
+    function applyKnownRatiosNow(records) {
+        if (!ratioCache.size) return;
+        for (const record of records) {
+            for (const node of record.addedNodes) {
+                if (node.nodeType !== 1) continue;
+                const cards = node.matches?.(CARD_SELECTOR)
+                    ? [node]
+                    : node.querySelectorAll?.(CARD_SELECTOR) || [];
+                for (const card of cards) {
+                    if (card.dataset.kefinRatioSet) continue;
+                    if (card.getAttribute('data-type') === 'Episode') continue;
+                    const id = card.getAttribute('data-id');
+                    if (!id) continue;
+                    const ratio = ratioCache.get(id);
+                    if (!ratio) continue;
+                    card.style.setProperty(RATIO_PROP, ratio.toFixed(4));
+                    card.dataset.kefinRatioSet = '1';
+                }
+            }
+        }
+    }
+
     let sweepTimer = null;
     function scheduleSweep() {
         if (sweepTimer) return;
@@ -560,7 +621,10 @@
 
         loadRatioCache();
 
-        const observer = new MutationObserver(() => scheduleSweep());
+        const observer = new MutationObserver((records) => {
+            applyKnownRatiosNow(records);   // before paint
+            scheduleSweep();                // the rest, unhurried
+        });
         observer.observe(document.body, { childList: true, subtree: true });
         window.addEventListener('resize', onResize, { passive: true });
         // Card images are set lazily as they come into view, and that is a style

@@ -3426,6 +3426,29 @@
         }
 
         if (imageUrl) {
+            /* Stamp the aspect ratio while the item is still in hand.
+             *
+             * trueAspectCards otherwise has to look this up after the card is in
+             * the DOM, which means the card is painted at the container's default
+             * shape and then corrected -- the resize that made entering a library
+             * look choppy. Everything needed is right here at build time, so the
+             * card can be emitted at its own shape and never move.
+             *
+             * Only when the picture IS this item's own Primary. A portrait card
+             * for an episode carries its SERIES poster, and the episode's ratio
+             * describes its 16:9 still, which is how that row turned into
+             * letterboxes the first time round.
+             *
+             * The variable does nothing unless the feature is switched on, so
+             * this is inert otherwise.
+             */
+            const ownPrimary = imageUrl.includes(`/Items/${item.Id}/Images/Primary`);
+            const ratio = item?.PrimaryImageAspectRatio;
+            if (ownPrimary && typeof ratio === 'number' && ratio > 0) {
+                card.style.setProperty('--kefin-card-ratio', ratio.toFixed(4));
+                card.dataset.kefinRatioSet = '1';   // the sweep can skip it entirely
+            }
+
             // Use data-src for lazy loading instead of immediate backgroundImage
             cardImageContainer.setAttribute('data-src', imageUrl);
             if (blurhashStr
