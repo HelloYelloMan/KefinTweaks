@@ -536,6 +536,12 @@
     }
 
     async function fetchRatios(ids) {
+        /* The sweep can now run before Jellyfin has booted, because the observer
+           no longer waits for it. Marking nothing as pending here matters: these
+           ids must stay askable once ApiClient exists, or the cards the server
+           did not stamp would never get a ratio at all. */
+        if (typeof ApiClient === 'undefined' || !ApiClient || typeof ApiClient.getItems !== 'function') return;
+
         const wanted = ids.filter((id) => !ratioCache.has(id) && !pending.has(id));
         if (!wanted.length) return;
         wanted.forEach((id) => pending.add(id));
@@ -1025,7 +1031,29 @@
         LOG('Reading aspect ratios from Jellyfin\'s own item responses');
     }
 
-    function initializeHook() {
+    /**
+     * Start watching IMMEDIATELY. None of this needs ApiClient.
+     *
+     * This is what decides whether a card is born at its own size or painted at
+     * the row default and corrected afterwards. The observer callback is a
+     * microtask, so it runs after the cards are in the DOM and before the frame
+     * is drawn -- but only if it is installed by then.
+     *
+     * It used to be installed from initialize(), behind a wait for ApiClient and
+     * KefinTweaksUtils that polls every 250ms. On a soft navigation that costs
+     * nothing, because the script has been running for ages. On a HARD REFRESH
+     * Jellyfin is booting at the same time, the library's cards are inserted
+     * during that wait, the observer never sees them, and they paint at the
+     * fanart default before the debounced sweep pulls them in -- which is
+     * exactly the "starts wide, then shrinks" that only ever happened on a cold
+     * load.
+     *
+     * Nothing here touches the API: ratios come off the card's own data-ar, and
+     * measuring a container is DOM geometry. Wrapping fetch early matters for
+     * the same reason -- the library's /Items response can land before a late
+     * wrapper is in place, and a ratio missed there becomes a lookup later.
+     */
+    function startWatching() {
         if (window.__kefinTrueAspectActive) return;
         window.__kefinTrueAspectActive = true;
 
@@ -1043,26 +1071,45 @@
         // it. Scrolling is what reveals them; the sweep is debounced either way.
         window.addEventListener('scroll', scheduleSweep, { passive: true, capture: true });
 
+        scheduleSweep();
+        LOG('True aspect cards watching');
+    }
+
+    /**
+     * The rest, once Jellyfin has booted. Only the ratio LOOKUP needs ApiClient,
+     * and that is the fallback for cards the server did not stamp -- so waiting
+     * for it delays nothing that affects the first paint.
+     */
+    function attachApiBits() {
         if (window.KefinTweaksUtils?.onViewPage) {
             window.KefinTweaksUtils.onViewPage(() => scheduleSweep(), { pages: [] });
         }
-
         scheduleSweep();
         LOG('True aspect cards initialized');
     }
 
     function initialize(attempt = 0) {
+        // Watch first, ask questions later: the observer is what keeps the first
+        // paint correct, and it has no dependencies to wait for.
+        startWatching();
+
         if (typeof ApiClient === 'undefined' || !ApiClient || !window.KefinTweaksUtils) {
             if (attempt < 40) {
                 setTimeout(() => initialize(attempt + 1), 250);
                 return;
             }
-            WARN('Dependencies not available, giving up');
+            WARN('Dependencies not available; ratios the server did not stamp will not be looked up');
             return;
         }
-        initializeHook();
+        attachApiBits();
     }
 
+    /* Start watching the moment this file runs, not at DOMContentLoaded.
+       document.body exists by then for an injected script, and cards inserted
+       between parse and DOMContentLoaded would otherwise be missed. */
+    if (document.body) {
+        startWatching();
+    }
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => initialize());
     } else {
