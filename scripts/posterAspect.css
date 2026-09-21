@@ -302,8 +302,8 @@
 .par-300{--par-ar:3.00}
 
 /* The row height is the skin's. The width follows from the ratio. */
-.par-on > .card.portraitCard:not([data-par-probe]),
-.par-on > .card.overflowPortraitCard:not([data-par-probe]) {
+.par-on:not(.detailImageContainer) > .card.portraitCard:not([data-par-probe]),
+.par-on:not(.detailImageContainer) > .card.overflowPortraitCard:not([data-par-probe]) {
     /* Width must include the padding, or a content-box skin (ElegantFin sets
        .card{box-sizing:content-box;padding:var(--padding)}) adds it again and
        the picture is stretched past its own shape. */
@@ -347,14 +347,14 @@
 
 /* Jellyfin's padder sets height from a percentage of width; the height comes
    from --par-h now, so the padder must stop contributing. */
-.par-on > .card.portraitCard:not([data-par-probe]) .cardPadder,
-.par-on > .card.overflowPortraitCard:not([data-par-probe]) .cardPadder {
+.par-on:not(.detailImageContainer) > .card.portraitCard:not([data-par-probe]) .cardPadder,
+.par-on:not(.detailImageContainer) > .card.overflowPortraitCard:not([data-par-probe]) .cardPadder {
     padding-bottom: 0 !important;
     height: 100%;
 }
 
-.par-on > .card.portraitCard:not([data-par-probe]) .cardScalable,
-.par-on > .card.overflowPortraitCard:not([data-par-probe]) .cardScalable {
+.par-on:not(.detailImageContainer) > .card.portraitCard:not([data-par-probe]) .cardScalable,
+.par-on:not(.detailImageContainer) > .card.overflowPortraitCard:not([data-par-probe]) .cardScalable {
     height: var(--par-h) !important;
     width: 100% !important;
     aspect-ratio: auto !important;
@@ -364,6 +364,41 @@
 .par-on > .card.portraitCard:not([data-par-probe]) .cardImageContainer,
 .par-on > .card.overflowPortraitCard:not([data-par-probe]) .cardImageContainer {
     background-size: cover;
+}
+
+/* An item page's cover is WIDTH-led, not height-led.
+ *
+ * Everywhere else this feature works the way a row does: the skin fixes the
+ * height, and each card's width is height x its own ratio. A detail page is the
+ * other way round. The skin fixes the WIDTH -- Abyss uses
+ * `.detailImageContainer .card { width: 21vw !important }` -- and then reserves
+ * a matching gutter for it, `.detailRibbon { padding-left: 28.45vw }`, so the
+ * title and play buttons clear the cover.
+ *
+ * Driving width from height there overrides the skin's width (this file's
+ * selectors are more specific, and both are !important) while the ribbon keeps
+ * padding for the width it thinks the cover has. At a measured row height of
+ * ~1059px that is survivable for a 2:3 poster and badly wrong for landscape
+ * art: a 1.78 ratio would compute to ~1885px against an ~804px gutter.
+ *
+ * So leave the width alone here and take the height from the ratio instead.
+ * The cover still shows at its true shape -- which is the whole point, and the
+ * reason this is not simply excluded -- but it can no longer outgrow the space
+ * the skin set aside for it, whatever the art.
+ *
+ * aspect-ratio rather than the percentage-padding trick, because the padder is
+ * what pins Jellyfin's portrait cards to 2:3 in the first place. */
+.par-on.detailImageContainer > .card.portraitCard:not([data-par-probe]) .cardPadder,
+.par-on.detailImageContainer > .card.overflowPortraitCard:not([data-par-probe]) .cardPadder {
+    padding-bottom: 0 !important;
+    height: auto !important;
+}
+
+.par-on.detailImageContainer > .card.portraitCard:not([data-par-probe]) .cardScalable,
+.par-on.detailImageContainer > .card.overflowPortraitCard:not([data-par-probe]) .cardScalable {
+    height: auto !important;
+    width: 100% !important;
+    aspect-ratio: var(--par-ar, 0.7013) !important;
 }
 
 /* Let the hover zoom paint outside the card.
