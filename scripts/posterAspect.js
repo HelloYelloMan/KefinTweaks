@@ -370,7 +370,16 @@
                 l.addEventListener('load', done, { once: true });
                 l.addEventListener('error', done, { once: true });
             });
-            setTimeout(invalidate, 2000);
+            /* Fallback for a sheet that never fires load or error. Guarded the
+               same way: if the selected skin still matches what the containers
+               were measured under, there is nothing to redo, and firing blind
+               two seconds in is its own late resize. */
+            setTimeout(() => {
+                const sig = skinSignature();
+                const done = document.querySelector('.' + ON_CLASS);
+                if (done && done.dataset.parSkin === sig) return;
+                invalidate();
+            }, 2000);
         // skinManager inserts after #cssTheme when it can, but falls back to the
         // BODY, which a head-only observer never sees.
         }).observe(document.documentElement, { childList: true, subtree: true });
@@ -395,7 +404,20 @@
             if (any) scheduleSweep();
         }).observe(document.documentElement, { childList: true, subtree: true });
 
-        window.addEventListener('resize', invalidate, { passive: true });
+        /* A resize SWEEPS; it does not invalidate.
+         *
+         * invalidate() deletes the recorded width, which is what the "already
+         * measured" tolerance compares against -- so wiring it to resize made
+         * every resize event re-measure unconditionally, tolerance and all.
+         * And the window fires resize for trivia: a scrollbar appearing as more
+         * cards load is a resize. Caught on Robert's machine at 1247ms, every
+         * card going 456px to 463px with the container's width already final.
+         *
+         * Sweeping instead lets measureContainer decide: a scrollbar's worth of
+         * width is inside the tolerance and changes nothing, while a real window
+         * resize is well outside it and re-measures properly.
+         */
+        window.addEventListener('resize', scheduleSweep, { passive: true });
         watchSkin();
         sweep();
         LOG('Poster aspect watching');
