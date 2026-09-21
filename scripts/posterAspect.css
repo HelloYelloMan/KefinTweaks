@@ -301,26 +301,9 @@
 .par-299{--par-ar:2.99}
 .par-300{--par-ar:3.00}
 
-/* WHY [class*="par-"]: only size a card whose ratio we actually know.
- *
- * The transformation adds par-NN only when the item reports
- * PrimaryImageAspectRatio > 0. Without this gate, a card with no ratio still
- * matched these rules and fell to the var() fallback -- 0.7013, which is
- * ElegantFin's poster shape, not the 0.6667 every other skin uses. Every
- * AnimePipeline specials collection landed there: measured 245px row height x
- * 0.7013 + 27px padding = the 199px they rendered at, against 190px for a true
- * 2:3. Close enough to read as "default ratio" and not be it.
- *
- * Gated, a card with no known ratio matches nothing here and keeps whatever
- * shape the skin gives it. "We don't know" now means "don't touch it".
- *
- * Safe as a gate: no class in jellyfin-web, Abyss or cardBuilder.css contains
- * "par-", so par-NN is the only thing it can match. The container's own par-on
- * is never on a card.
- */
 /* The row height is the skin's. The width follows from the ratio. */
-.par-on:not(.detailImageContainer) > .card.portraitCard[class*="par-"]:not([data-par-probe]),
-.par-on:not(.detailImageContainer) > .card.overflowPortraitCard[class*="par-"]:not([data-par-probe]) {
+.par-on:not(.detailImageContainer) > .card.portraitCard:not([data-par-probe]),
+.par-on:not(.detailImageContainer) > .card.overflowPortraitCard:not([data-par-probe]) {
     /* Width must include the padding, or a content-box skin (ElegantFin sets
        .card{box-sizing:content-box;padding:var(--padding)}) adds it again and
        the picture is stretched past its own shape. */
@@ -345,8 +328,8 @@
  * card at its own ratio exactly as a scrollable row does. The layout's dummy
  * cards still pad the last row, since they are sized the same way.
  */
-.par-on[data-layout="grid"] > .card.portraitCard[class*="par-"]:not([data-par-probe]),
-.par-on[data-layout="grid"] > .card.overflowPortraitCard[class*="par-"]:not([data-par-probe]) {
+.par-on[data-layout="grid"] > .card.portraitCard:not([data-par-probe]),
+.par-on[data-layout="grid"] > .card.overflowPortraitCard:not([data-par-probe]) {
     flex: 0 0 auto !important;
 }
 
@@ -364,22 +347,22 @@
 
 /* Jellyfin's padder sets height from a percentage of width; the height comes
    from --par-h now, so the padder must stop contributing. */
-.par-on:not(.detailImageContainer) > .card.portraitCard[class*="par-"]:not([data-par-probe]) .cardPadder,
-.par-on:not(.detailImageContainer) > .card.overflowPortraitCard[class*="par-"]:not([data-par-probe]) .cardPadder {
+.par-on:not(.detailImageContainer) > .card.portraitCard:not([data-par-probe]) .cardPadder,
+.par-on:not(.detailImageContainer) > .card.overflowPortraitCard:not([data-par-probe]) .cardPadder {
     padding-bottom: 0 !important;
     height: 100%;
 }
 
-.par-on:not(.detailImageContainer) > .card.portraitCard[class*="par-"]:not([data-par-probe]) .cardScalable,
-.par-on:not(.detailImageContainer) > .card.overflowPortraitCard[class*="par-"]:not([data-par-probe]) .cardScalable {
+.par-on:not(.detailImageContainer) > .card.portraitCard:not([data-par-probe]) .cardScalable,
+.par-on:not(.detailImageContainer) > .card.overflowPortraitCard:not([data-par-probe]) .cardScalable {
     height: var(--par-h) !important;
     width: 100% !important;
     aspect-ratio: auto !important;
 }
 
 /* The box now matches the picture, so cover crops nothing. */
-.par-on > .card.portraitCard[class*="par-"]:not([data-par-probe]) .cardImageContainer,
-.par-on > .card.overflowPortraitCard[class*="par-"]:not([data-par-probe]) .cardImageContainer {
+.par-on > .card.portraitCard:not([data-par-probe]) .cardImageContainer,
+.par-on > .card.overflowPortraitCard:not([data-par-probe]) .cardImageContainer {
     background-size: cover;
 }
 
@@ -405,14 +388,14 @@
  *
  * aspect-ratio rather than the percentage-padding trick, because the padder is
  * what pins Jellyfin's portrait cards to 2:3 in the first place. */
-.par-on.detailImageContainer > .card.portraitCard[class*="par-"]:not([data-par-probe]) .cardPadder,
-.par-on.detailImageContainer > .card.overflowPortraitCard[class*="par-"]:not([data-par-probe]) .cardPadder {
+.par-on.detailImageContainer > .card.portraitCard:not([data-par-probe]) .cardPadder,
+.par-on.detailImageContainer > .card.overflowPortraitCard:not([data-par-probe]) .cardPadder {
     padding-bottom: 0 !important;
     height: auto !important;
 }
 
-.par-on.detailImageContainer > .card.portraitCard[class*="par-"]:not([data-par-probe]) .cardScalable,
-.par-on.detailImageContainer > .card.overflowPortraitCard[class*="par-"]:not([data-par-probe]) .cardScalable {
+.par-on.detailImageContainer > .card.portraitCard:not([data-par-probe]) .cardScalable,
+.par-on.detailImageContainer > .card.overflowPortraitCard:not([data-par-probe]) .cardScalable {
     height: auto !important;
     width: 100% !important;
     aspect-ratio: var(--par-ar, 0.7013) !important;
