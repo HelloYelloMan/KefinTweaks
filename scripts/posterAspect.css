@@ -333,6 +333,18 @@
     flex: 0 0 auto !important;
 }
 
+/* The measurement probe must NEVER grow.
+ *
+ * It is the only child of the container at the moment it is measured, so with
+ * the grid's `flex: auto` a single flex item stretches to the whole container
+ * width. The probe then reports a card as wide as the page, the row height
+ * solved from it is enormous, and every card comes out massive -- which is
+ * exactly what refreshing a section in grid mode did. It must measure the
+ * width the skin gives a card, not the width flex would stretch it to. */
+.card[data-par-probe] {
+    flex: 0 0 auto !important;
+}
+
 /* Jellyfin's padder sets height from a percentage of width; the height comes
    from --par-h now, so the padder must stop contributing. */
 .par-on > .card.portraitCard:not([data-par-probe]) .cardPadder,

@@ -157,6 +157,9 @@
         probe.className = 'card portraitCard';
         probe.setAttribute('data-par-probe', '1');
         probe.style.visibility = 'hidden';
+        // Belt and braces alongside the stylesheet rule: in a grid the
+        // container's `flex: auto` would stretch a lone probe to the full width.
+        probe.style.setProperty('flex', '0 0 auto', 'important');
         probe.innerHTML = '<div class="cardBox cardBox-bottompadded"><div class="cardScalable">'
             + '<div class="cardPadder cardPadder-portrait"></div></div></div>';
         container.appendChild(probe);
@@ -169,6 +172,19 @@
         probe.remove();
 
         if (!box.height || !box.width || !card.width) return false;
+
+        /* Sanity: a card is never most of the container.
+         *
+         * If the probe somehow stretched -- a layout mode that grows flex items,
+         * a skin rule reaching it -- the height solved from it would be wildly
+         * too big and every card in the row would balloon. Better to leave the
+         * container alone and measure again next sweep than to apply a number
+         * that is obviously wrong. */
+        if (card.width > width * 0.9) {
+            WARN('Probe measured ' + Math.round(card.width) + 'px in a '
+                + width + 'px container; ignoring this measurement.');
+            return false;
+        }
 
         // .cardScalable sits inside a padded .cardBox, so the card is wider than
         // its picture. The width formula must carry that difference or the ratio
