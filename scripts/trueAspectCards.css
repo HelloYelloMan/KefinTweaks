@@ -92,6 +92,45 @@
     }
 }
 
+/* Let the hover zoom paint outside the card, for wide art.
+ *
+ * Jellyfin sets `contain: layout style paint` on every card, and paint
+ * containment clips anything drawn outside the border box. The hover effect
+ * scales the image up inside that box, so whether it survives depends on how
+ * much slack the padding leaves.
+ *
+ * The growth is proportional -- scale(1.02) on .cardScalable, the image itself
+ * measured going 393px to 411px -- but the slack is a fixed 11px of card
+ * padding however wide the card is, so wide art loses. Growth per side is
+ * imageWidth x 0.0229 against 5.5px of slack, which puts the threshold at an
+ * image about 240px wide: a portrait poster grows 3.5px a side and fits, a
+ * 16:9 one grows 9px and does not.
+ * Measured on a 16:9 poster (Stargate, ratio 1.7778) at a 221px row: the card
+ * box ends at x442, and on hover the image ran to x447 -- 5px of picture
+ * clipped off the right, and 2px off the left. A portrait poster in the same
+ * row grows about 3.5px a side against 5.5px of slack, which is why only
+ * landscape art shows it.
+ *
+ * Relaxing containment only for the hovered card keeps the optimisation
+ * everywhere it matters -- one card at a time is not a paint cost -- and
+ * `layout style` is retained, so nothing about the geometry changes. There is
+ * room for the overflow to land in: the next card starts at x457, well clear
+ * of the x447 the image reaches.
+ */
+.kefin-true-aspect > .card.portraitCard:hover,
+.kefin-true-aspect > .card.overflowPortraitCard:hover,
+.kefin-true-aspect > .card.portraitCard:focus-within,
+.kefin-true-aspect > .card.overflowPortraitCard:focus-within {
+    contain: layout style !important;
+    /* `contain: paint` was also creating a stacking context. Dropping it hands
+       paint order back to document order, which would let the NEXT card draw
+       over the few pixels this one now legitimately overflows into -- the same
+       clipped edge again, by a different route. Lifting the hovered card makes
+       it explicit. position: relative with no offsets moves nothing. */
+    position: relative;
+    z-index: 2;
+}
+
 /* The padder is Jellyfin's pre-aspect-ratio height mechanism: a percentage
    padding-bottom on a zero-height box. Height comes from --kefin-card-h now, so
    the padder has to stop contributing or it adds its 150% on top. */
