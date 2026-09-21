@@ -357,6 +357,27 @@
     function buildItemsUrl(userId, options) {
         const serverAddress = ApiClient.serverAddress();
         const params = new URLSearchParams();
+
+        /* Always ask for PrimaryImageAspectRatio.
+         *
+         * The card builder stamps it onto each card as data-ar, which is what
+         * the aspect-ratio card features size from. A query that does not ask
+         * for it produces items with no ratio, and those cards silently fall
+         * back to one uniform shape -- which is how the same film ended up
+         * showing full art in one row and cropped in another, purely because
+         * the two rows were fed by different queries.
+         *
+         * Chasing that field through every call site does not work: there are
+         * many, they are easy to miss, and a new one starts out wrong. Adding it
+         * here covers all of them, including any added later. It is one small
+         * field on a request that is already being made.
+         */
+        options = { ...options };
+        const fields = String(options.Fields || '');
+        if (!/\bPrimaryImageAspectRatio\b/.test(fields)) {
+            options.Fields = fields ? 'PrimaryImageAspectRatio,' + fields : 'PrimaryImageAspectRatio';
+        }
+
         
         // Add all options as query parameters
         Object.keys(options).forEach(key => {
