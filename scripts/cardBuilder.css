@@ -1341,6 +1341,33 @@
 	min-width: 0;
 }
 
+/* Keep our section-title link's highlight inset on the left.
+ *
+ * Abyss styles every section title button as
+ *
+ *     .sectionTitleTextButton:not(.padded-left) {
+ *         padding: 4px 12px 6px 6px !important;
+ *         margin-left: -6px !important;
+ *     }
+ *
+ * The negative margin is deliberate there: it cancels the 6px left padding so
+ * the label stays aligned with the page's content edge while the hover
+ * background bleeds outward. Measured on a flat season row, the button starts
+ * at x=797 against a parent at 803, with the text on 803 -- the padding exists
+ * but has no visible inset, against 12px on the right.
+ *
+ * Drop the pull for OUR link only. The button then sits inside its parent and
+ * the highlight is inset on both sides. Scoped to .sectionTitle-link, which is
+ * the class this file's builder adds, so Abyss's own section titles keep the
+ * alignment the skin intends.
+ *
+ * More specific than the skin's selector (three classes and an element, against
+ * its two classes) so it wins regardless of which stylesheet loads last.
+ */
+a.sectionTitle-link.sectionTitleTextButton {
+	margin-left: 0 !important;
+}
+
 .sectionTitle-wrapper > .section-controls {
 	grid-column: 2;
 	grid-row: 1;
