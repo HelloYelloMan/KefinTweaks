@@ -229,12 +229,19 @@
  * returns 54px at 1167, 111px at 1920 and 159px at 2560 -- in every case more
  * than the row was short by.
  *
+ * The data attribute covers the phone case, where Jellyfin does not add
+ * .padded-right-withalphapicker at all and padding-right is 0, yet the picker
+ * still floats over the content. Room is taken from WIDTH because the row
+ * height is the skin's and is never shrunk -- on a narrow screen that can cost
+ * a card per row, which is the accepted trade.
+ *
  * The fallback covers the moment before the measurement lands, and any page
  * where the picker is not found.
  *
  * Scoped to containers this feature has switched on, so a library page without
  * it keeps Jellyfin's spacing exactly.
  */
-.kefin-true-aspect.padded-right-withalphapicker {
+.kefin-true-aspect.padded-right-withalphapicker,
+.kefin-true-aspect[data-kefin-alpha-slack] {
     padding-right: var(--kefin-alpha-slack, 4%) !important;
 }
