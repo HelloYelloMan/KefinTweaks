@@ -82,114 +82,38 @@
     const FANART_RATIO = 1000 / 1426;
 
     /**
-     * itemId -> PrimaryImageAspectRatio, kept across visits rather than per view.
+     * itemId -> { r: PrimaryImageAspectRatio }, for this page load only.
      *
-     * Ratios do not change while you browse, and the same items come back on
-     * every navigation -- home, then a library, then back. Persisting them
-     * means the lookup happens once per item rather than once per page, which
-     * is most of this feature's request cost on a session that moves around --
-     * and, more importantly, that an item whose true ratio had to be learned
-     * from its image is never re-learned. See loadRatioCache.
+     * Holds what has been learned while you browse -- the same items come back
+     * on every navigation, home then a library then back, and this saves asking
+     * twice within one page. It is NOT persisted; see the note below knownRatio
+     * for why that matters.
      *
-     * @type {Map<string, number>}
+     * @type {Map<string, {r: number}>}
      */
     const ratioCache = new Map();
     const pending = new Set();
-    const RATIO_STORE = 'kefinTweaks_cardRatios';
-
-    /* Ratios live in localStorage, not sessionStorage.
+    /* NOTHING IS PERSISTED. Ratios live in the Map above and die with the page,
+     * and that is deliberate.
      *
-     * A ratio here is not free information. Where the server's recorded
-     * PrimaryImageAspectRatio disagrees with the actual picture -- 26 of 100
-     * items measured on this library -- the only way to learn the truth is to
-     * load the image and look, which happens AFTER the card has been painted at
-     * the size the metadata claimed. So the card visibly resizes once.
+     * They used to be written to storage so an item was looked up only once
+     * ever. Every staleness bug this feature produced came out of that: a ratio
+     * describing artwork since replaced, an entry keyed on something that did
+     * not identify the card, values outliving a hard refresh. Keying on the
+     * image tag fixed the artwork case, but it was bookkeeping to keep a
+     * DERIVED value alive, and the value is cheap to derive again.
      *
-     * In sessionStorage that "once" was once per tab. A phone browser discards
-     * and restores tabs constantly, so the cache was empty almost every time
-     * Jellyfin was opened and the whole library re-learned itself on every
-     * visit -- reported as cards starting large and shrinking down, every time,
-     * never settling.
-     *
-     * localStorage makes it once per item, for real. The entries are tiny (an
-     * id and a number) and the whole blob is dropped after CACHE_TTL_MS so
-     * replaced artwork cannot be described by a stale measurement forever.
+     * Re-deriving per page load is affordable now because most cards never need
+     * a lookup: the File Transformation rule stamps the ratio onto the card as
+     * data-ar. Measured -- 100% of library cards, 85% on the home screen, the
+     * remainder being episodes (which correctly show their series' poster) and
+     * one section the rule does not reach. The lookup is the fallback for that
+     * remainder, and a fallback does not need a cache that can be wrong.
      */
-    const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-
-    /* Cache entries are { r: ratio, t: imageTag }, not a bare number.
-     *
-     * Replacing an item's artwork leaves its id alone, so an id-keyed cache
-     * went on describing the OLD picture -- and once these moved to
-     * localStorage, not even a hard refresh cleared it. Reported exactly so.
-     *
-     * Jellyfin already solves this for its own image caching: every Primary
-     * image URL carries `tag=<hash>`, and the item payload carries the same
-     * value in ImageTags.Primary. It changes when the artwork changes. Storing
-     * it alongside the ratio means new art invalidates the entry by itself,
-     * with no TTL to wait out and nothing for anyone to clear by hand.
-     */
-    function tagOfUrl(url) {
-        const m = /[?&]tag=([^&]+)/.exec(url || '');
-        return m ? m[1] : null;
-    }
 
     function knownRatio(id) {
         const entry = ratioCache.get(id);
         return entry && typeof entry.r === 'number' ? entry.r : undefined;
-    }
-
-    function loadRatioCache() {
-        try {
-            const raw = localStorage.getItem(RATIO_STORE)
-                || sessionStorage.getItem(RATIO_STORE);   // migrate an old session's work
-            if (!raw) return;
-            const parsed = JSON.parse(raw);
-            // Older builds stored a bare id->ratio map; accept both shapes.
-            const entries = parsed && parsed.r ? parsed.r : parsed;
-            const stamped = parsed && parsed.t;
-            if (stamped && (Date.now() - parsed.t) > CACHE_TTL_MS) {
-                localStorage.removeItem(RATIO_STORE);
-                return;
-            }
-            Object.entries(entries).forEach(([id, v]) => {
-                // Accept the old bare-number shape; it simply has no tag, so
-                // the next item payload will replace it.
-                if (typeof v === 'number') ratioCache.set(id, { r: v, t: null });
-                else if (v && typeof v.r === 'number') ratioCache.set(id, { r: v.r, t: v.t || null });
-            });
-            LOG(`Reusing ${ratioCache.size} known ratio(s)`);
-        } catch (e) {
-            // A corrupt or blocked store costs a refetch, nothing more.
-        }
-    }
-
-    let persistTimer = null;
-    function writeRatioCache(map) {
-        localStorage.setItem(RATIO_STORE, JSON.stringify({
-            v: 1, t: Date.now(), r: Object.fromEntries(map)
-        }));
-    }
-
-    function persistRatioCache() {
-        if (persistTimer) return;
-        persistTimer = setTimeout(() => {
-            persistTimer = null;
-            try {
-                writeRatioCache(ratioCache);
-            } catch (e) {
-                /* Out of quota. Keeping the newest half is better than keeping
-                   nothing: a Map iterates in insertion order, so the tail is
-                   what was learned most recently and is most likely to be
-                   looked at again. If even that fails, the in-memory cache
-                   still carries this page. */
-                try {
-                    const all = [...ratioCache.entries()];
-                    const keep = new Map(all.slice(Math.floor(all.length / 2)));
-                    writeRatioCache(keep);
-                } catch (e2) { /* nothing more to do */ }
-            }
-        }, 2000);
     }
 
     function visibleScopes() {
@@ -245,8 +169,7 @@
             const shown = displayedImage(card);
             const key = shown ? shown.id : id;
             if (key) {
-                ratioCache.set(key, { r: actual, t: tagOfUrl(url) });
-                persistRatioCache();
+                ratioCache.set(key, { r: actual });
             }
             card.style.setProperty(RATIO_PROP, actual.toFixed(4));
             LOG(`Metadata said ${claimed.toFixed(3)}, the image is ${actual.toFixed(3)} - corrected`);
@@ -625,15 +548,11 @@
             });
             (result?.Items || []).forEach((item) => {
                 if (typeof item.PrimaryImageAspectRatio === 'number') {
-                    ratioCache.set(item.Id, {
-                        r: item.PrimaryImageAspectRatio,
-                        t: (item.ImageTags && item.ImageTags.Primary) || null
-                    });
+                    ratioCache.set(item.Id, { r: item.PrimaryImageAspectRatio });
                 }
             });
             // Remember the misses too, so they are not asked for again.
-            wanted.forEach((id) => { if (!ratioCache.has(id)) ratioCache.set(id, { r: 0, t: null }); });
-            persistRatioCache();
+            wanted.forEach((id) => { if (!ratioCache.has(id)) ratioCache.set(id, { r: 0 }); });
         } catch (err) {
             WARN('Ratio lookup failed:', err);
         } finally {
@@ -1050,17 +969,13 @@
         for (const item of items) {
             if (!item || !item.Id) continue;
             if (typeof item.PrimaryImageAspectRatio !== 'number') continue;
-            const tag = (item.ImageTags && item.ImageTags.Primary) || null;
-            const prev = ratioCache.get(item.Id);
-            /* Same artwork: keep what we have. It may be a ratio measured from
-               the image itself, which is better than the server's record.
-               Different tag -- new art, or an entry from before tags were
-               stored -- take the server's value and let it be re-verified. */
-            if (prev && prev.t === tag) continue;
-            ratioCache.set(item.Id, { r: item.PrimaryImageAspectRatio, t: tag });
+            /* Already known this page load -- possibly measured from the image
+               itself, which beats the server's record. Nothing outlives the
+               page, so there is no stale entry to guard against. */
+            if (ratioCache.has(item.Id)) continue;
+            ratioCache.set(item.Id, { r: item.PrimaryImageAspectRatio });
             added++;
         }
-        if (added) persistRatioCache();
     }
 
     function watchItemResponses() {
@@ -1093,7 +1008,6 @@
         if (window.__kefinTrueAspectActive) return;
         window.__kefinTrueAspectActive = true;
 
-        loadRatioCache();
         watchItemResponses();
 
         const observer = new MutationObserver((records) => {
