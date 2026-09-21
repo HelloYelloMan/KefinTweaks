@@ -88,12 +88,42 @@
      * cards keep rendering, they just lose their ratio class. If that happens,
      * find the chunk that contains the SearchText and put its id here.
      */
-    const ENTRY = {
-        Id: ENTRY_ID,
-        FilenamePattern: String.raw`24468\.[0-9a-f]+\.chunk\.js`,
-        SearchText: `class="'+re+'"'`,
-        ReplaceText: `class="'+(r.PrimaryImageAspectRatio>0?'par-'+Math.round(r.PrimaryImageAspectRatio*100)+' ':'')+re+'"'`
-    };
+    /* TWO rules, because two different builders draw poster cards.
+     *
+     * Rows and grids come from the card builder in chunk 24468. An item page's
+     * cover does NOT -- it is built in itemDetails.<hash>.chunk.js by its own
+     * function, which picks a shape from the item's ratio and then writes the
+     * class itself. That is why the cover carried no par-NN and fell to the
+     * 0.7013 default: measured on Black Rock Shooter: Dawn Fall, a true 2:3, the
+     * cover rendered 593x846 where its ratio calls for 593x890. Armitage III
+     * looked right only because its poster really is 0.7013.
+     *
+     * The item is `t` at that point in the minified source -- the same scope
+     * reads t.PrimaryImageAspectRatio to choose the shape and t.Type to pick the
+     * placeholder -- so the ratio is in hand exactly where the class is written.
+     *
+     * Separate pattern keys on purpose. One key matching both files would have
+     * to be broad enough to catch every chunk, which is the mistake that blanked
+     * Custom Tabs. The cost of two keys is that each is its own pipeline, so a
+     * plugin patching either of these two files could still shadow us or be
+     * shadowed -- narrow patterns make that less likely, not impossible.
+     */
+    const COVER_ENTRY_ID = 'b7d4f1a0-3c68-4e92-8a15-6f0b9d2c7e83';
+
+    const ENTRIES = [
+        {
+            Id: ENTRY_ID,
+            FilenamePattern: String.raw`24468\.[0-9a-f]+\.chunk\.js`,
+            SearchText: `class="'+re+'"'`,
+            ReplaceText: `class="'+(r.PrimaryImageAspectRatio>0?'par-'+Math.round(r.PrimaryImageAspectRatio*100)+' ':'')+re+'"'`
+        },
+        {
+            Id: COVER_ENTRY_ID,
+            FilenamePattern: String.raw`itemDetails\.[0-9a-f]+\.chunk\.js`,
+            SearchText: `'<div class="card '.concat(n,'Card">`,
+            ReplaceText: `'<div class="card '.concat(n,'Card ',(t.PrimaryImageAspectRatio>0?'par-'+Math.round(t.PrimaryImageAspectRatio*100):''),'">`
+        }
+    ];
 
     /* An earlier approach wrote data-ar onto every card through a second rule,
      * under that same all-chunks pattern. It was abandoned -- cardBuilder sets
@@ -103,7 +133,10 @@
     const STALE_IDS = ['7ca51d3e-9b24-4f80-a6d1-0c8e5b2f4a91'];
 
     const normId = (id) => String(id || '').replace(/-/g, '').toLowerCase();
-    const isOurs = (e) => !!e && (normId(e.Id) === normId(ENTRY_ID) || e.ReplaceText === ENTRY.ReplaceText);
+    const isOurs = (e) => !!e && (
+        ENTRIES.some((x) => normId(e.Id) === normId(x.Id))
+        || ENTRIES.some((x) => e.ReplaceText === x.ReplaceText)
+    );
     const isStale = (e) => !!e && STALE_IDS.some((id) => normId(e.Id) === normId(id));
 
     let registering = null;
@@ -122,10 +155,12 @@
             const list = Array.isArray(cfg?.Transformations) ? cfg.Transformations : [];
             const mine = list.filter(isOurs);
             const stale = list.filter(isStale);
-            if (mine.length === 1
-                && stale.length === 0
-                && mine[0].FilenamePattern === ENTRY.FilenamePattern
-                && mine[0].SearchText === ENTRY.SearchText) return true;
+            const complete = mine.length === ENTRIES.length && ENTRIES.every((x) => mine.some((m) =>
+                normId(m.Id) === normId(x.Id)
+                && m.FilenamePattern === x.FilenamePattern
+                && m.SearchText === x.SearchText
+                && m.ReplaceText === x.ReplaceText));
+            if (complete && stale.length === 0) return true;
 
             if (typeof ApiClient.updatePluginConfiguration !== 'function') {
                 WARN('No updatePluginConfiguration on this build; add the rule by hand.');
@@ -135,7 +170,8 @@
             // and the abandoned data-ar rule goes with them.
             await ApiClient.updatePluginConfiguration(id, {
                 ...cfg,
-                Transformations: list.filter((t) => t && !isOurs(t) && !isStale(t)).concat([{ ...ENTRY }])
+                Transformations: list.filter((t) => t && !isOurs(t) && !isStale(t))
+                    .concat(ENTRIES.map((x) => ({ ...x })))
             });
             LOG('Ratio class rule registered. Reload for jellyfin-web to be served with it.');
             return true;
