@@ -168,6 +168,10 @@ hover blur was lost). The theme's own styling is used for all of that now.
 The larger performance wins are **not** in this option and are always active, because
 they are free — no visual or behavioural change:
 
+- batching `posterAspect.js`'s per-card container measurement and taking widths from a
+  `ResizeObserver` instead of `getBoundingClientRect` — 883 forced layouts per home load
+  became 89, and a home scroll went from 60 long tasks (9,424 ms, worst 499 ms) to 19
+  (1,357 ms, worst 107 ms). See [forced-layout.md](forced-layout.md)
 - memoising Jellyfin Enhanced's `getSidebarContainer()` (`scripts/jeSidebarMemo.js`) — it
   read `offsetParent`, a forced full-document style flush, on every DOM mutation
 - replacing the home-screen infinite-scroll `scrollHeight` poll with a sentinel
