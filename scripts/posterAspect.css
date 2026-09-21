@@ -383,31 +383,6 @@
     z-index: 2;
 }
 
-/* Reserve what the A-Z picker actually needs, and no more.
- *
- * Jellyfin holds a PERCENTAGE of the width for the picker
- * (.padded-right-withalphapicker), which on a 2824px window is 211.8px for a
- * strip 21px wide. That matters here: the row height is the skin's, each card
- * is height x its own ratio, so cards land a few pixels wider than the slot the
- * skin planned -- and over ten slots that is enough to push the last card onto
- * the next row while 200px sits empty beside it.
- *
- * A fixed reservation fixes it, and it is a STATIC rule on purpose. Doing this
- * from JavaScript meant widening the container after it had been measured,
- * which made the next measurement read the wider box and creep the row height
- * up -- covers growing slightly a moment after the page settled. A stylesheet
- * rule is in force before anything is laid out, so the container is already its
- * final width when the skin sizes a card and when the height is measured. One
- * measurement, one width, nothing to correct afterwards.
- *
- * The picker is a fixed-width strip, not a proportional one, so a fixed number
- * is the honest reservation at any window size. Phones do not get this class at
- * all, so nothing changes there.
- */
-.padded-right-withalphapicker {
-    padding-right: 48px !important;
-}
-
 /* Room for the A-Z picker, taken from WIDTH. The row height is the skin's and
    is never shrunk, so width is the only thing left to give. Not gated on
    .padded-right-withalphapicker: that is a desktop class, and on a phone the

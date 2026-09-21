@@ -150,31 +150,8 @@
 
         const width = Math.round(container.getBoundingClientRect().width);
         if (!width) return false;
-
-        /* Wait for the A-Z picker's reservation to land.
-         *
-         * Jellyfin adds .padded-right-withalphapicker after the first render, so
-         * a container measured before it is briefly full width -- the skin hands
-         * it a bigger card, and the row height solved from it is too tall. When
-         * the class arrives the container narrows and the height is measured
-         * again: covers looking right, then growing slightly a moment later.
-         *
-         * If this page has a picker at all, the reservation is coming, so
-         * measuring now would only have to be undone.
-         */
-        const page = container.closest('[data-role="page"]') || document;
-        if (page.querySelector('.alphaPicker')
-            && !container.closest('.padded-right-withalphapicker')) return false;
-
         const sig = skinSignature();
-        if (container.dataset.parSkin === sig) {
-            const was = Number(container.dataset.parAt);
-            /* Re-measure on a real resize, not on the small shifts a page makes
-               while it settles. Anything under 5% is layout noise -- the picker
-               reservation is 48px on a 2824px window, under 2% -- and acting on
-               it is what moves the row height after the fact. */
-            if (was && Math.abs(width - was) / was < 0.05) return true;
-        }
+        if (container.dataset.parAt === String(width) && container.dataset.parSkin === sig) return true;
 
         const probe = document.createElement('div');
         probe.className = 'card portraitCard';
