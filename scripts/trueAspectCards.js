@@ -831,7 +831,9 @@
      * from build time, so they are skipped here and never touched at all.
      */
     function applyKnownRatiosNow(records) {
-        if (!ratioCache.size) return;
+        // No early return on an empty cache: this pass also activates the
+        // container and fits the rows inside the picker, both of which have to
+        // happen whether or not any ratio is known yet.
         const touched = new Set();
         for (const record of records) {
             for (const node of record.addedNodes) {
@@ -840,8 +842,6 @@
                     ? [node]
                     : node.querySelectorAll?.(CARD_SELECTOR) || [];
                 for (const card of cards) {
-                    // Size the container the same frame its first card arrives,
-                    // so the card is never painted at the ladder width first.
                     /* Size this container from its OWN first card, in the same
                        frame that card arrives, so it is never painted at the
                        ladder width first. measureAndActivate measures the probe
@@ -855,6 +855,33 @@
                     if (card.getAttribute('data-type') === 'Episode') continue;
                     const id = card.getAttribute('data-id');
                     if (!id) continue;
+
+                    /* Prefer a ratio the card was BORN with.
+                     *
+                     * Inert today -- nothing emits data-ar yet. This is the hook
+                     * for the File Transformation route: jellyfin-web builds its
+                     * card markup as a string with the item in scope, so one
+                     * substitution can stamp each card with its own
+                     * PrimaryImageAspectRatio. If that lands, the ratio arrives
+                     * WITH the card -- correct, current, before paint -- and the
+                     * whole discovery layer below (API lookups, the response
+                     * harvest, the persisted cache and its tag bookkeeping) has
+                     * nothing left to do. It is also the layer every staleness
+                     * bug has come out of.
+                     *
+                     * If the patch ever stops applying -- a Jellyfin update
+                     * renaming minified identifiers, say -- the attribute is
+                     * simply absent and this falls through to the existing path,
+                     * so the feature degrades instead of breaking.
+                     */
+                    const born = parseFloat(card.dataset.ar);
+                    if (isFinite(born) && born > 0) {
+                        card.style.setProperty(RATIO_PROP, born.toFixed(4));
+                        card.dataset.kefinRatioSet = '1';
+                        markSettled(card);
+                        continue;
+                    }
+
                     const ratio = knownRatio(id);
                     if (!ratio) continue;
                     card.style.setProperty(RATIO_PROP, ratio.toFixed(4));
