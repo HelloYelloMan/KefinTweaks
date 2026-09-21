@@ -93,12 +93,35 @@
 
         const style = document.createElement('style');
         style.id = styleId;
-        // Scoped to .videoOsd so shadows only apply during video playback
+        /* Scoped to the playback OSD so shadows only apply during video playback.
+         *
+         * These selectors used to be built around a `.videoOsd` class and class
+         * names like .videoOsd-text / .videoOsdDurationText. None of them exist
+         * in jellyfin-web -- the only videoOsd* classes it ships are
+         * .videoOsdBottom, .videoOsdBottom-maincontrols, .videoOsdBottom-hidden
+         * and #videoOsdPage -- so every rule that depended on them matched
+         * nothing and the shadows were never drawn. The bottom-controls block
+         * was the exception and did work, because .videoOsdBottom is real.
+         *
+         * The header during playback is .skinHeader.osdHeader (the same class
+         * handleHeaderChange and pauseScreen.js test for), and the text lives in
+         * .videoOsdBottom as .osdTitle / .osdMediaInfo / .osdPositionText /
+         * .osdDurationText, per the shipped markup:
+         *
+         *   <div class="videoOsdBottom videoOsdBottom-maincontrols">
+         *     <div class="osdControls">
+         *       <div class="osdTextContainer osdMainTextContainer">
+         *         <h3 class="osdTitle"></h3>
+         *
+         * .pageTitle is included because the header title sits over the video as
+         * well; it is the element Jellyfin's setTitle() writes the series and
+         * episode name into.
+         */
         style.textContent = `
-            /* Drop Shadow for Top Header Icons - only inside video OSD */
-            .videoOsd .skinHeader .paper-icon-button-light,
-            .videoOsd .skinHeader .headerButton,
-            .videoOsd .skinHeader .headerLeft {
+            /* Drop Shadow for Top Header Icons - only inside the playback OSD */
+            .skinHeader.osdHeader .paper-icon-button-light,
+            .skinHeader.osdHeader .headerButton,
+            .skinHeader.osdHeader .headerLeft {
                 filter: drop-shadow(0 1px 3px rgba(0,0,0,0.8));
             }
 
@@ -111,9 +134,15 @@
             }
 
             /* Text Shadows for Title and Time */
-            .videoOsd .videoOsd-text,
-            .videoOsd .videoOsdDurationText,
-            .videoOsd .videoOsdPositionText {
+            .skinHeader.osdHeader .pageTitle,
+            .videoOsdBottom .osdTitle,
+            .videoOsdBottom .osdTitleSmall,
+            .videoOsdBottom .osdMediaInfo,
+            .videoOsdBottom .osdText,
+            .videoOsdBottom .osdMainText,
+            .videoOsdBottom .osdTimeText,
+            .videoOsdBottom .osdPositionText,
+            .videoOsdBottom .osdDurationText {
                 text-shadow: 0 1px 3px rgba(0,0,0,0.9);
             }
         `;
@@ -194,7 +223,9 @@
 
             if (USE_CLEARART) {
                 targetContainer = document.querySelector('.videoOsdBottom');
-                if (!targetContainer) targetContainer = header.closest('.videoOsd');
+                // Fallback: .videoOsd does not exist, and .skinHeader is not inside
+                // the OSD page anyway, so closest() could never have found anything.
+                if (!targetContainer) targetContainer = getActiveOsdPage();
             } else {
                 targetContainer = header.querySelector('.headerRight') || header;
             }
