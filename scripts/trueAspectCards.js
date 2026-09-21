@@ -310,12 +310,9 @@
 
         /* Do not re-measure a container that is already set up at this width.
          *
-         * Measuring means taking the class off, reading a card, and putting it
-         * back -- which reverts every card to the ladder width and returns it,
-         * one frame later. Jellyfin keeps pages in the DOM and re-shows them, so
-         * coming back to a library ran that again and made all hundred cards
-         * visibly jump. Measured: 100 of 100 cards changing width on a second
-         * visit, none on the first.
+         * Measuring is cheap but not free -- it clones a card and forces a
+         * layout -- and Jellyfin keeps pages in the DOM and re-shows them, so
+         * without this guard every return to a library would re-measure.
          *
          * The measurement only depends on the container's width, so recording it
          * is enough to know when the answer would be the same. A real resize
@@ -335,24 +332,49 @@
                 && skinSignature() === container.dataset.kefinSkinSig) return true;
         }
 
-        if (wasActive) container.classList.remove(ACTIVE_CLASS);
+        /* Measure a THROWAWAY COPY, never the live cards.
+         *
+         * This used to take the class off the container, read a real card, and
+         * put the class back. That strips the sizing from every card in the
+         * container for as long as it takes, and a re-measure is guaranteed
+         * shortly after any load: a skin's stylesheets arrive progressively, and
+         * each one changes the skin signature that the guard above keys on. The
+         * result is the whole grid snapping back to the default ratio and
+         * resizing again, every time -- reported as a jitter after the cards
+         * first settle.
+         *
+         * A clone carrying the same classes gets the same ladder width from the
+         * skin, and the stylesheet excludes [data-kefin-probe] so it is sized by
+         * the skin rather than by us -- which is exactly the measurement wanted.
+         * Insert, read, remove, all synchronously: layout is forced, but the
+         * browser never paints a frame containing it, and the real cards are
+         * never touched.
+         */
+        const copy = probe.cloneNode(true);
+        copy.setAttribute('data-kefin-probe', '1');
+        copy.removeAttribute('data-kefin-settled');
+        copy.style.removeProperty(RATIO_PROP);
+        copy.style.visibility = 'hidden';
+        container.appendChild(copy);
 
-        const scalable = probe.querySelector('.cardScalable');
+        const scalable = copy.querySelector('.cardScalable');
         if (!scalable) {
-            if (wasActive) container.classList.add(ACTIVE_CLASS);
+            copy.remove();
             return false;
         }
         const rect = scalable.getBoundingClientRect();
+        const copyRect = copy.getBoundingClientRect();
         if (!rect.height || !rect.width) {
-            if (wasActive) container.classList.add(ACTIVE_CLASS);
+            copy.remove();
             return false;
         }
 
         // The image box is narrower than the card: .cardScalable sits inside a
         // padded .cardBox. Width has to carry that difference or the ratio lands
         // on the card and not on the picture.
-        const cardRect = probe.getBoundingClientRect();
+        const cardRect = copyRect;
         const pad = Math.max(0, Math.round(cardRect.width - rect.width));
+        copy.remove();
 
         applyAlphaPickerSlack(container);
 
@@ -388,7 +410,7 @@
         // The height before any picker correction. fitInsidePicker always works
         // from this, so the correction cannot compound on itself each sweep.
         container.dataset.kefinBaseH = String(Math.round(height));
-        container.classList.add(ACTIVE_CLASS);
+        if (!wasActive) container.classList.add(ACTIVE_CLASS);
         return true;
     }
 
@@ -493,6 +515,7 @@
     function cardsNeedingRatio(scope) {
         const out = [];
         scope.querySelectorAll(CARD_SELECTOR).forEach((card) => {
+            if (card.hasAttribute('data-kefin-probe')) return;
             if (card.dataset.kefinRatioSet) return;
             const shown = displayedImage(card);
             if (!shown) return;                 // not loaded yet: try again next sweep
@@ -788,6 +811,10 @@
                     ? [node]
                     : node.querySelectorAll?.(CARD_SELECTOR) || [];
                 for (const card of cards) {
+                    // The measurement clone is not a real card; it is gone by the
+                    // time this microtask runs, but skip it explicitly so it can
+                    // never be measured from or stamped.
+                    if (card.hasAttribute('data-kefin-probe')) continue;
                     /* Size this container from its OWN first card, in the same
                        frame that card arrives, so it is never painted at the
                        ladder width first. measureAndActivate measures the probe

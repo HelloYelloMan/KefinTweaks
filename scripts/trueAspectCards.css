@@ -1,5 +1,11 @@
 /* True-aspect cards: one row height, width from each poster's own ratio.
  *
+ * Every card rule excludes [data-kefin-probe]. That is the throwaway clone
+ * measureAndActivate inserts to read the skin's ladder width: it must be sized
+ * by the SKIN, not by us, or the measurement would just read back our own
+ * arithmetic. It exists for a single synchronous layout read and is removed
+ * before any frame is painted.
+ *
  * Only active on a container the script has measured and switched on, and only
  * for portrait-family cards -- backdrop, square and banner cards keep their
  * shapes, which are deliberate rather than derived from artwork.
@@ -28,8 +34,8 @@
  * --kefin-card-r-default still overrides it, measured per container, so a row
  * that really is 2:3 behaves as before.
  */
-.kefin-true-aspect > .card.portraitCard,
-.kefin-true-aspect > .card.overflowPortraitCard {
+.kefin-true-aspect > .card.portraitCard:not([data-kefin-probe]),
+.kefin-true-aspect > .card.overflowPortraitCard:not([data-kefin-probe]) {
     /* The width formula is `height x ratio + pad`, which is only true if the
        width we set INCLUDES the padding. Jellyfin's cards are border-box, so it
        is; ElegantFin's are content-box with `padding: var(--padding)`, so the
@@ -78,16 +84,16 @@
  * size snaps and only later corrections -- a ratio learned from the image, a
  * skin change, a resize -- are eased.
  */
-.kefin-true-aspect > .card.portraitCard[data-kefin-settled],
-.kefin-true-aspect > .card.overflowPortraitCard[data-kefin-settled] {
+.kefin-true-aspect > .card.portraitCard:not([data-kefin-probe])[data-kefin-settled],
+.kefin-true-aspect > .card.overflowPortraitCard:not([data-kefin-probe])[data-kefin-settled] {
     transition: width 140ms ease-out !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .kefin-true-aspect > .card.portraitCard,
-    .kefin-true-aspect > .card.overflowPortraitCard,
-    .kefin-true-aspect > .card.portraitCard[data-kefin-settled],
-    .kefin-true-aspect > .card.overflowPortraitCard[data-kefin-settled] {
+    .kefin-true-aspect > .card.portraitCard:not([data-kefin-probe]),
+    .kefin-true-aspect > .card.overflowPortraitCard:not([data-kefin-probe]),
+    .kefin-true-aspect > .card.portraitCard:not([data-kefin-probe])[data-kefin-settled],
+    .kefin-true-aspect > .card.overflowPortraitCard:not([data-kefin-probe])[data-kefin-settled] {
         transition: none;
     }
 }
@@ -117,10 +123,10 @@
  * room for the overflow to land in: the next card starts at x457, well clear
  * of the x447 the image reaches.
  */
-.kefin-true-aspect > .card.portraitCard:hover,
-.kefin-true-aspect > .card.overflowPortraitCard:hover,
-.kefin-true-aspect > .card.portraitCard:focus-within,
-.kefin-true-aspect > .card.overflowPortraitCard:focus-within {
+.kefin-true-aspect > .card.portraitCard:not([data-kefin-probe]):hover,
+.kefin-true-aspect > .card.overflowPortraitCard:not([data-kefin-probe]):hover,
+.kefin-true-aspect > .card.portraitCard:not([data-kefin-probe]):focus-within,
+.kefin-true-aspect > .card.overflowPortraitCard:not([data-kefin-probe]):focus-within {
     contain: layout style !important;
     /* `contain: paint` was also creating a stacking context. Dropping it hands
        paint order back to document order, which would let the NEXT card draw
@@ -178,8 +184,8 @@
 /* The padder is Jellyfin's pre-aspect-ratio height mechanism: a percentage
    padding-bottom on a zero-height box. Height comes from --kefin-card-h now, so
    the padder has to stop contributing or it adds its 150% on top. */
-.kefin-true-aspect > .card.portraitCard .cardPadder,
-.kefin-true-aspect > .card.overflowPortraitCard .cardPadder {
+.kefin-true-aspect > .card.portraitCard:not([data-kefin-probe]) .cardPadder,
+.kefin-true-aspect > .card.overflowPortraitCard:not([data-kefin-probe]) .cardPadder {
     padding-bottom: 0 !important;
     height: 100%;
 }
@@ -189,8 +195,8 @@
    definite. !important because the rules it has to beat are themselves
    !important, and this file cannot rely on load order against a user's own
    custom CSS. */
-.kefin-true-aspect > .card.portraitCard .cardScalable,
-.kefin-true-aspect > .card.overflowPortraitCard .cardScalable {
+.kefin-true-aspect > .card.portraitCard:not([data-kefin-probe]) .cardScalable,
+.kefin-true-aspect > .card.overflowPortraitCard:not([data-kefin-probe]) .cardScalable {
     height: var(--kefin-card-h) !important;
     width: 100% !important;
     aspect-ratio: auto !important;
@@ -199,8 +205,8 @@
 /* The box now matches the image, so cover crops nothing and simply fills it
    exactly. Kept as cover rather than contain so a card whose ratio is still
    unknown, or slightly stale, fills its box instead of showing bars. */
-.kefin-true-aspect > .card.portraitCard .cardImageContainer,
-.kefin-true-aspect > .card.overflowPortraitCard .cardImageContainer {
+.kefin-true-aspect > .card.portraitCard:not([data-kefin-probe]) .cardImageContainer,
+.kefin-true-aspect > .card.overflowPortraitCard:not([data-kefin-probe]) .cardImageContainer {
     background-size: cover;
 }
 
