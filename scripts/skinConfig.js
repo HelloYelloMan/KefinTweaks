@@ -196,13 +196,16 @@
                 enabled: true
             },
             {
-                // .vertical-wrap is the library/genre/search grid and nothing
-                // else -- home rows are horizontal scrollers and keep their
-                // left edge. Pure justify-content: no width, height or padding
-                // is touched, so no card changes size.
+                // The library list view is built without Jellyfin's `centered`
+                // class, so its grid packs left and the ragged leftover ends up
+                // on the right. Scoped to .vertical-wrap, which is the library,
+                // genre and search grid and never a home row.
                 name: 'Center Library Cards',
                 url: `${getKefinTweaksRoot()}skins/optional/global/centerLibraryCards.css`,
-                enabled: false
+                // On by default, like the overlay-button option above: a brand
+                // new key has no entry in either config, so this is what
+                // isOptionalIncludeEnabled falls through to.
+                enabled: true
             }
         ],
         

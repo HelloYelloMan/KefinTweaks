@@ -1,26 +1,31 @@
 /* Center Library Cards
  *
- * Library, genre and search grids are flex containers with wrapping
- * (.itemsContainer.vertical-wrap), and Jellyfin leaves them at the default
- * justify-content: flex-start. Rows therefore pack to the left and whatever
- * width is left over collects in one lump on the right. That is barely
- * noticeable when every card is the same width, and very noticeable with
- * true-aspect cards, where a row's total width depends on which posters
- * happen to be in it.
+ * The library grid (.itemsContainer.vertical-wrap) is a wrapping flex
+ * container left at the default justify-content: flex-start, so every row
+ * packs hard against the left gutter and all the leftover width collects on
+ * the right. With true-aspect cards the leftover differs row to row, so the
+ * left edge is a dead straight line and the right edge is ragged. Measured on
+ * a TV library at 2824px: L = 93 on all six rows, R = 2532..2564.
  *
- * Jellyfin already ships the rule -- .vertical-wrap.centered { justify-content:
- * center } -- it just never puts that class on a library page. This is the same
- * declaration, applied where it is wanted.
+ * Jellyfin does ship the declaration -- .vertical-wrap.centered
+ * { justify-content: center } -- and its markup carries `centered` on SOME
+ * containers, but not on the library list view, which is built with
+ * "itemsContainer padded-left padded-right padded-right-withalphapicker
+ * vertical-wrap" and no `centered`. So the class cannot be relied on; this
+ * sets the property directly.
  *
- * Scoped to .vertical-wrap on purpose: home screen rows are horizontal
- * scrollers and never carry it, so they keep their left edge lined up with
- * their section title.
+ * !important because skins restyle this container freely and the whole point
+ * of the option is that it takes effect.
  *
- * justify-content applies to each flex LINE, so every row centres on its own
- * and a short final row sits in the middle rather than hanging off the left.
+ * Scoped to .vertical-wrap: home screen rows are horizontal scrollers and
+ * never carry it, so they keep their left edge lined up with their section
+ * title.
  *
- * Nothing here touches width, height or padding. The container is exactly the
- * box it was; only the leftover space inside it moves, so no card changes size
+ * justify-content applies per flex LINE, so each row centres on its own and a
+ * short final row sits in the middle rather than hanging off the left.
+ *
+ * Nothing here touches width, height or padding. The container is the same box
+ * it was and only the leftover space inside it moves, so no card changes size
  * and the row height stays the skin's.
  *
  * One cosmetic caveat: .itemsContainer > .card > .cardBox carries a trailing
@@ -30,5 +35,5 @@
  */
 
 .itemsContainer.vertical-wrap {
-    justify-content: center;
+    justify-content: center !important;
 }

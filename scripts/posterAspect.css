@@ -383,12 +383,30 @@
     z-index: 2;
 }
 
-/* Reserve what the A-Z picker needs, not 7.5% of the window.
+/* Reserve what the A-Z picker needs, which above ~1300px is NOTHING.
  *
- * Jellyfin holds a percentage of the width for the picker -- 211.8px on a
- * 2824px window, for a strip 21px wide -- and the waste grows with the screen.
- * 3.3% is what the LEFT side gets (.padded-left), so the content sits in a
- * symmetric box and the picker still has room.
+ * Jellyfin holds 7.5% of the window for a strip that measures 21px, and the
+ * waste grows with the screen. But the container never reaches the picker in
+ * the first place: the page gutter (.padded-left, which also sets
+ * padding-right: 3.3%) already stops its box short. Measured on a TV library,
+ * box right edge to picker left edge:
+ *
+ *     2824px window -> 56px clear     1600px -> 15px clear     1280px -> 5px
+ *
+ * So any padding-right here is a SECOND reservation inside a box that is
+ * already clear, and it costs nothing to drop: at all three widths, removing
+ * it left the card count and the card height exactly as they were -- 9/7/5
+ * cards, 413/302/320px tall -- and only moved the leftover space.
+ *
+ * Dropping it is also what centres the grid. Jellyfin's own markup carries
+ * `centered` on this container, so rows are already centred WITHIN the content
+ * box; the box itself was the thing off-centre, 93px of gap on the left
+ * against 186px on the right. At padding-right 0 the gaps come out 217/223,
+ * 141/147 and 139/145 -- even, give or take the trailing card margin.
+ *
+ * The picker's offset from the right edge is a constant 43px at every width,
+ * while the gutter is 3.5% of the window, so the gutter stops covering it
+ * below about 1230px. The media query puts a flat reservation back there.
  *
  * Deliberately a STATIC rule and nothing else. Doing this from JavaScript meant
  * widening the container after its height had been measured, so a later
@@ -411,7 +429,18 @@
  */
 .padded-right-withalphapicker,
 .itemsContainer[data-par-picker] {
-    padding-right: max(env(safe-area-inset-right), 3.3%) !important;
+    padding-right: 0 !important;
+}
+
+/* Below ~1230px the page gutter is narrower than the picker's 43px offset, so
+   the box would reach it. Flat px, not a percentage: the picker's offset does
+   not scale, so neither should the room left for it. Both selectors move
+   together here too. */
+@media (max-width: 1300px) {
+    .padded-right-withalphapicker,
+    .itemsContainer[data-par-picker] {
+        padding-right: 48px !important;
+    }
 }
 
 /* Room for the A-Z picker, taken from WIDTH. The row height is the skin's and
