@@ -39,6 +39,40 @@
 // Requires administrator rights, because plugin configuration does. Non-admin
 // users simply skip it -- the transformation is server-wide once any admin has
 // applied it, so there is nothing for them to do.
+//
+// DOES IT ACTUALLY WORK? NOT ON File Transformation 3.0.1.0 -- measured.
+//
+// Kept off by default, and the reason is worth writing down so nobody spends
+// another evening on it. The rule registers correctly and is live: after a
+// restart the plugin logged it at startup, logged "Installing response
+// transformation middleware", the pattern matched the request and the search
+// text matched the content --
+//
+//     served bytes 37798 = disk bytes 37798, byte-identical
+//     search target present: 1   regex matches: 1   data-ar: 0
+//
+// Four pattern forms were tried: the exact filename (which the plugin's own UI
+// says is supported and checked first), an anchored regex, a loose name, and
+// one including the /web/ prefix. None applied.
+//
+// The discriminating test was whether ANY javascript transformation applies,
+// including those other plugins register through the startup callback API:
+//
+//     home-html.8ce38bc7d6dc073656d4.chunk.js   transformed=False
+//     main.jellyfin.bundle.js                   transformed=False
+//     24468.50f2991bf78868105780.chunk.js       transformed=False
+//
+// None. Only index.html comes back changed, and that is explained by the
+// JavaScript Injector having a middleware of its own -- its configuration
+// carries DisableScriptInjectionMiddleware -- rather than by this plugin. The
+// likely mechanism is ordering: Jellyfin serves /web/*.js through the static
+// file middleware, which short-circuits the pipeline before the transformation
+// middleware runs, while index.html is served specially.
+//
+// So this stays switched off, and True Aspect Cards keeps discovering ratios
+// for itself. If a later plugin version applies configuration rules to static
+// assets, switching this on deletes that whole layer -- the client hook in
+// trueAspectCards.js already prefers data-ar when it is present.
 
 (function() {
     'use strict';
