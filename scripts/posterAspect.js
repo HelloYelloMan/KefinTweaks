@@ -151,7 +151,41 @@
         const width = Math.round(container.getBoundingClientRect().width);
         if (!width) return false;
         const sig = skinSignature();
-        if (container.dataset.parAt === String(width) && container.dataset.parSkin === sig) return true;
+        if (container.dataset.parSkin === sig) {
+            const was = Number(container.dataset.parAt);
+            /* Once measured, the height is settled.
+             *
+             * A page shifts by a few pixels while it finishes loading -- the
+             * picker's reservation arriving, a scrollbar, a header resolving --
+             * and re-measuring on each of those is what resizes the covers a
+             * moment after everything looks right. The height is the skin's for
+             * this layout; small width changes do not change what the skin
+             * wants, they are just the page settling.
+             *
+             * 5% is comfortably above that noise and far below a real window
+             * resize or a sidebar opening, which still re-measure.
+             */
+            if (was && Math.abs(width - was) / was < 0.05) return true;
+            if (was === width) return true;
+        }
+
+        /* Pin the picker reservation BEFORE measuring.
+         *
+         * Jellyfin adds .padded-right-withalphapicker after the first render, so
+         * a container is briefly unreserved and then reserved. Measured in both
+         * states it yields two different row heights, and the second one is what
+         * resizes the covers a moment after the page has settled.
+         *
+         * Marking the container here makes the stylesheet apply the same
+         * reservation we will end up with either way, synchronously, before the
+         * probe is read. Jellyfin's own class is overridden to the same value,
+         * so when it does arrive the width does not move and there is nothing to
+         * re-measure.
+         */
+        const ownerPage = container.closest('[data-role="page"]') || document;
+        if (ownerPage.querySelector('.alphaPicker')) {
+            container.dataset.parPicker = '1';
+        }
 
         const probe = document.createElement('div');
         probe.className = 'card portraitCard';

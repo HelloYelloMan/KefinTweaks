@@ -383,6 +383,34 @@
     z-index: 2;
 }
 
+/* TEST: reserve what the A-Z picker needs, not 7.5% of the window.
+ *
+ * Jellyfin holds a percentage of the width for the picker -- 211.8px on a
+ * 2824px window, for a strip 21px wide -- and the waste grows with the screen.
+ *
+ * Deliberately a STATIC rule and nothing else. Doing this from JavaScript meant
+ * widening the container after its height had been measured, so a later
+ * measurement read the wider box and the covers grew a moment after the page
+ * settled. A stylesheet rule is in force before any layout happens: the
+ * container is already its final width when the skin sizes a card and when the
+ * height is read, so whatever size the cards come out, they come out that size
+ * once.
+ *
+ * The same value is applied through [data-par-picker], which the script sets
+ * before it measures, so the container's width is identical before and after
+ * Jellyfin's class arrives. That is what stops the height being measured twice
+ * and the covers resizing a moment later.
+ *
+ * Expect the cards to get BIGGER, not more numerous: the skin cuts the row into
+ * N equal slots, so a wider container means wider slots, a taller card, and the
+ * same count. If a tenth card does appear, the slot maths worked out at this
+ * width rather than this being a general fix.
+ */
+.padded-right-withalphapicker,
+.itemsContainer[data-par-picker] {
+    padding-right: 48px !important;
+}
+
 /* Room for the A-Z picker, taken from WIDTH. The row height is the skin's and
    is never shrunk, so width is the only thing left to give. Not gated on
    .padded-right-withalphapicker: that is a desktop class, and on a phone the
