@@ -320,9 +320,33 @@
      * at exactly the size the skin gave them until they can be sized correctly,
      * which is the right thing to be showing in the meantime.
      */
+    const SKIN_KEY = 'kefinTweaks_selectedSkin';
+    // Never wait forever for a skin that is not coming.
+    const SKIN_WAIT_DEADLINE = Date.now() + 8000;
+
     function skinReady() {
         const links = document.querySelectorAll('link[data-kefin-skin], link[data-kefin-optional-include]');
-        if (!links.length) return true;          // no skin: Jellyfin's own CSS is already in
+
+        if (!links.length) {
+            /* No links YET is not the same as no skin.
+             *
+             * On a fresh load skinManager has not inserted them at the moment
+             * the first cards appear, so treating an empty list as "ready"
+             * measured against Jellyfin's default CSS, sized everything once,
+             * and then the skin arrived, invalidated the measurement and sized
+             * everything a second time -- the double resize on refresh.
+             *
+             * If a skin is selected, its sheets are still on their way, so wait.
+             * The deadline stops that becoming a hang when skinManager is off,
+             * has failed, or the key is stale: past it, Jellyfin's own CSS is
+             * what there is, and that is a perfectly good thing to measure.
+             */
+            let selected = null;
+            try { selected = localStorage.getItem(SKIN_KEY); } catch (e) { /* blocked */ }
+            if (!selected || selected === 'Default') return true;
+            return Date.now() > SKIN_WAIT_DEADLINE;
+        }
+
         for (const l of links) {
             // A sheet that failed outright must not block this forever.
             if (!l.sheet && !l.dataset.kefinLoadFailed) return false;
