@@ -86,18 +86,32 @@
     // Fixed so the entry can be found and updated rather than duplicated.
     const ENTRY_ID = '7ca51d3e-9b24-4f80-a6d1-0c8e5b2f4a91';
 
-    /* SearchText is a REGEX -- the plugin compiles it (Regex.Replace), so the
-       metacharacters in the minified source have to be escaped. ReplaceText is a
-       .NET replacement string, where only `$` is special; there is none here, so
-       it goes in literally. Backticks avoid a second layer of escaping for the
-       quotes the source itself contains.
-
-       Verified against the deployed chunk offline: exactly one match, 46 bytes
-       added, and the patched file still parses. */
+    /* The two fields are NOT the same kind of string, which is the whole story
+     * of why this took so long.
+     *
+     *   FilenamePattern IS a regex. NeedsTransformation and RunTransformation
+     *     both run it through GetOrCreateRegex(...).IsMatch(path), so `\.` is
+     *     right here.
+     *
+     *   SearchText is NOT a regex. From the plugin source:
+     *         currentContent.Replace(transformation.SearchText,
+     *                                transformation.ReplaceText)
+     *     That is string.Replace -- a plain literal substring replace. Escaping
+     *     it turns it into a string that does not occur in the file, and the
+     *     transformation silently does nothing.
+     *
+     * Measured, one rule at a time against the same chunk:
+     *     data-type="              applied       (literal, present)
+     *     r\.Type                  NOT applied   (literal backslash, absent)
+     *     '[+]r[.]Type[+]'         NOT applied   (literal brackets, absent)
+     *
+     * So the search text goes in exactly as it appears in the minified source.
+     * ReplaceText is likewise literal -- no $ substitution to worry about.
+     */
     const ENTRY = {
         Id: ENTRY_ID,
         FilenamePattern: String.raw`.*\.chunk\.js`,
-        SearchText: String.raw`data-type="'\+r\.Type\+'"'`,
+        SearchText: `data-type="'+r.Type+'"'`,
         ReplaceText: `data-type="'+r.Type+'" data-ar="'+(r.PrimaryImageAspectRatio||'')+'"'`
     };
 
