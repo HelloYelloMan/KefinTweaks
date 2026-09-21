@@ -21,6 +21,14 @@
  * never carry it, so they keep their left edge lined up with their section
  * title.
  *
+ * And scoped OUT of item detail pages. .vertical-wrap is not unique to a
+ * library grid -- a series page uses it for the season row, and a detail page
+ * also uses it for cast, More Like This and the rest -- so the first version of
+ * this centred those too. #itemDetailPage is the anchor Jellyfin puts on every
+ * detail page, the same one hideSpecialsSeason.css keys on, and the second rule
+ * below restores flex-start there by raising specificity rather than by
+ * excluding it from the first selector, which keeps both rules readable.
+ *
  * justify-content applies per flex LINE, so each row centres on its own and a
  * short final row sits in the middle rather than hanging off the left.
  *
@@ -36,4 +44,9 @@
 
 .itemsContainer.vertical-wrap {
     justify-content: center !important;
+}
+
+/* Library grids only -- a detail page's rows keep their left edge. */
+#itemDetailPage .itemsContainer.vertical-wrap {
+    justify-content: flex-start !important;
 }
