@@ -1,0 +1,34 @@
+/* Center Library Cards
+ *
+ * Library, genre and search grids are flex containers with wrapping
+ * (.itemsContainer.vertical-wrap), and Jellyfin leaves them at the default
+ * justify-content: flex-start. Rows therefore pack to the left and whatever
+ * width is left over collects in one lump on the right. That is barely
+ * noticeable when every card is the same width, and very noticeable with
+ * true-aspect cards, where a row's total width depends on which posters
+ * happen to be in it.
+ *
+ * Jellyfin already ships the rule -- .vertical-wrap.centered { justify-content:
+ * center } -- it just never puts that class on a library page. This is the same
+ * declaration, applied where it is wanted.
+ *
+ * Scoped to .vertical-wrap on purpose: home screen rows are horizontal
+ * scrollers and never carry it, so they keep their left edge lined up with
+ * their section title.
+ *
+ * justify-content applies to each flex LINE, so every row centres on its own
+ * and a short final row sits in the middle rather than hanging off the left.
+ *
+ * Nothing here touches width, height or padding. The container is exactly the
+ * box it was; only the leftover space inside it moves, so no card changes size
+ * and the row height stays the skin's.
+ *
+ * One cosmetic caveat: .itemsContainer > .card > .cardBox carries a trailing
+ * margin-right of 1.2em, including on the last card of a row, so a centred row
+ * sits about 0.6em left of true centre. Correcting it would mean changing the
+ * container's usable width, which can cost a card per row -- not worth it.
+ */
+
+.itemsContainer.vertical-wrap {
+    justify-content: center;
+}

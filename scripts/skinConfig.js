@@ -194,6 +194,15 @@
                 // through to this -- which is what makes it take effect without
                 // anyone having to go and switch it on.
                 enabled: true
+            },
+            {
+                // .vertical-wrap is the library/genre/search grid and nothing
+                // else -- home rows are horizontal scrollers and keep their
+                // left edge. Pure justify-content: no width, height or padding
+                // is touched, so no card changes size.
+                name: 'Center Library Cards',
+                url: `${getKefinTweaksRoot()}skins/optional/global/centerLibraryCards.css`,
+                enabled: false
             }
         ],
         
