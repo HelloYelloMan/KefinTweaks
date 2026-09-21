@@ -239,8 +239,22 @@
          * so when it does arrive the width does not move and there is nothing to
          * re-measure.
          */
+        /* Only the wrapping grid, not every container on the page.
+         *
+         * The reservation this pins exists because Jellyfin pads the LIBRARY
+         * GRID for the A-Z picker (.padded-right-withalphapicker). A horizontal
+         * row on the same page never gets that padding, so marking it here gave
+         * it `padding-right: 0 !important` against a padding it never had --
+         * a layout change to rows that have nothing to do with the picker. The
+         * test was on the page having a picker, not on this container being the
+         * thing the picker pads.
+         *
+         * .vertical-wrap is the wrapping grid and the only layout Jellyfin
+         * applies the reservation to; it cannot be tested for the class itself,
+         * since the whole point is to pin the reservation BEFORE Jellyfin adds
+         * it. */
         const ownerPage = container.closest('[data-role="page"]') || document;
-        if (ownerPage.querySelector('.alphaPicker')) {
+        if (container.classList.contains('vertical-wrap') && ownerPage.querySelector('.alphaPicker')) {
             container.dataset.parPicker = '1';
         }
 
@@ -333,6 +347,11 @@
      * row, which is the accepted trade.
      */
     function applyPickerSlack(container) {
+        // Same scope as the reservation above: the wrapping grid is what the
+        // picker overlaps. Applied to every measured container it padded
+        // horizontal rows -- episode rows, cast, More Like This -- for a picker
+        // that does not reach them.
+        if (!container.classList.contains('vertical-wrap')) return;
         const picker = document.querySelector('[data-role="page"]:not(.hide) .alphaPicker')
             || document.querySelector('.alphaPicker');
         if (!picker) return;
