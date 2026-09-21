@@ -373,11 +373,27 @@
  * while the slack is a fixed ~11px of padding, so wide art has its edges cut
  * off. Relaxed for the hovered card only; paint containment also creates a
  * stacking context, so the card is lifted or the next one would draw over the
- * pixels it now legitimately overflows into. */
-.par-on > .card.portraitCard:not([data-par-probe]):hover,
-.par-on > .card.overflowPortraitCard:not([data-par-probe]):hover,
-.par-on > .card.portraitCard:not([data-par-probe]):focus-within,
-.par-on > .card.overflowPortraitCard:not([data-par-probe]):focus-within {
+ * pixels it now legitimately overflows into.
+ *
+ * NOT on .detailImageContainer. An item page's cover is a .card in a container
+ * this feature also marks par-on, but it has no neighbours to overflow into or
+ * rise above, so there is nothing here for it to win -- and both declarations
+ * actively break it:
+ *
+ *   z-index: 2   the cover rests at z-index 3 and .detailRibbon, which holds
+ *                the title and the play buttons, is position: relative with
+ *                z-index 2. Dropping the cover to 2 ties them, and the tie goes
+ *                to the ribbon because it comes later in the DOM -- so hovering
+ *                the cover pulled the ribbon on top of it.
+ *   position     Abyss pins the cover with position: fixed !important, which
+ *                survives this only because the declaration below is not
+ *                !important. On a skin that pins it without !important the
+ *                cover would jump to relative on hover.
+ */
+.par-on:not(.detailImageContainer) > .card.portraitCard:not([data-par-probe]):hover,
+.par-on:not(.detailImageContainer) > .card.overflowPortraitCard:not([data-par-probe]):hover,
+.par-on:not(.detailImageContainer) > .card.portraitCard:not([data-par-probe]):focus-within,
+.par-on:not(.detailImageContainer) > .card.overflowPortraitCard:not([data-par-probe]):focus-within {
     contain: layout style !important;
     position: relative;
     z-index: 2;
