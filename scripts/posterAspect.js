@@ -290,12 +290,85 @@
      * stylesheet's own sizing off it, or it would measure our arithmetic rather
      * than the skin's.
      */
+    /* Container widths, reported rather than asked for.
+     *
+     * The "already measured" guard needs a current width, and a
+     * getBoundingClientRect to get one forces layout. On a settled page that is
+     * nearly free, but during a scroll the layout tree is dirty constantly and
+     * each forced read is expensive: 331 of them across one home scroll cost
+     * ~2.2s, which was the whole remaining cost of this file.
+     *
+     * A ResizeObserver hands back the width the browser has already computed,
+     * so the guard costs nothing. Only a container we have never had a reading
+     * for still falls through to a real measurement.
+     *
+     * BORDER box, not content box: applyPickerSlack writes padding-right, which
+     * moves the content box and would make this observer re-trigger on its own
+     * write. The border box does not move for padding, and it is also what
+     * getBoundingClientRect reports, so the cached value and dataset.parAt stay
+     * directly comparable.
+     */
+    const knownWidth = new WeakMap();
+    /* A real Set, not a WeakSet: ResizeObserver holds its targets STRONGLY, so
+     * containers detached by a page change would be kept alive by the observer
+     * whatever we did here. Holding them somewhere iterable is what lets sweep
+     * drop them again. */
+    const tracked = new Set();
+    let widthObserver = null;
+
+    function pruneTracked() {
+        if (!widthObserver || !tracked.size) return;
+        for (const c of tracked) {
+            if (c.isConnected) continue;
+            widthObserver.unobserve(c);
+            tracked.delete(c);
+        }
+    }
+
+    function trackWidth(container) {
+        if (!window.ResizeObserver || tracked.has(container)) return;
+        if (!widthObserver) {
+            widthObserver = new ResizeObserver((entries) => {
+                let changed = false;
+                for (const e of entries) {
+                    const w = Math.round(
+                        e.borderBoxSize && e.borderBoxSize[0]
+                            ? e.borderBoxSize[0].inlineSize
+                            : e.contentRect.width
+                    );
+                    // A row inside a skipped content-visibility subtree has no
+                    // box. Keep the last good width rather than recording zero.
+                    if (!w) continue;
+                    knownWidth.set(e.target, w);
+                    const was = Number(e.target.dataset.parAt);
+                    if (was && Math.abs(w - was) / was >= 0.05) changed = true;
+                }
+                if (changed) scheduleSweep();
+            });
+        }
+        tracked.add(container);
+        widthObserver.observe(container);
+    }
+
     function measureContainer(container) {
         if (!skinReadyCached()) return false;
 
+        const sig = skinSignatureCached();
+
+        /* Fast path: settled container, width from the observer, no layout.
+         * Same tolerance as below -- this only decides HOW the width is
+         * obtained, never what counts as settled. */
+        if (container.dataset.parSkin === sig && container.classList.contains(ON_CLASS)) {
+            const seen = knownWidth.get(container);
+            const settled = Number(container.dataset.parAt);
+            if (seen && settled) {
+                if (seen === settled) return true;
+                if (Math.abs(seen - settled) / settled < 0.05) return true;
+            }
+        }
+
         const width = Math.round(container.getBoundingClientRect().width);
         if (!width) return false;
-        const sig = skinSignatureCached();
         if (container.dataset.parSkin === sig) {
             const was = Number(container.dataset.parAt);
             /* Once measured, the height is settled.
@@ -424,6 +497,13 @@
         container.dataset.parSkin = sig;
         container.classList.add(ON_CLASS);
         applyPickerSlack(container);
+        /* Seed the cache from the reading we already forced, then let the
+         * observer keep it current -- so the next visit to this container takes
+         * the fast path above instead of forcing layout again. Registered after
+         * applyPickerSlack, whose padding write must not be the first thing the
+         * observer sees as a change. */
+        knownWidth.set(container, width);
+        trackWidth(container);
         return true;
     }
 
@@ -498,6 +578,7 @@
         });
         if (!targets.size) return;
         inBatch(() => targets.forEach(measureContainer));
+        pruneTracked();
     }
 
     let pending = null;
