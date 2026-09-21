@@ -911,6 +911,47 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
     }
     
     /**
+     * Move every optional include back below the last skin link.
+     *
+     * Switching skins leaves the cascade upside down. unloadOptionalIncludesForSkin
+     * only removes includes tagged with the OUTGOING skin's name, so the global ones
+     * stay in the DOM -- and loadOptionalIncludeCSS then early-returns on them,
+     * because a link with that href is still there. Their position, though, was
+     * chosen relative to skin links that removeAllSkinCSS has since deleted, and the
+     * incoming skin's links are appended after them. The skin now comes last and
+     * wins every tie, which is why an option can quietly stop applying until the
+     * page is refreshed -- a fresh load inserts the skin first and the includes
+     * after it.
+     *
+     * Re-inserting a <link> that has already loaded does not refetch it or drop its
+     * stylesheet; the sheet just changes place in the cascade, so there is no flash.
+     *
+     * Only survivors need this. Includes that arrive later go through
+     * loadOptionalIncludeCSS, which positions them against the skin links that are
+     * in place by then.
+     */
+    function reorderOptionalIncludesAfterSkins() {
+        const skinLinks = document.querySelectorAll('link[data-kefin-skin="true"]');
+        if (skinLinks.length === 0) {
+            return;
+        }
+
+        let anchor = skinLinks[skinLinks.length - 1];
+        if (!anchor.parentNode) {
+            return;
+        }
+
+        // Walk them in document order and re-anchor each to the previous one, so
+        // the includes keep their relative order among themselves.
+        document.querySelectorAll('link[data-kefin-optional-include="true"]').forEach((link) => {
+            if (link.parentNode) {
+                anchor.parentNode.insertBefore(link, anchor.nextSibling);
+                anchor = link;
+            }
+        });
+    }
+
+    /**
      * Unload all optional includes CSS for a specific skin
      * @param {string} skinName - The skin name to unload includes for (or 'global' for global includes)
      */
@@ -2894,6 +2935,10 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
 
             // Load optional includes for this skin
             loadOptionalIncludes(skin);
+
+            // The global includes were never unloaded, so they are still sitting
+            // above the links just inserted. Put them back underneath.
+            reorderOptionalIncludesAfterSkins();
 
             window.cardBuilder?.invalidateCardRadiusCache?.();
             requestAnimationFrame(() => window.cardBuilder?.ensureCardRadiusCssVar?.());
