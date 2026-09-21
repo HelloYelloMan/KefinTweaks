@@ -131,6 +131,50 @@
     z-index: 2;
 }
 
+/* Episode cards switched to their own still.
+ *
+ * The stills option takes a card out of the portrait family -- portraitCard
+ * becomes backdropCard, and the padder swaps to cardPadder-backdrop -- because
+ * that is how it inherits every backdrop rule a skin already has. But every
+ * sizing rule here is scoped to the portrait family, so a reshaped card stopped
+ * being sized by this feature and fell back to that padder, whose 56.25% is a
+ * percentage of the card's WIDTH. In a row built for a 221px height, a 166px
+ * card came out 93px tall: the stills appeared, at the wrong height.
+ *
+ * data-kefin-still is set by reshapeToBackdrop, so these rules reach exactly
+ * the cards this feature reshaped and nothing else. A row of genuine backdrop
+ * cards is its own container, never carries the marker, and is untouched.
+ *
+ * The ratio comes from the episode's own metadata where it is known, falling
+ * back to 16:9, so the width follows the same `height x ratio + pad` formula as
+ * every other card and the row stays one height throughout.
+ */
+.kefin-true-aspect > .card[data-kefin-still] {
+    box-sizing: border-box !important;
+    width: calc(var(--kefin-card-h) * var(--kefin-card-ratio, 1.7778)
+                + var(--kefin-card-pad, 0px)) !important;
+    transition: none !important;
+}
+
+.kefin-true-aspect > .card[data-kefin-still][data-kefin-settled] {
+    transition: width 140ms ease-out !important;
+}
+
+.kefin-true-aspect > .card[data-kefin-still] .cardPadder {
+    padding-bottom: 0 !important;
+    height: 100%;
+}
+
+.kefin-true-aspect > .card[data-kefin-still] .cardScalable {
+    height: var(--kefin-card-h) !important;
+    width: 100% !important;
+    aspect-ratio: auto !important;
+}
+
+.kefin-true-aspect > .card[data-kefin-still] .cardImageContainer {
+    background-size: cover;
+}
+
 /* The padder is Jellyfin's pre-aspect-ratio height mechanism: a percentage
    padding-bottom on a zero-height box. Height comes from --kefin-card-h now, so
    the padder has to stop contributing or it adds its 150% on top. */

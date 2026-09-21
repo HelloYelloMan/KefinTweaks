@@ -696,7 +696,7 @@
      * padder matters as much as the card: its percentage padding is what sets
      * the height.
      */
-    function reshapeToBackdrop(card) {
+    function reshapeToBackdrop(card, episodeId) {
         const overflow = card.classList.contains('overflowPortraitCard');
         card.classList.remove('portraitCard', 'overflowPortraitCard');
         card.classList.add(overflow ? 'overflowBackdropCard' : 'backdropCard');
@@ -706,6 +706,27 @@
             padder.classList.remove('cardPadder-portrait', 'cardPadder-overflowPortrait');
             padder.classList.add(overflow ? 'cardPadder-overflowBackdrop' : 'cardPadder-backdrop');
         }
+
+        /* Keep it in this feature's sizing, at the row's height.
+         *
+         * Everything above takes the card OUT of the portrait family, and every
+         * sizing rule in the stylesheet is scoped to that family -- so the
+         * moment a card was reshaped it stopped being sized here and fell back
+         * to Jellyfin's cardPadder-backdrop, whose 56.25% is a percentage of the
+         * card's WIDTH. A 166px-wide card then stands 93px tall in a row built
+         * for 221px, which is the reported mismatch: the stills appear, at the
+         * wrong height.
+         *
+         * The marker lets the stylesheet size these cards the same way as the
+         * rest -- one row height, width from the ratio -- without touching
+         * genuine backdrop rows, which are their own containers and never carry
+         * it.
+         */
+        card.dataset.kefinStill = '1';
+        const known = episodeId ? knownRatio(episodeId) : undefined;
+        // A still is 16:9 unless its own metadata says otherwise.
+        const ratio = known && known > 0 ? known : (16 / 9);
+        card.style.setProperty(RATIO_PROP, ratio.toFixed(4));
     }
 
     async function applyEpisodeStills(scope) {
@@ -724,7 +745,7 @@
             // is worse than a repeated one.
             if (!hasStill.get(id)) return;
             if (!repointImage(holder, bg, id)) return;
-            reshapeToBackdrop(card);
+            reshapeToBackdrop(card, id);
             changed++;
         });
         if (changed) LOG(`Switched ${changed} episode card(s) to their own still`);
