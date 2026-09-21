@@ -803,10 +803,28 @@
         // Render episodes section
         await renderEpisodesSection(seriesId, seasons, targetEpisode, nextUpHeaderText);
 
-        // Hide season container if option is enabled and there's only one season
-        if (hideSingleSeasonContainer && isSingleSeason && childrenCollapsible) {
-            childrenCollapsible.style.display = 'none';
-            LOG('Hid season container for single-season show');
+        // Hide season container if option is enabled and there's only one season.
+        //
+        // Look the element up here rather than reaching for a name from another
+        // function: childrenCollapsible is declared in renderEpisodesSection and in
+        // the host-insertion helper, never in this one, so the original test threw
+        // ReferenceError the moment both flags were true -- which is to say every
+        // time the option was switched on for a single-season show. && short
+        // circuits, so with the option off the name was never evaluated and nothing
+        // ever reported a fault. The throw also skipped the seriesEpisodesProcessed
+        // marker below, leaving the page to be processed again on the next pass.
+        //
+        // Same selectors and same 10.10 fallback as renderEpisodesSection uses.
+        if (hideSingleSeasonContainer && isSingleSeason) {
+            const seasonContainer = activePage.querySelector('.detailSection #listChildrenCollapsible')
+                || activePage.querySelector('#childrenCollapsible');
+
+            if (seasonContainer) {
+                seasonContainer.style.display = 'none';
+                LOG('Hid season container for single-season show');
+            } else {
+                WARN('Flatten Single Season Shows is on, but the season container was not found');
+            }
         }
 
         // Mark as processed
