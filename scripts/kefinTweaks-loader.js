@@ -104,13 +104,6 @@
             description: 'UI helper functions for KefinTweaks'
         },
         {
-            name: 'homeScreenConfig',
-            script: 'homeScreenConfig.js',
-            css: null,
-            dependencies: [],
-            description: 'Default home screen configuration for KefinTweaks'
-        },
-        {
             name: 'homeScreenConfig2',
             script: 'homeScreenConfig2.js',
             css: null,

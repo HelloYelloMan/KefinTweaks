@@ -2447,7 +2447,14 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
         return slug || 'page';
     }
 
-    /** Idempotent fallback if plugin did not early-inject #kefin-custom-page-styles. */
+    /** Idempotent fallback if plugin did not early-inject #kefin-custom-page-styles.
+     *
+     * THIS CSS EXISTS TWICE. kefinTweaks-plugin.js injects the same block early,
+     * under the same element id, and this function bails when that id is already
+     * present -- so in a normal load the PLUGIN's copy is the one in force and
+     * this one never runs. Editing only this copy therefore changes nothing,
+     * which is how a bad rule here survived unnoticed. Change both, or neither.
+     */
     function ensureCustomPageStyles() {
         if (document.getElementById('kefin-custom-page-styles')) return;
         const style = document.createElement('style');

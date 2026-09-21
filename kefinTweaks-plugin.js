@@ -1757,6 +1757,14 @@ window.KefinTweaksConfig = ${JSON.stringify(config, null, 2)};`;
         const style = document.createElement('style');
         style.id = 'kefin-custom-page-styles';
         style.textContent = `
+/* NOTE: this block is duplicated in scripts/utils.js (ensureCustomPageStyles).
+   This copy is injected first and wins -- utils.js bails when
+   #kefin-custom-page-styles already exists -- so editing only that one has no
+   effect. Change both, or neither.
+
+   .skinHeader:not(.osdHeader) on the .pageTitle rule is load-bearing: .pageTitle
+   is a single element Jellyfin reuses for every view, including the playback
+   OSD, so without it the player loses its series and episode title. */
 #reactRoot .skinBody:has(.customPage:not(.hide)) #fallbackPage {
 	display: none;
 }
