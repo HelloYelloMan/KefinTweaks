@@ -1761,7 +1761,7 @@ window.KefinTweaksConfig = ${JSON.stringify(config, null, 2)};`;
 	display: none;
 }
 
-#reactRoot:not(:has(.skinBody .customPage:not(.hide))) .pageTitle {
+#reactRoot:not(:has(.skinBody .customPage:not(.hide))) .skinHeader:not(.osdHeader) .pageTitle {
     display: none !important;
 }
 
