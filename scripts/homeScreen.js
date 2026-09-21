@@ -2740,7 +2740,10 @@
             SortBy: 'PremiereDate',
             SortOrder: newMoviesConfig.sortOrderDirection === 'Ascending' ? 'Ascending' : 'Descending',
             Limit: 16,
-            Fields: 'PremiereDate',
+            // PrimaryImageAspectRatio is what the card builder stamps onto each
+            // card as data-ar. Without it here this row's posters all came out
+            // the same width while every other row varied.
+            Fields: 'PrimaryImageAspectRatio,PremiereDate',
             Recursive: true,
             MinPremiereDate: minPremiereDate,
             MaxPremiereDate: maxPremiereDate
