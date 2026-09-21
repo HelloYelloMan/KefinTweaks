@@ -181,6 +181,61 @@
 
     // ------------------------------------------------------------ the height
 
+    /* One batch = one answer for "which skin, and has it landed".
+     *
+     * Both questions are about the DOCUMENT, not about a container, but they
+     * were being asked once per container -- and containers are measured once
+     * per card, so a 276-card home screen asked them 883 and 427 times. Each ask
+     * is a document-wide querySelectorAll.
+     *
+     * A batch is one synchronous pass: a MutationObserver callback, or one
+     * sweep. The records have already been applied by the time we run, and
+     * nothing in here inserts a stylesheet (the probe is a div), so the answer
+     * cannot change midway. Caching for longer than that would be wrong --
+     * watchSkin compares a fresh signature against dataset.parSkin to decide
+     * whether a skin actually changed, so a stale value there would miss a real
+     * skin switch.
+     */
+    let batchDepth = 0;
+    let batchReady;
+    let batchSig;
+
+    function inBatch(fn) {
+        if (batchDepth++ === 0) { batchReady = undefined; batchSig = undefined; }
+        try { return fn(); }
+        finally { if (--batchDepth === 0) { batchReady = undefined; batchSig = undefined; } }
+    }
+
+    function skinReadyCached() {
+        if (batchDepth && batchReady !== undefined) return batchReady;
+        const v = skinReady();
+        if (batchDepth) batchReady = v;
+        return v;
+    }
+
+    function skinSignatureCached() {
+        if (batchDepth && batchSig !== undefined) return batchSig;
+        const v = skinSignature();
+        if (batchDepth) batchSig = v;
+        return v;
+    }
+
+    /* The skin that is applied, asked of the component that applies it.
+     *
+     * Reading localStorage directly answers "did the user PICK a skin", which is
+     * null for everyone on the default -- and then both callers below took their
+     * fallback path: skinReady stopped waiting for the skin at all, and
+     * skinSignature fingerprinted the href list. skinManager resolves the
+     * default for us and is registered ahead of this file in the loader.
+     */
+    function selectedSkinName() {
+        try {
+            const resolved = window.KefinTweaksSkinManager?.getSelectedSkinName?.();
+            if (resolved) return resolved;
+        } catch (e) { /* skinManager absent or mid-init */ }
+        try { return localStorage.getItem(SKIN_KEY); } catch (e) { return null; }
+    }
+
     function skinReady() {
         const links = document.querySelectorAll('link[data-kefin-skin], link[data-kefin-optional-include]');
         if (!links.length) {
@@ -190,8 +245,7 @@
                has to be measured again when the skin lands -- the double sizing.
                If a skin is selected, wait for it; the deadline stops that
                becoming a hang when skinManager is off or the key is stale. */
-            let selected = null;
-            try { selected = localStorage.getItem(SKIN_KEY); } catch (e) { /* blocked */ }
+            const selected = selectedSkinName();
             if (!selected || selected === 'Default') return true;
             return Date.now() > SKIN_DEADLINE;
         }
@@ -220,10 +274,8 @@
      * not present to have stored anything.
      */
     function skinSignature() {
-        try {
-            const selected = localStorage.getItem(SKIN_KEY);
-            if (selected) return 'skin:' + selected;
-        } catch (e) { /* storage blocked */ }
+        const selected = selectedSkinName();
+        if (selected) return 'skin:' + selected;
         return Array.from(document.querySelectorAll('link[data-kefin-skin], link[data-kefin-optional-include]'))
             .map((l) => l.getAttribute('href') || '').sort().join('|');
     }
@@ -239,11 +291,11 @@
      * than the skin's.
      */
     function measureContainer(container) {
-        if (!skinReady()) return false;
+        if (!skinReadyCached()) return false;
 
         const width = Math.round(container.getBoundingClientRect().width);
         if (!width) return false;
-        const sig = skinSignature();
+        const sig = skinSignatureCached();
         if (container.dataset.parSkin === sig) {
             const was = Number(container.dataset.parAt);
             /* Once measured, the height is settled.
@@ -431,12 +483,21 @@
     function sweep() {
         const pages = document.querySelectorAll('[data-role="page"]:not(.hide)');
         const scopes = pages.length ? pages : [document];
+        /* Collect first, measure once.
+         *
+         * Every card resolves to its PARENT, so walking the cards of a 276-card
+         * page called measureContainer 276 times across ~21 real containers.
+         * The dataset guard made the repeats cheap-looking, but it only fires
+         * after a getBoundingClientRect -- a forced layout each time. */
+        const targets = new Set();
         scopes.forEach((scope) => {
-            scope.querySelectorAll('.itemsContainer').forEach(measureContainer);
+            scope.querySelectorAll('.itemsContainer').forEach((c) => targets.add(c));
             scope.querySelectorAll(CARD_SELECTOR).forEach((c) => {
-                if (c.parentElement && !c.hasAttribute('data-par-probe')) measureContainer(c.parentElement);
+                if (c.parentElement && !c.hasAttribute('data-par-probe')) targets.add(c.parentElement);
             });
         });
+        if (!targets.size) return;
+        inBatch(() => targets.forEach(measureContainer));
     }
 
     let pending = null;
@@ -519,13 +580,21 @@
          * here in the same microtask, and the cards that follow are sized by CSS
          * as they are parsed. Nothing has to catch the cards themselves. */
         new MutationObserver((records) => {
-            let any = false;
+            /* Cards arrive one record at a time and every one of them resolves
+             * to the SAME row container, so measuring as we walk the records
+             * measured that row once per card. Collecting across the whole
+             * batch first keeps the property this observer exists for -- the
+             * container is still sized in the same synchronous pass, before the
+             * frame is painted -- while doing it once instead of N times. */
+            const targets = new Set();
             for (const r of records) {
                 for (const n of r.addedNodes) {
-                    containersIn(n).forEach((c) => { measureContainer(c); any = true; });
+                    containersIn(n).forEach((c) => targets.add(c));
                 }
             }
-            if (any) scheduleSweep();
+            if (!targets.size) return;
+            inBatch(() => targets.forEach(measureContainer));
+            scheduleSweep();
         }).observe(document.documentElement, { childList: true, subtree: true });
 
         /* A resize SWEEPS; it does not invalidate.

@@ -562,10 +562,31 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
         return sourceMap;
     }
     
+    /**
+     * The skin that is actually applied, whether or not anyone chose it.
+     *
+     * `localStorage` only holds a name once the user picks a skin explicitly;
+     * on the default everything here resolves through getDefaultSkinName()
+     * instead. Readers outside this file were doing the bare `getItem` and so
+     * saw null for the commonest case -- posterAspect then fell back to
+     * fingerprinting the skin's stylesheet hrefs, a list that changes several
+     * times while the optional includes load, which is exactly the instability
+     * the name is meant to avoid.
+     *
+     * Deliberately does NOT go through getDefaultSkinName(): that logs on every
+     * call, and this one is called from a MutationObserver batch.
+     */
+    function getSelectedSkinName() {
+        let stored = null;
+        try { stored = localStorage.getItem(STORAGE_KEY); } catch (e) { /* storage blocked */ }
+        return stored || window.KefinTweaksConfig?.defaultSkin || 'Default';
+    }
+
     // Expose helper functions globally
     window.KefinTweaksSkinManager = window.KefinTweaksSkinManager || {};
     window.KefinTweaksSkinManager.getSkinSourceInfo = getSkinSourceInfo;
     window.KefinTweaksSkinManager.getAllSkinSources = getAllSkinSources;
+    window.KefinTweaksSkinManager.getSelectedSkinName = getSelectedSkinName;
     window.KefinTweaksSkinManager.toggleAppearancePopover = toggleAppearancePopover;
     
     // Load and merge theme configurations
