@@ -130,7 +130,29 @@
         return true;
     }
 
+    /**
+     * WHICH skin is selected -- not how many of its stylesheets have arrived.
+     *
+     * This used to be the sorted list of skin link hrefs. skinManager adds a
+     * skin's optional includes progressively, so that list changes several
+     * times during a page load, and each change looked like a skin switch: the
+     * "already measured" guard was bypassed, the container was measured again,
+     * and because a later sheet had made the skin's own card taller the row
+     * height moved. Caught on Robert's machine with a ResizeObserver -- every
+     * card growing 442px to 449px at the same instant, 1.2s in, with the
+     * container's width already final (jfClass true, padding 48px). Nothing
+     * about the container changed; the skin did, underneath us.
+     *
+     * The selected skin's name is stable while its sheets load and changes only
+     * when someone actually switches skins, which is the question this guard is
+     * really asking. The href list remains the fallback for when skinManager is
+     * not present to have stored anything.
+     */
     function skinSignature() {
+        try {
+            const selected = localStorage.getItem(SKIN_KEY);
+            if (selected) return 'skin:' + selected;
+        } catch (e) { /* storage blocked */ }
         return Array.from(document.querySelectorAll('link[data-kefin-skin], link[data-kefin-optional-include]'))
             .map((l) => l.getAttribute('href') || '').sort().join('|');
     }
@@ -320,6 +342,20 @@
                 });
             });
             if (!links.length && !removed) return;
+
+            /* A skin's sheets arriving is not a skin CHANGE.
+             *
+             * This observer used to invalidate on any skin link being added,
+             * which deletes the recorded measurement and forces a re-measure --
+             * so the stable signature above would be bypassed anyway. During a
+             * page load skinManager adds several sheets, each one triggering
+             * this, and a later sheet that makes the skin's card taller then
+             * moves the row height. Only act when the selected skin actually
+             * differs from the one the containers were measured under.
+             */
+            const now = skinSignature();
+            const measured = document.querySelector('.' + ON_CLASS);
+            if (measured && measured.dataset.parSkin === now) return;
 
             // Wait for the sheets themselves. A stylesheet that has not applied
             // measures as the skin being left, so a fixed delay is a bet on
