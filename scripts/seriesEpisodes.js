@@ -709,6 +709,86 @@
      * Processes a series page to add episodes section
      * @param {string} seriesId - The series ID
      */
+    /**
+     * Hide the season row once exactly one season card is visible on it.
+     *
+     * Visibility rather than season count, because a card can be hidden by CSS
+     * that this file knows nothing about. The Hide Specials From Season Row
+     * option is the case in hand: it hides .card[data-type="Season"]
+     * [data-prefix="SPE"], so a one-season-plus-Specials series renders a row
+     * with a single card in it while the seasons query still reports two.
+     *
+     * That option only hides the card on a page carrying #animePipelineReleases,
+     * a row inserted about 150ms after load, and the plugin then removes and
+     * re-adds it around 900ms in -- during which the selector stops matching and
+     * the card comes back. So a single reading taken when this runs can be taken
+     * before the card is hidden, or during the blink while it is briefly back.
+     * Watch the page instead and settle for a bounded window.
+     *
+     * Hiding is one-way on purpose. The first time one visible card is seen the
+     * row goes and stays gone, so the blink cannot flicker the whole row in and
+     * out. Nothing here ever shows a row the user's CSS left visible: a page with
+     * no pipeline row keeps its Specials card, counts two, and keeps its row.
+     *
+     * @param {HTMLElement} activePage
+     */
+    function hideSeasonRowWhenOneSeasonIsVisible(activePage) {
+        // Same selectors and same 10.10 fallback as renderEpisodesSection.
+        const findRow = () => activePage.querySelector('.detailSection #listChildrenCollapsible')
+            || activePage.querySelector('#childrenCollapsible');
+
+        const tryHide = () => {
+            const row = findRow();
+            if (!row) {
+                return false;
+            }
+
+            const visible = Array.from(row.querySelectorAll('.card[data-type="Season"]'))
+                .filter((card) => getComputedStyle(card).display !== 'none');
+
+            if (visible.length !== 1) {
+                return false;
+            }
+
+            row.style.display = 'none';
+            LOG('Hid season row: one season card visible');
+            return true;
+        };
+
+        if (tryHide()) {
+            return;
+        }
+
+        let observer = null;
+        const stop = () => {
+            clearTimeout(timer);
+            if (observer) {
+                observer.disconnect();
+                observer = null;
+            }
+        };
+
+        // Long enough to cover the plugin's ~900ms remove-and-re-add, with room
+        // for a slow first paint.
+        const timer = setTimeout(stop, 5000);
+
+        observer = new MutationObserver(() => {
+            if (tryHide()) {
+                stop();
+            }
+        });
+
+        // #animePipelineReleases arriving is a childList change on the page, and
+        // it is what flips the Specials card's computed display without touching
+        // the card itself -- so subtree childList is the signal that matters.
+        observer.observe(activePage, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'style']
+        });
+    }
+
     async function processSeriesPage(series) {
         const seriesId = series.Id;
         const activePage = document.querySelector('.libraryPage:not(.hide)');
@@ -803,28 +883,22 @@
         // Render episodes section
         await renderEpisodesSection(seriesId, seasons, targetEpisode, nextUpHeaderText);
 
-        // Hide season container if option is enabled and there's only one season.
+        // Hide the season row when only one season is actually on screen.
         //
-        // Look the element up here rather than reaching for a name from another
-        // function: childrenCollapsible is declared in renderEpisodesSection and in
-        // the host-insertion helper, never in this one, so the original test threw
-        // ReferenceError the moment both flags were true -- which is to say every
-        // time the option was switched on for a single-season show. && short
-        // circuits, so with the option off the name was never evaluated and nothing
-        // ever reported a fault. The throw also skipped the seriesEpisodesProcessed
-        // marker below, leaving the page to be processed again on the next pass.
+        // Not `seasons.length === 1`, which is what this used to ask. A series with
+        // one season plus a Specials season answers 2, so the row survived -- and
+        // with the Hide Specials From Season Row option on, what survived was a row
+        // containing exactly one visible card. Counting what is rendered instead of
+        // what the API returned covers that case and any other stylesheet that
+        // hides a season card, without this file having to know which ones exist.
         //
-        // Same selectors and same 10.10 fallback as renderEpisodesSection uses.
-        if (hideSingleSeasonContainer && isSingleSeason) {
-            const seasonContainer = activePage.querySelector('.detailSection #listChildrenCollapsible')
-                || activePage.querySelector('#childrenCollapsible');
-
-            if (seasonContainer) {
-                seasonContainer.style.display = 'none';
-                LOG('Hid season container for single-season show');
-            } else {
-                WARN('Flatten Single Season Shows is on, but the season container was not found');
-            }
+        // (The old test also named childrenCollapsible, which is declared in
+        // renderEpisodesSection and in the host-insertion helper but never in this
+        // function, so it threw ReferenceError whenever both flags were true. &&
+        // short circuits, so with the option off the name was never evaluated and
+        // nothing ever reported a fault.)
+        if (hideSingleSeasonContainer) {
+            hideSeasonRowWhenOneSeasonIsVisible(activePage);
         }
 
         // Mark as processed
