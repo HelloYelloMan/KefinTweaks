@@ -113,7 +113,12 @@
             return false;
         }
 
-        const config = await ApiClient.getPluginConfiguration(pluginId);
+        // ApiClient does not always expose the plugin-configuration helpers
+        // (it varies by Jellyfin build), and calling a missing one threw
+        // "Could not register the ratio transformation: undefined" in testing.
+        const config = typeof ApiClient.getPluginConfiguration === 'function'
+            ? await ApiClient.getPluginConfiguration(pluginId)
+            : await window.KefinTweaksUtils.getPluginConfiguration(pluginId);
         const list = Array.isArray(config?.Transformations) ? config.Transformations : [];
         const mine = list.filter(isOurs);
         if (mine.length === 1 && sameEntry(mine[0])) return true;
@@ -122,6 +127,11 @@
         // collapses back into one.
         const next = list.filter((t) => t && !isOurs(t));
         next.push({ ...ENTRY });
+        if (typeof ApiClient.updatePluginConfiguration !== 'function') {
+            WARN('This build has no updatePluginConfiguration; add the rule from the '
+                + 'File Transformation plugin page instead.');
+            return false;
+        }
         await ApiClient.updatePluginConfiguration(pluginId, { ...config, Transformations: next });
         LOG(mine.length ? 'Ratio transformation updated' : 'Ratio transformation registered');
         LOG('Reload for jellyfin-web to be served with ratios on its cards.');
@@ -388,8 +398,10 @@
             const user = await ApiClient.getCurrentUser();
             if (user?.Policy?.IsAdministrator) await ensureTransformation();
         } catch (error) {
-            // A failure here costs the ratios, not the page.
-            ERR('Could not register the ratio transformation:', error);
+            // A failure here costs the ratios, not the page. Report something
+            // useful: a bare rejection prints as "undefined" and says nothing.
+            ERR('Could not register the ratio transformation:',
+                error?.message || error?.statusText || error?.status || error);
         }
 
         new MutationObserver(onMutations).observe(document.body, { childList: true, subtree: true });

@@ -1225,7 +1225,7 @@
                         const queryParams = {
                             ParentId: collectionId,
                             IncludeItemTypes: includeItemTypes,
-                            Fields: 'ItemCounts,Overview,Taglines',
+                            Fields: 'PrimaryImageAspectRatio,ItemCounts,Overview,Taglines',
                             Limit: itemLimit,
                             SortBy: sortOrder,
                             SortOrder: sortOrderDirection,
@@ -1261,7 +1261,7 @@
                         const queryParams = {
                             ParentId: playlistId,
                             IncludeItemTypes: includeItemTypes,
-                            Fields: 'Overview,Taglines',
+                            Fields: 'PrimaryImageAspectRatio,Overview,Taglines',
                             Limit: itemLimit,
                             SortBy: sortOrder,
                             SortOrder: sortOrderDirection,

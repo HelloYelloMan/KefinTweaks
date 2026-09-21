@@ -581,7 +581,7 @@
                         IncludeItemTypes: [poolType],
                         Recursive: true,
                         Filters: 'IsPlayed',
-                        Fields: 'UserData,People',
+                        Fields: 'PrimaryImageAspectRatio,UserData,People',
                         SortBy: config.sourceType === 'watched-recent' ? 'DatePlayed' : 'Random',
                         SortOrder: config.sourceType === 'watched-recent' ? 'Descending' : undefined,
                         Limit: config.sourceType === 'watched-recent' ? 5 : 20
@@ -607,7 +607,7 @@
                         Filters: discoveryType === 'Watchlist' ? 'Likes' : 'IsFavorite',
                         SortBy: 'Random',
                         Limit: 20,
-                        Fields: 'UserData,People'
+                        Fields: 'PrimaryImageAspectRatio,UserData,People'
                     }
                 };
             }
@@ -618,7 +618,7 @@
                         IncludeItemTypes: [itemType === 'Series' ? 'Episode' : itemType],
                         Recursive: true,
                         Filters: 'IsPlayed',
-                        Fields: 'UserData,People',
+                        Fields: 'PrimaryImageAspectRatio,UserData,People',
                         SortBy: 'DatePlayed',
                         SortOrder: 'Descending',
                         Limit: 5
@@ -635,7 +635,7 @@
                         SortBy: 'PlayedPercentage',
                         SortOrder: 'Descending',
                         Limit: 5,
-                        Fields: 'UserData,People'
+                        Fields: 'PrimaryImageAspectRatio,UserData,People'
                     }
                 };
             }
@@ -647,7 +647,7 @@
                     Filters: 'IsPlayed',
                     SortBy: 'Random',
                     Limit: 20,
-                    Fields: 'UserData,People'
+                    Fields: 'PrimaryImageAspectRatio,UserData,People'
                 }
             };
         }

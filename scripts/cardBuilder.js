@@ -3462,6 +3462,17 @@
             if (ownPrimary && typeof ratio === 'number' && ratio > 0) {
                 card.style.setProperty('--kefin-card-ratio', ratio.toFixed(4));
                 card.dataset.kefinRatioSet = '1';   // the sweep can skip it entirely
+
+                /* Same number, under the name the OTHER implementation reads.
+                 *
+                 * Aspect Cards takes its ratio from data-ar, which the File
+                 * Transformation rule stamps onto the cards JELLYFIN builds.
+                 * These cards are built here instead, so that rule never reaches
+                 * them -- which is why home rows stayed uniform while library
+                 * pages worked. Emitting it here closes that gap without either
+                 * feature knowing about the other; both are inert unless their
+                 * own feature is switched on. */
+                card.dataset.ar = String(ratio);
             }
 
             // Use data-src for lazy loading instead of immediate backgroundImage
