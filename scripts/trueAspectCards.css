@@ -46,16 +46,48 @@
        exactly how it was reported. */
     width: calc(var(--kefin-card-h) * var(--kefin-card-ratio, var(--kefin-card-r-default, 0.7013))
                 + var(--kefin-card-pad, 0px)) !important;
-    /* When a card does have to change, ease it instead of snapping. Short
-       enough not to feel laggy while cards stream in, and width only -- the row
-       height does not change, so animating it would only cost paint work.
-       Anyone who has asked not to see motion gets none. */
-    transition: width 140ms ease-out;
+    /* No transition until the card has been painted at its own size. This has
+       to be !important and explicit, not merely absent: something in the stack
+       puts `transition: width 0.5s` on cards, and that is what was animating
+       them. Not one skin's doing -- reported across all three in use here, and
+       zero movers measured under ElegantFin, Abyss and Default alike once this
+       rule was in place. Overriding it outright is what makes that true
+       regardless of where it comes from. See the settled rule below. */
+    transition: none !important;
+}
+
+/* Ease a width change only once the card has been painted at its own size.
+ *
+ * A card is inserted at the skin's ladder width and gets its real ratio a
+ * moment later, in the same observer callback. That is a width CHANGE as far
+ * as CSS is concerned -- and something in the stack puts
+ * `transition: width 0.5s` on cards, so every card visibly slid from the ladder
+ * width down to its true width over half a second as it appeared. Reported as cards starting large and shrinking
+ * down, and measured exactly so: 26 of 100 going 166px -> 158-161px with their
+ * ratio, their row height and their container's active state all identical
+ * before and after, computed transition reading `width 0.5s`. Nothing about the
+ * sizing was ever wrong; it was being animated into place by someone else's
+ * rule.
+ *
+ * Worse, this feature forces a layout read before painting (to measure the row
+ * from its first card), which is what commits that ladder width as the value
+ * to animate FROM. The measurement and the animation together manufactured the
+ * flicker.
+ *
+ * data-kefin-settled is set a frame after the first size lands, so the initial
+ * size snaps and only later corrections -- a ratio learned from the image, a
+ * skin change, a resize -- are eased.
+ */
+.kefin-true-aspect > .card.portraitCard[data-kefin-settled],
+.kefin-true-aspect > .card.overflowPortraitCard[data-kefin-settled] {
+    transition: width 140ms ease-out !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
     .kefin-true-aspect > .card.portraitCard,
-    .kefin-true-aspect > .card.overflowPortraitCard {
+    .kefin-true-aspect > .card.overflowPortraitCard,
+    .kefin-true-aspect > .card.portraitCard[data-kefin-settled],
+    .kefin-true-aspect > .card.overflowPortraitCard[data-kefin-settled] {
         transition: none;
     }
 }

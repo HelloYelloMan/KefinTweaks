@@ -82,13 +82,14 @@
     const FANART_RATIO = 1000 / 1426;
 
     /**
-     * itemId -> PrimaryImageAspectRatio, kept for the tab rather than the view.
+     * itemId -> PrimaryImageAspectRatio, kept across visits rather than per view.
      *
      * Ratios do not change while you browse, and the same items come back on
-     * every navigation -- home, then a library, then back. Holding them in
-     * sessionStorage means the lookup happens once per item per tab instead of
-     * once per page, which is most of this feature's request cost on a session
-     * that moves around.
+     * every navigation -- home, then a library, then back. Persisting them
+     * means the lookup happens once per item rather than once per page, which
+     * is most of this feature's request cost on a session that moves around --
+     * and, more importantly, that an item whose true ratio had to be learned
+     * from its image is never re-learned. See loadRatioCache.
      *
      * @type {Map<string, number>}
      */
@@ -96,27 +97,72 @@
     const pending = new Set();
     const RATIO_STORE = 'kefinTweaks_cardRatios';
 
+    /* Ratios live in localStorage, not sessionStorage.
+     *
+     * A ratio here is not free information. Where the server's recorded
+     * PrimaryImageAspectRatio disagrees with the actual picture -- 26 of 100
+     * items measured on this library -- the only way to learn the truth is to
+     * load the image and look, which happens AFTER the card has been painted at
+     * the size the metadata claimed. So the card visibly resizes once.
+     *
+     * In sessionStorage that "once" was once per tab. A phone browser discards
+     * and restores tabs constantly, so the cache was empty almost every time
+     * Jellyfin was opened and the whole library re-learned itself on every
+     * visit -- reported as cards starting large and shrinking down, every time,
+     * never settling.
+     *
+     * localStorage makes it once per item, for real. The entries are tiny (an
+     * id and a number) and the whole blob is dropped after CACHE_TTL_MS so
+     * replaced artwork cannot be described by a stale measurement forever.
+     */
+    const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
     function loadRatioCache() {
         try {
-            const raw = sessionStorage.getItem(RATIO_STORE);
+            const raw = localStorage.getItem(RATIO_STORE)
+                || sessionStorage.getItem(RATIO_STORE);   // migrate an old session's work
             if (!raw) return;
             const parsed = JSON.parse(raw);
-            Object.entries(parsed).forEach(([id, r]) => ratioCache.set(id, r));
-            LOG(`Reusing ${ratioCache.size} cached ratio(s) from this session`);
+            // Older builds stored a bare id->ratio map; accept both shapes.
+            const entries = parsed && parsed.r ? parsed.r : parsed;
+            const stamped = parsed && parsed.t;
+            if (stamped && (Date.now() - parsed.t) > CACHE_TTL_MS) {
+                localStorage.removeItem(RATIO_STORE);
+                return;
+            }
+            Object.entries(entries).forEach(([id, r]) => {
+                if (typeof r === 'number' && r > 0) ratioCache.set(id, r);
+            });
+            LOG(`Reusing ${ratioCache.size} known ratio(s)`);
         } catch (e) {
             // A corrupt or blocked store costs a refetch, nothing more.
         }
     }
 
     let persistTimer = null;
+    function writeRatioCache(map) {
+        localStorage.setItem(RATIO_STORE, JSON.stringify({
+            v: 1, t: Date.now(), r: Object.fromEntries(map)
+        }));
+    }
+
     function persistRatioCache() {
         if (persistTimer) return;
         persistTimer = setTimeout(() => {
             persistTimer = null;
             try {
-                sessionStorage.setItem(RATIO_STORE, JSON.stringify(Object.fromEntries(ratioCache)));
+                writeRatioCache(ratioCache);
             } catch (e) {
-                // Full or blocked: the in-memory cache still works for this page.
+                /* Out of quota. Keeping the newest half is better than keeping
+                   nothing: a Map iterates in insertion order, so the tail is
+                   what was learned most recently and is most likely to be
+                   looked at again. If even that fails, the in-memory cache
+                   still carries this page. */
+                try {
+                    const all = [...ratioCache.entries()];
+                    const keep = new Map(all.slice(Math.floor(all.length / 2)));
+                    writeRatioCache(keep);
+                } catch (e2) { /* nothing more to do */ }
             }
         }, 2000);
     }
@@ -395,100 +441,31 @@
         // from this, so the correction cannot compound on itself each sweep.
         container.dataset.kefinBaseH = String(Math.round(height));
         container.classList.add(ACTIVE_CLASS);
-        rememberMeasurement(settledWidth, Math.round(height), pad);
         return true;
     }
 
-    /**
-     * Remember a solved row height so the NEXT container does not have to paint
-     * wrong once to learn it.
+    /* The width-keyed measurement cache that used to live here has been removed.
      *
-     * Measuring means reading a card with the class off, which cannot happen
-     * until that card has been laid out at the skin's own ladder width. So the
-     * first container of a given shape necessarily shows one frame at the wrong
-     * size, and every card whose ratio is not the default then moves -- measured
-     * at 27 of 100 cards, worst 9px, with all 100 ratios already known. It was
-     * never missing data; it was the order of events.
+     * It keyed a solved row height on (skin, CONTAINER width) and reused it for
+     * the next container of that width. On a library page, where there is one
+     * container, that was harmless. On the home screen it was not: every row is
+     * the full width of the page, so every row collided on one key, and the
+     * first row to be measured stamped its height onto all of them. Dumped from
+     * a phone-sized home screen, 17 rows, every one of them
+     * `containerW 379, cardH_var 170px, measuredAt 379` out of a cache holding
+     * exactly one entry -- while the rows' real card heights ranged from 220 to
+     * 239. A row whose cards were not the size of that first row rendered too
+     * large, and stayed too large: activating from the cache also stamped
+     * kefinMeasuredAt and kefinSkinSig, so measureAndActivate's guard
+     * short-circuited and the row never corrected itself. Refreshing the section
+     * rebuilt the container, which is why that was the only thing that worked.
      *
-     * The answer only depends on the skin and the container's width, so it is
-     * worth keeping. sessionStorage carries it across a reload, which is what
-     * makes opening a library steady from the first paint rather than the
-     * second. A stale entry cannot do lasting harm: the sweep re-measures and
-     * corrects it, exactly as it does today.
+     * The cache existed to avoid painting once at the ladder width before the
+     * measurement landed. Measuring the container's own first card in the
+     * pre-paint observer achieves the same thing and cannot be wrong about which
+     * row it is describing, so there is nothing left for a cache to do.
      */
-    const MEASURE_STORE = 'kefinTrueAspectMetrics';
-    let measurements = null;
 
-    function measurementKey(width) {
-        return skinSignature() + '@' + width;
-    }
-
-    function loadMeasurements() {
-        if (measurements) return measurements;
-        measurements = new Map();
-        try {
-            const raw = sessionStorage.getItem(MEASURE_STORE);
-            if (raw) Object.entries(JSON.parse(raw)).forEach(([k, v]) => measurements.set(k, v));
-        } catch (e) { /* private mode, or corrupt: start empty */ }
-        return measurements;
-    }
-
-    function rememberMeasurement(width, height, pad) {
-        const store = loadMeasurements();
-        const key = measurementKey(width);
-        const prev = store.get(key);
-        if (prev && prev.h === height && prev.pad === pad) return;
-        store.set(key, { h: height, pad: pad });
-        try {
-            sessionStorage.setItem(MEASURE_STORE, JSON.stringify(Object.fromEntries(store)));
-        } catch (e) { /* quota or private mode: in-memory is still useful */ }
-    }
-
-    /**
-     * Switch a container on from what we already know, before it is painted.
-     * Returns false when this shape has not been solved yet, leaving the normal
-     * measure-then-activate path to do it.
-     */
-    function activateFromCache(container) {
-        if (container.classList.contains(ACTIVE_CLASS)) return false;
-        const width = Math.round(container.getBoundingClientRect().width);
-        if (!width) return false;
-        const known = loadMeasurements().get(measurementKey(width));
-        if (!known) return false;
-        container.style.setProperty('--kefin-card-h', known.h + 'px');
-        container.style.setProperty('--kefin-card-r-default', FANART_RATIO.toFixed(4));
-        container.style.setProperty('--kefin-card-pad', known.pad + 'px');
-        container.dataset.kefinMeasuredAt = String(width);
-        container.dataset.kefinSkinSig = skinSignature();
-        container.dataset.kefinBaseH = String(known.h);
-        applyAlphaPickerSlack(container);
-        container.classList.add(ACTIVE_CLASS);
-        return true;
-    }
-
-    /**
-     * Keep the end of a row clear of the A-Z picker, without costing a card.
-     *
-     * On a phone there is no .padded-right-withalphapicker, the container's
-     * padding-right is 0, and the picker simply floats over the content -- so
-     * the last card in a row sat under the letters. Measured on an S25 Ultra
-     * viewport (412x883): picker starting at x387, worst card reaching x391.
-     *
-     * The obvious fix, reserving padding, is the wrong one and was tried: the
-     * row is packed to within 2px of the container edge, so taking the ~15px
-     * the picker wants pushes the third card onto the next line -- the
-     * three-across-becomes-two regression, which is far worse than a 5px sliver.
-     *
-     * So take it out of the HEIGHT instead. Every card's width is derived from
-     * the row height, so shaving a little off the height narrows the whole row
-     * proportionally -- around 1.7px per card here, which is invisible -- and
-     * the row ends before the picker with all three cards still on it.
-     * Shrinking cannot pull an extra card onto the row either: at these sizes a
-     * fourth would need nearly another 120px.
-     *
-     * Always computed from kefinBaseH rather than from the current height, so
-     * repeated sweeps converge instead of ratcheting the cards ever smaller.
-     */
     function fitInsidePicker(container) {
         const base = parseFloat(container.dataset.kefinBaseH);
         if (!(base > 0)) return;
@@ -580,8 +557,30 @@
         return out;
     }
 
+    /**
+     * Let a card animate future width changes, but not the first one.
+     *
+     * Deferred by a frame so the size being applied right now is committed
+     * without a transition; anything that changes afterwards eases. Batched
+     * through one rAF so a screenful of cards costs a single callback.
+     */
+    let settleQueue = null;
+    function markSettled(card) {
+        if (card.dataset.kefinSettled) return;
+        if (!settleQueue) {
+            settleQueue = [];
+            requestAnimationFrame(() => {
+                const batch = settleQueue;
+                settleQueue = null;
+                batch.forEach((c) => { if (c.isConnected) c.dataset.kefinSettled = '1'; });
+            });
+        }
+        settleQueue.push(card);
+    }
+
     function setRatio(card, ratio, containerDefault) {
         card.dataset.kefinRatioSet = '1';
+        markSettled(card);
         if (!ratio || !isFinite(ratio) || ratio <= 0) return;
         if (containerDefault && Math.abs(ratio - containerDefault) < MIN_DELTA) return;
         card.style.setProperty(RATIO_PROP, ratio.toFixed(4));
@@ -805,6 +804,7 @@
      */
     function applyKnownRatiosNow(records) {
         if (!ratioCache.size) return;
+        const touched = new Set();
         for (const record of records) {
             for (const node of record.addedNodes) {
                 if (node.nodeType !== 1) continue;
@@ -814,7 +814,15 @@
                 for (const card of cards) {
                     // Size the container the same frame its first card arrives,
                     // so the card is never painted at the ladder width first.
-                    if (card.parentElement) activateFromCache(card.parentElement);
+                    /* Size this container from its OWN first card, in the same
+                       frame that card arrives, so it is never painted at the
+                       ladder width first. measureAndActivate measures the probe
+                       directly when the container is not yet active, which is
+                       exactly the situation here -- there is no class to take
+                       off, so it costs one layout read and is exact. */
+                    const holder = card.parentElement;
+                    if (holder && !holder.classList.contains(ACTIVE_CLASS)) measureAndActivate(holder);
+                    if (holder) touched.add(holder);
                     if (card.dataset.kefinRatioSet) continue;
                     if (card.getAttribute('data-type') === 'Episode') continue;
                     const id = card.getAttribute('data-id');
@@ -823,9 +831,26 @@
                     if (!ratio) continue;
                     card.style.setProperty(RATIO_PROP, ratio.toFixed(4));
                     card.dataset.kefinRatioSet = '1';
+                    markSettled(card);
                 }
             }
         }
+
+        /* Fit the rows inside the picker NOW, while this batch is still unpainted.
+         *
+         * This used to run only from the debounced sweep, 200ms later -- which
+         * is to say after the cards had been drawn. The correction shrinks the
+         * row height, so every card in the container changed width a moment
+         * after appearing: measured on a phone, 100 of 100 cards with
+         * --kefin-card-h going 170px to 165px, ratios already correct and
+         * unchanged. The sizing was right both times; the second one just
+         * arrived too late to be invisible.
+         *
+         * Jellyfin inserts a container's cards in one batch, so by the time this
+         * runs the row geometry is already there to measure -- it just has not
+         * been painted yet, which is exactly the moment to adjust it.
+         */
+        touched.forEach(fitInsidePicker);
     }
 
     let sweepTimer = null;
