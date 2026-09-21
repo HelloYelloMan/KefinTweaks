@@ -1,0 +1,362 @@
+/* Poster Aspect -- each card sized from its own artwork, by CSS alone.
+ *
+ * A second implementation of true-aspect poster cards, written to fix the one
+ * thing the first could not: cards must be the right size in the FIRST painted
+ * frame, with no correction afterwards.
+ *
+ * HOW IT DIFFERS
+ *
+ * The first implementation gives each card its ratio from JavaScript, in a
+ * MutationObserver, before the frame is painted. That works only if the script
+ * is already running when the cards appear -- and on a hard refresh Jellyfin is
+ * booting at the same time, so it often is not. Hence: cards paint at the
+ * default, then shrink.
+ *
+ * Here the ratio arrives as a CLASS in the markup itself, put there by the File
+ * Transformation rule, and every .par-NNN below turns that class into a number.
+ * A card is therefore correctly sized the instant the browser parses it. No
+ * observer, no timing, nothing to miss.
+ *
+ * The ONE thing CSS cannot derive is the row height in pixels: it comes from
+ * the skin's own ladder, which is a percentage or a variable, and converting it
+ * needs a laid-out card. So JavaScript measures that once per container, from a
+ * throwaway probe, and writes --par-h. That happens when the CONTAINER appears,
+ * which is before its cards -- so by the time a card exists, its height is
+ * already known.
+ *
+ * --par-h    row height, the skin's own, never shrunk
+ * --par-pad  the gap between the card box and the image box inside it
+ * --par-ar   this card's ratio, from its class
+ */
+
+.par-30{--par-ar:.30}
+.par-31{--par-ar:.31}
+.par-32{--par-ar:.32}
+.par-33{--par-ar:.33}
+.par-34{--par-ar:.34}
+.par-35{--par-ar:.35}
+.par-36{--par-ar:.36}
+.par-37{--par-ar:.37}
+.par-38{--par-ar:.38}
+.par-39{--par-ar:.39}
+.par-40{--par-ar:.40}
+.par-41{--par-ar:.41}
+.par-42{--par-ar:.42}
+.par-43{--par-ar:.43}
+.par-44{--par-ar:.44}
+.par-45{--par-ar:.45}
+.par-46{--par-ar:.46}
+.par-47{--par-ar:.47}
+.par-48{--par-ar:.48}
+.par-49{--par-ar:.49}
+.par-50{--par-ar:.50}
+.par-51{--par-ar:.51}
+.par-52{--par-ar:.52}
+.par-53{--par-ar:.53}
+.par-54{--par-ar:.54}
+.par-55{--par-ar:.55}
+.par-56{--par-ar:.56}
+.par-57{--par-ar:.57}
+.par-58{--par-ar:.58}
+.par-59{--par-ar:.59}
+.par-60{--par-ar:.60}
+.par-61{--par-ar:.61}
+.par-62{--par-ar:.62}
+.par-63{--par-ar:.63}
+.par-64{--par-ar:.64}
+.par-65{--par-ar:.65}
+.par-66{--par-ar:.66}
+.par-67{--par-ar:.67}
+.par-68{--par-ar:.68}
+.par-69{--par-ar:.69}
+.par-70{--par-ar:.70}
+.par-71{--par-ar:.71}
+.par-72{--par-ar:.72}
+.par-73{--par-ar:.73}
+.par-74{--par-ar:.74}
+.par-75{--par-ar:.75}
+.par-76{--par-ar:.76}
+.par-77{--par-ar:.77}
+.par-78{--par-ar:.78}
+.par-79{--par-ar:.79}
+.par-80{--par-ar:.80}
+.par-81{--par-ar:.81}
+.par-82{--par-ar:.82}
+.par-83{--par-ar:.83}
+.par-84{--par-ar:.84}
+.par-85{--par-ar:.85}
+.par-86{--par-ar:.86}
+.par-87{--par-ar:.87}
+.par-88{--par-ar:.88}
+.par-89{--par-ar:.89}
+.par-90{--par-ar:.90}
+.par-91{--par-ar:.91}
+.par-92{--par-ar:.92}
+.par-93{--par-ar:.93}
+.par-94{--par-ar:.94}
+.par-95{--par-ar:.95}
+.par-96{--par-ar:.96}
+.par-97{--par-ar:.97}
+.par-98{--par-ar:.98}
+.par-99{--par-ar:.99}
+.par-100{--par-ar:1.00}
+.par-101{--par-ar:1.01}
+.par-102{--par-ar:1.02}
+.par-103{--par-ar:1.03}
+.par-104{--par-ar:1.04}
+.par-105{--par-ar:1.05}
+.par-106{--par-ar:1.06}
+.par-107{--par-ar:1.07}
+.par-108{--par-ar:1.08}
+.par-109{--par-ar:1.09}
+.par-110{--par-ar:1.10}
+.par-111{--par-ar:1.11}
+.par-112{--par-ar:1.12}
+.par-113{--par-ar:1.13}
+.par-114{--par-ar:1.14}
+.par-115{--par-ar:1.15}
+.par-116{--par-ar:1.16}
+.par-117{--par-ar:1.17}
+.par-118{--par-ar:1.18}
+.par-119{--par-ar:1.19}
+.par-120{--par-ar:1.20}
+.par-121{--par-ar:1.21}
+.par-122{--par-ar:1.22}
+.par-123{--par-ar:1.23}
+.par-124{--par-ar:1.24}
+.par-125{--par-ar:1.25}
+.par-126{--par-ar:1.26}
+.par-127{--par-ar:1.27}
+.par-128{--par-ar:1.28}
+.par-129{--par-ar:1.29}
+.par-130{--par-ar:1.30}
+.par-131{--par-ar:1.31}
+.par-132{--par-ar:1.32}
+.par-133{--par-ar:1.33}
+.par-134{--par-ar:1.34}
+.par-135{--par-ar:1.35}
+.par-136{--par-ar:1.36}
+.par-137{--par-ar:1.37}
+.par-138{--par-ar:1.38}
+.par-139{--par-ar:1.39}
+.par-140{--par-ar:1.40}
+.par-141{--par-ar:1.41}
+.par-142{--par-ar:1.42}
+.par-143{--par-ar:1.43}
+.par-144{--par-ar:1.44}
+.par-145{--par-ar:1.45}
+.par-146{--par-ar:1.46}
+.par-147{--par-ar:1.47}
+.par-148{--par-ar:1.48}
+.par-149{--par-ar:1.49}
+.par-150{--par-ar:1.50}
+.par-151{--par-ar:1.51}
+.par-152{--par-ar:1.52}
+.par-153{--par-ar:1.53}
+.par-154{--par-ar:1.54}
+.par-155{--par-ar:1.55}
+.par-156{--par-ar:1.56}
+.par-157{--par-ar:1.57}
+.par-158{--par-ar:1.58}
+.par-159{--par-ar:1.59}
+.par-160{--par-ar:1.60}
+.par-161{--par-ar:1.61}
+.par-162{--par-ar:1.62}
+.par-163{--par-ar:1.63}
+.par-164{--par-ar:1.64}
+.par-165{--par-ar:1.65}
+.par-166{--par-ar:1.66}
+.par-167{--par-ar:1.67}
+.par-168{--par-ar:1.68}
+.par-169{--par-ar:1.69}
+.par-170{--par-ar:1.70}
+.par-171{--par-ar:1.71}
+.par-172{--par-ar:1.72}
+.par-173{--par-ar:1.73}
+.par-174{--par-ar:1.74}
+.par-175{--par-ar:1.75}
+.par-176{--par-ar:1.76}
+.par-177{--par-ar:1.77}
+.par-178{--par-ar:1.78}
+.par-179{--par-ar:1.79}
+.par-180{--par-ar:1.80}
+.par-181{--par-ar:1.81}
+.par-182{--par-ar:1.82}
+.par-183{--par-ar:1.83}
+.par-184{--par-ar:1.84}
+.par-185{--par-ar:1.85}
+.par-186{--par-ar:1.86}
+.par-187{--par-ar:1.87}
+.par-188{--par-ar:1.88}
+.par-189{--par-ar:1.89}
+.par-190{--par-ar:1.90}
+.par-191{--par-ar:1.91}
+.par-192{--par-ar:1.92}
+.par-193{--par-ar:1.93}
+.par-194{--par-ar:1.94}
+.par-195{--par-ar:1.95}
+.par-196{--par-ar:1.96}
+.par-197{--par-ar:1.97}
+.par-198{--par-ar:1.98}
+.par-199{--par-ar:1.99}
+.par-200{--par-ar:2.00}
+.par-201{--par-ar:2.01}
+.par-202{--par-ar:2.02}
+.par-203{--par-ar:2.03}
+.par-204{--par-ar:2.04}
+.par-205{--par-ar:2.05}
+.par-206{--par-ar:2.06}
+.par-207{--par-ar:2.07}
+.par-208{--par-ar:2.08}
+.par-209{--par-ar:2.09}
+.par-210{--par-ar:2.10}
+.par-211{--par-ar:2.11}
+.par-212{--par-ar:2.12}
+.par-213{--par-ar:2.13}
+.par-214{--par-ar:2.14}
+.par-215{--par-ar:2.15}
+.par-216{--par-ar:2.16}
+.par-217{--par-ar:2.17}
+.par-218{--par-ar:2.18}
+.par-219{--par-ar:2.19}
+.par-220{--par-ar:2.20}
+.par-221{--par-ar:2.21}
+.par-222{--par-ar:2.22}
+.par-223{--par-ar:2.23}
+.par-224{--par-ar:2.24}
+.par-225{--par-ar:2.25}
+.par-226{--par-ar:2.26}
+.par-227{--par-ar:2.27}
+.par-228{--par-ar:2.28}
+.par-229{--par-ar:2.29}
+.par-230{--par-ar:2.30}
+.par-231{--par-ar:2.31}
+.par-232{--par-ar:2.32}
+.par-233{--par-ar:2.33}
+.par-234{--par-ar:2.34}
+.par-235{--par-ar:2.35}
+.par-236{--par-ar:2.36}
+.par-237{--par-ar:2.37}
+.par-238{--par-ar:2.38}
+.par-239{--par-ar:2.39}
+.par-240{--par-ar:2.40}
+.par-241{--par-ar:2.41}
+.par-242{--par-ar:2.42}
+.par-243{--par-ar:2.43}
+.par-244{--par-ar:2.44}
+.par-245{--par-ar:2.45}
+.par-246{--par-ar:2.46}
+.par-247{--par-ar:2.47}
+.par-248{--par-ar:2.48}
+.par-249{--par-ar:2.49}
+.par-250{--par-ar:2.50}
+.par-251{--par-ar:2.51}
+.par-252{--par-ar:2.52}
+.par-253{--par-ar:2.53}
+.par-254{--par-ar:2.54}
+.par-255{--par-ar:2.55}
+.par-256{--par-ar:2.56}
+.par-257{--par-ar:2.57}
+.par-258{--par-ar:2.58}
+.par-259{--par-ar:2.59}
+.par-260{--par-ar:2.60}
+.par-261{--par-ar:2.61}
+.par-262{--par-ar:2.62}
+.par-263{--par-ar:2.63}
+.par-264{--par-ar:2.64}
+.par-265{--par-ar:2.65}
+.par-266{--par-ar:2.66}
+.par-267{--par-ar:2.67}
+.par-268{--par-ar:2.68}
+.par-269{--par-ar:2.69}
+.par-270{--par-ar:2.70}
+.par-271{--par-ar:2.71}
+.par-272{--par-ar:2.72}
+.par-273{--par-ar:2.73}
+.par-274{--par-ar:2.74}
+.par-275{--par-ar:2.75}
+.par-276{--par-ar:2.76}
+.par-277{--par-ar:2.77}
+.par-278{--par-ar:2.78}
+.par-279{--par-ar:2.79}
+.par-280{--par-ar:2.80}
+.par-281{--par-ar:2.81}
+.par-282{--par-ar:2.82}
+.par-283{--par-ar:2.83}
+.par-284{--par-ar:2.84}
+.par-285{--par-ar:2.85}
+.par-286{--par-ar:2.86}
+.par-287{--par-ar:2.87}
+.par-288{--par-ar:2.88}
+.par-289{--par-ar:2.89}
+.par-290{--par-ar:2.90}
+.par-291{--par-ar:2.91}
+.par-292{--par-ar:2.92}
+.par-293{--par-ar:2.93}
+.par-294{--par-ar:2.94}
+.par-295{--par-ar:2.95}
+.par-296{--par-ar:2.96}
+.par-297{--par-ar:2.97}
+.par-298{--par-ar:2.98}
+.par-299{--par-ar:2.99}
+.par-300{--par-ar:3.00}
+
+/* The row height is the skin's. The width follows from the ratio. */
+.par-on > .card.portraitCard:not([data-par-probe]),
+.par-on > .card.overflowPortraitCard:not([data-par-probe]) {
+    /* Width must include the padding, or a content-box skin (ElegantFin sets
+       .card{box-sizing:content-box;padding:var(--padding)}) adds it again and
+       the picture is stretched past its own shape. */
+    box-sizing: border-box !important;
+    width: calc(var(--par-h) * var(--par-ar, 0.7013) + var(--par-pad, 0px)) !important;
+    /* Never animate. There is nothing to animate FROM -- the card is born at
+       its final size -- and a skin that sets `transition: width` on cards would
+       otherwise slide every card in from the ladder width. */
+    transition: none !important;
+}
+
+/* Jellyfin's padder sets height from a percentage of width; the height comes
+   from --par-h now, so the padder must stop contributing. */
+.par-on > .card.portraitCard:not([data-par-probe]) .cardPadder,
+.par-on > .card.overflowPortraitCard:not([data-par-probe]) .cardPadder {
+    padding-bottom: 0 !important;
+    height: 100%;
+}
+
+.par-on > .card.portraitCard:not([data-par-probe]) .cardScalable,
+.par-on > .card.overflowPortraitCard:not([data-par-probe]) .cardScalable {
+    height: var(--par-h) !important;
+    width: 100% !important;
+    aspect-ratio: auto !important;
+}
+
+/* The box now matches the picture, so cover crops nothing. */
+.par-on > .card.portraitCard:not([data-par-probe]) .cardImageContainer,
+.par-on > .card.overflowPortraitCard:not([data-par-probe]) .cardImageContainer {
+    background-size: cover;
+}
+
+/* Let the hover zoom paint outside the card.
+ *
+ * Jellyfin sets `contain: layout style paint` on cards, which clips anything
+ * drawn outside the border box. The hover zoom grows the image proportionally
+ * while the slack is a fixed ~11px of padding, so wide art has its edges cut
+ * off. Relaxed for the hovered card only; paint containment also creates a
+ * stacking context, so the card is lifted or the next one would draw over the
+ * pixels it now legitimately overflows into. */
+.par-on > .card.portraitCard:not([data-par-probe]):hover,
+.par-on > .card.overflowPortraitCard:not([data-par-probe]):hover,
+.par-on > .card.portraitCard:not([data-par-probe]):focus-within,
+.par-on > .card.overflowPortraitCard:not([data-par-probe]):focus-within {
+    contain: layout style !important;
+    position: relative;
+    z-index: 2;
+}
+
+/* Room for the A-Z picker, taken from WIDTH. The row height is the skin's and
+   is never shrunk, so width is the only thing left to give. Not gated on
+   .padded-right-withalphapicker: that is a desktop class, and on a phone the
+   picker floats over content with no padding at all. */
+.par-on[data-par-slack] {
+    padding-right: var(--par-slack) !important;
+}

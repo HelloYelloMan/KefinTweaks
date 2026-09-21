@@ -250,6 +250,7 @@
         mediaTags: true,          // Add a Tags row to the item-details metadata table
         specialEpisodePrefix: true, // Drop the "Special - " prefix from season-zero episode titles
         trueAspectCards: false,   // Size poster cards to their own aspect ratio instead of one fixed shape
+        posterAspect: false,   // Rewrite of the above; CSS-sized from a ratio class, height measured before the cards exist
         osdLogo: true,            // Media logo/ClearArt on the video OSD
         pauseScreen: true,        // Rich pause screen overlay (logo, plot, artwork, progress)
         themeMediaCastFix: true,  // Theme media playback while a remote/cast target is connected
@@ -813,6 +814,13 @@
             css: null,
             dependencies: ['utils'],
             description: 'Removes the "Special - " prefix Jellyfin puts on the title of every season-zero episode, everywhere it appears. The prefix is localized, so the wording is learned once from the server rather than assumed.'
+        },
+        {
+            name: 'posterAspect',
+            script: 'posterAspect.js',
+            css: 'posterAspect.css',
+            dependencies: ['utils'],
+            description: 'Rewrite of true-aspect poster cards. The ratio arrives as a class in the card markup (via the File Transformation plugin) so CSS sizes each card as it is parsed, and the row height is measured once per container BEFORE its cards exist. Cards are correct in the first painted frame, with no correction afterwards. Use INSTEAD of True Aspect Poster Cards.'
         },
         {
             name: 'trueAspectCards',
