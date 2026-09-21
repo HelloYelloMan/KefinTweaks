@@ -708,7 +708,11 @@
             name: 'removeContinue',
             script: 'removeContinue.js',
             css: null,
-            dependencies: [],
+            // Both fetches go through window.apiHelper.getAuthHeader(). This said
+            // [] and got away with it only because homeScreen pulls apiHelper in
+            // anyway -- with homeScreen off, clicking the button threw TypeError
+            // and surfaced as the generic "Failed to remove" alert.
+            dependencies: ['apiHelper'],
             description: 'Adds remove from continue watching functionality to cards with data-position-ticks'
         },
         {

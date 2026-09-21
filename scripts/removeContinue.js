@@ -4,7 +4,7 @@
 // This script adds a "remove from continue watching" button to cards that have
 // data-positionticks attribute (indicating they are in progress)
 //
-// No external dependencies required - self-contained functionality
+// Depends on apiHelper for the auth header used by both API calls.
 
 (function() {
     'use strict';
