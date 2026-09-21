@@ -82,11 +82,27 @@
         };
     }
 
+    /* Keep the server's order. Do NOT sort by IndexNumber.
+     *
+     * /Shows/{id}/Episodes returns a season's episodes with its specials placed
+     * where their metadata says they belong -- AirsAfterSeasonNumber puts them
+     * after the finale, AirsBeforeEpisodeNumber slots them inline. IndexNumber
+     * restarts at 1 for season 0, so sorting on it alone interleaves them:
+     * special 1 lands beside episode 1, special 2 beside episode 2.
+     *
+     * Measured on Valkyrie Drive: Mermaid, whose six specials all air after the
+     * season. The server returns S1E1..S1E12 then S0E1..S0E6, identically with
+     * SortBy=IndexNumber and with no SortBy at all. The client sort turned that
+     * into S0E1, S1E1, S0E2, S1E2 ... -- a special every other card.
+     *
+     * Sorting by ParentIndexNumber first would not fix it either: that puts
+     * season 0 ahead of season 1, which is just as wrong for specials that air
+     * afterwards. The airs-before/after placement is the server's to compute
+     * and it already has.
+     */
     function postProcessEpisodes(data) {
-        const items = Array.isArray(data)
-            ? data.slice()
-            : (Array.isArray(data?.Items) ? data.Items.slice() : []);
-        return items.sort((a, b) => (a.IndexNumber || 0) - (b.IndexNumber || 0));
+        if (Array.isArray(data)) return data.slice();
+        return Array.isArray(data?.Items) ? data.Items.slice() : [];
     }
 
     function formatSeasonName(seasonNameValue, seasonNumber) {
