@@ -383,10 +383,12 @@
     z-index: 2;
 }
 
-/* TEST: reserve what the A-Z picker needs, not 7.5% of the window.
+/* Reserve what the A-Z picker needs, not 7.5% of the window.
  *
  * Jellyfin holds a percentage of the width for the picker -- 211.8px on a
  * 2824px window, for a strip 21px wide -- and the waste grows with the screen.
+ * 3.3% is what the LEFT side gets (.padded-left), so the content sits in a
+ * symmetric box and the picker still has room.
  *
  * Deliberately a STATIC rule and nothing else. Doing this from JavaScript meant
  * widening the container after its height had been measured, so a later
@@ -409,7 +411,7 @@
  */
 .padded-right-withalphapicker,
 .itemsContainer[data-par-picker] {
-    padding-right: 3.5% !important;
+    padding-right: max(env(safe-area-inset-right), 3.3%) !important;
 }
 
 /* Room for the A-Z picker, taken from WIDTH. The row height is the skin's and
