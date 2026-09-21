@@ -315,6 +315,24 @@
     transition: none !important;
 }
 
+/* Grid layout: the width we compute must be final, not a starting point.
+ *
+ * Expanding a row into a grid applies
+ *     .itemsContainer[data-layout="grid"] > .card { flex: auto }
+ * which is flex-grow:1 / flex-shrink:1 -- so every card stretches to fill its
+ * row and they all come out the same width, whatever width we asked for. It
+ * looks like the ratio has been thrown away; in fact it was computed correctly
+ * and then flattened by flex.
+ *
+ * flex: 0 0 auto makes the computed width authoritative, so a grid keeps each
+ * card at its own ratio exactly as a scrollable row does. The layout's dummy
+ * cards still pad the last row, since they are sized the same way.
+ */
+.par-on[data-layout="grid"] > .card.portraitCard:not([data-par-probe]),
+.par-on[data-layout="grid"] > .card.overflowPortraitCard:not([data-par-probe]) {
+    flex: 0 0 auto !important;
+}
+
 /* Jellyfin's padder sets height from a percentage of width; the height comes
    from --par-h now, so the padder must stop contributing. */
 .par-on > .card.portraitCard:not([data-par-probe]) .cardPadder,
