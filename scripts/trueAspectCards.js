@@ -117,6 +117,28 @@
      */
     const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
+    /* Cache entries are { r: ratio, t: imageTag }, not a bare number.
+     *
+     * Replacing an item's artwork leaves its id alone, so an id-keyed cache
+     * went on describing the OLD picture -- and once these moved to
+     * localStorage, not even a hard refresh cleared it. Reported exactly so.
+     *
+     * Jellyfin already solves this for its own image caching: every Primary
+     * image URL carries `tag=<hash>`, and the item payload carries the same
+     * value in ImageTags.Primary. It changes when the artwork changes. Storing
+     * it alongside the ratio means new art invalidates the entry by itself,
+     * with no TTL to wait out and nothing for anyone to clear by hand.
+     */
+    function tagOfUrl(url) {
+        const m = /[?&]tag=([^&]+)/.exec(url || '');
+        return m ? m[1] : null;
+    }
+
+    function knownRatio(id) {
+        const entry = ratioCache.get(id);
+        return entry && typeof entry.r === 'number' ? entry.r : undefined;
+    }
+
     function loadRatioCache() {
         try {
             const raw = localStorage.getItem(RATIO_STORE)
@@ -130,8 +152,11 @@
                 localStorage.removeItem(RATIO_STORE);
                 return;
             }
-            Object.entries(entries).forEach(([id, r]) => {
-                if (typeof r === 'number' && r > 0) ratioCache.set(id, r);
+            Object.entries(entries).forEach(([id, v]) => {
+                // Accept the old bare-number shape; it simply has no tag, so
+                // the next item payload will replace it.
+                if (typeof v === 'number') ratioCache.set(id, { r: v, t: null });
+                else if (v && typeof v.r === 'number') ratioCache.set(id, { r: v.r, t: v.t || null });
             });
             LOG(`Reusing ${ratioCache.size} known ratio(s)`);
         } catch (e) {
@@ -220,7 +245,7 @@
             const shown = displayedImage(card);
             const key = shown ? shown.id : id;
             if (key) {
-                ratioCache.set(key, actual);
+                ratioCache.set(key, { r: actual, t: tagOfUrl(url) });
                 persistRatioCache();
             }
             card.style.setProperty(RATIO_PROP, actual.toFixed(4));
@@ -600,11 +625,14 @@
             });
             (result?.Items || []).forEach((item) => {
                 if (typeof item.PrimaryImageAspectRatio === 'number') {
-                    ratioCache.set(item.Id, item.PrimaryImageAspectRatio);
+                    ratioCache.set(item.Id, {
+                        r: item.PrimaryImageAspectRatio,
+                        t: (item.ImageTags && item.ImageTags.Primary) || null
+                    });
                 }
             });
             // Remember the misses too, so they are not asked for again.
-            wanted.forEach((id) => { if (!ratioCache.has(id)) ratioCache.set(id, 0); });
+            wanted.forEach((id) => { if (!ratioCache.has(id)) ratioCache.set(id, { r: 0, t: null }); });
             persistRatioCache();
         } catch (err) {
             WARN('Ratio lookup failed:', err);
@@ -658,7 +686,7 @@
                 ? parseFloat(getComputedStyle(container).getPropertyValue('--kefin-card-r-default'))
                 : null;
             const before = card.style.getPropertyValue(RATIO_PROP);
-            setRatio(card, ratioCache.get(id), def);
+            setRatio(card, knownRatio(id), def);
             if (card.style.getPropertyValue(RATIO_PROP) !== before) applied++;
         });
         if (applied) LOG(`Sized ${applied} card(s) to their own aspect ratio`);
@@ -827,7 +855,7 @@
                     if (card.getAttribute('data-type') === 'Episode') continue;
                     const id = card.getAttribute('data-id');
                     if (!id) continue;
-                    const ratio = ratioCache.get(id);
+                    const ratio = knownRatio(id);
                     if (!ratio) continue;
                     card.style.setProperty(RATIO_PROP, ratio.toFixed(4));
                     card.dataset.kefinRatioSet = '1';
@@ -995,8 +1023,14 @@
         for (const item of items) {
             if (!item || !item.Id) continue;
             if (typeof item.PrimaryImageAspectRatio !== 'number') continue;
-            if (ratioCache.has(item.Id)) continue;
-            ratioCache.set(item.Id, item.PrimaryImageAspectRatio);
+            const tag = (item.ImageTags && item.ImageTags.Primary) || null;
+            const prev = ratioCache.get(item.Id);
+            /* Same artwork: keep what we have. It may be a ratio measured from
+               the image itself, which is better than the server's record.
+               Different tag -- new art, or an entry from before tags were
+               stored -- take the server's value and let it be re-verified. */
+            if (prev && prev.t === tag) continue;
+            ratioCache.set(item.Id, { r: item.PrimaryImageAspectRatio, t: tag });
             added++;
         }
         if (added) persistRatioCache();
