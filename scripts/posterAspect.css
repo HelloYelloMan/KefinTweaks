@@ -398,7 +398,8 @@
  *
  * The same value is applied through [data-par-picker], which the script sets
  * before it measures, so the container's width is identical before and after
- * Jellyfin's class arrives. That is what stops the height being measured twice
+ * Jellyfin's class arrives. Both selectors must carry the SAME value for that
+ * to hold -- change one and the width moves mid-load, which is the resize. That is what stops the height being measured twice
  * and the covers resizing a moment later.
  *
  * Expect the cards to get BIGGER, not more numerous: the skin cuts the row into
@@ -408,7 +409,7 @@
  */
 .padded-right-withalphapicker,
 .itemsContainer[data-par-picker] {
-    padding-right: 48px !important;
+    padding-right: 3.5% !important;
 }
 
 /* Room for the A-Z picker, taken from WIDTH. The row height is the skin's and
