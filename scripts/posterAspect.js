@@ -259,7 +259,22 @@
         const sample = container.querySelector(
             '.card.portraitCard:not([data-par-probe]), .card.overflowPortraitCard:not([data-par-probe])'
         );
-        const overflow = !!sample && sample.classList.contains('overflowPortraitCard');
+        /* A sample is the truth when there is one, but usually there is not:
+         * containers are measured as they appear, BEFORE their cards arrive, so
+         * that the row is the right size on its first paint. So fall back to
+         * what the container itself says. A horizontal row is .scrollSlider
+         * inside an .emby-scroller and holds overflowPortraitCard; a wrapping
+         * grid (.vertical-wrap, the library view) holds portraitCard.
+         *
+         * Getting this from a sample alone silently did nothing for exactly the
+         * rows that needed it -- More Like This and Recommended are measured
+         * empty, so they kept probing as portraitCard and stayed short, while
+         * Specials, injected by a plugin after its cards, picked the right class
+         * and came out correct. */
+        const overflow = sample
+            ? sample.classList.contains('overflowPortraitCard')
+            : (container.classList.contains('scrollSlider')
+                || !!(container.closest && container.closest('.emby-scroller')));
 
         const probe = document.createElement('div');
         probe.className = overflow ? 'card overflowPortraitCard' : 'card portraitCard';
