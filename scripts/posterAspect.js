@@ -64,16 +64,47 @@
      * style attribute, because the builder may already append one and a second
      * would be ignored. Verified against the deployed chunk: the search string
      * occurs exactly once and the patched file still parses.
+     *
+     * THE PATTERN NAMES ONE CHUNK, and must keep naming one chunk. It used to be
+     * `.*\.chunk\.js`, which matches every chunk jellyfin-web serves, and that is
+     * not a harmless over-reach: WebFileTransformationService.RunTransformation
+     * picks the pipeline with
+     *
+     *     m_fileTransformations.Keys.FirstOrDefault(k => regex(k).IsMatch(path))
+     *
+     * and runs THAT KEY'S PIPELINE ONLY. Patterns are dictionary keys, so a rule
+     * claiming every chunk silently swallows any other plugin's chunk rule the
+     * moment ours is found first -- and since each plugin registers in its own
+     * constructor, which one that is depends on plugin start order and changes
+     * across a restart. Custom Tabs patches through the same service, and its
+     * four tabs rendered blank.
+     *
+     * Unanchored on purpose: IsMatch is a search, and the path it is handed may
+     * carry a /web/ prefix, so ^ would stop it matching. The chunk id is the
+     * specific part; the content hash is left open so a jellyfin-web rebuild that
+     * only rehashes the file still matches.
+     *
+     * A jellyfin-web upgrade that renumbers the chunk WILL break this, quietly --
+     * cards keep rendering, they just lose their ratio class. If that happens,
+     * find the chunk that contains the SearchText and put its id here.
      */
     const ENTRY = {
         Id: ENTRY_ID,
-        FilenamePattern: String.raw`.*\.chunk\.js`,
+        FilenamePattern: String.raw`24468\.[0-9a-f]+\.chunk\.js`,
         SearchText: `class="'+re+'"'`,
         ReplaceText: `class="'+(r.PrimaryImageAspectRatio>0?'par-'+Math.round(r.PrimaryImageAspectRatio*100)+' ':'')+re+'"'`
     };
 
+    /* An earlier approach wrote data-ar onto every card through a second rule,
+     * under that same all-chunks pattern. It was abandoned -- cardBuilder sets
+     * data-ar itself now -- but isOurs() matches on our id or our ReplaceText, so
+     * it never recognised that rule as ours and it has sat in the plugin config
+     * ever since, claiming every chunk. Remove it by id. */
+    const STALE_IDS = ['7ca51d3e-9b24-4f80-a6d1-0c8e5b2f4a91'];
+
     const normId = (id) => String(id || '').replace(/-/g, '').toLowerCase();
     const isOurs = (e) => !!e && (normId(e.Id) === normId(ENTRY_ID) || e.ReplaceText === ENTRY.ReplaceText);
+    const isStale = (e) => !!e && STALE_IDS.some((id) => normId(e.Id) === normId(id));
 
     let registering = null;
     function ensureTransformation() {
@@ -90,7 +121,9 @@
             const cfg = await read(id);
             const list = Array.isArray(cfg?.Transformations) ? cfg.Transformations : [];
             const mine = list.filter(isOurs);
+            const stale = list.filter(isStale);
             if (mine.length === 1
+                && stale.length === 0
                 && mine[0].FilenamePattern === ENTRY.FilenamePattern
                 && mine[0].SearchText === ENTRY.SearchText) return true;
 
@@ -98,9 +131,11 @@
                 WARN('No updatePluginConfiguration on this build; add the rule by hand.');
                 return false;
             }
-            // Everything that is not ours is preserved; duplicates of ours collapse.
+            // Everything that is not ours is preserved; duplicates of ours collapse,
+            // and the abandoned data-ar rule goes with them.
             await ApiClient.updatePluginConfiguration(id, {
-                ...cfg, Transformations: list.filter((t) => t && !isOurs(t)).concat([{ ...ENTRY }])
+                ...cfg,
+                Transformations: list.filter((t) => t && !isOurs(t) && !isStale(t)).concat([{ ...ENTRY }])
             });
             LOG('Ratio class rule registered. Reload for jellyfin-web to be served with it.');
             return true;
