@@ -249,7 +249,7 @@
                                 SortBy: 'PremiereDate',
                                 SortOrder: 'Descending',
                                 Limit: 16,
-                                Fields: 'PremiereDate'
+                                Fields: 'PrimaryImageAspectRatio,PremiereDate'
                             }
                         }
                     ]
@@ -1436,7 +1436,7 @@
                             IncludeItemTypes: ['Movie'],
                             Recursive: true,
                             Filters: 'IsPlayed',
-                            Fields: 'UserData,People',
+                            Fields: 'PrimaryImageAspectRatio,UserData,People',
                             SortBy: 'DatePlayed',
                             SortOrder: 'Descending',
                             Limit: 5
@@ -1472,7 +1472,7 @@
                             IncludeItemTypes: ['Movie'],
                             Recursive: true,
                             Filters: 'IsPlayed',
-                            Fields: 'UserData,People',
+                            Fields: 'PrimaryImageAspectRatio,UserData,People',
                             SortBy: 'DatePlayed',
                             SortOrder: 'Descending',
                             Limit: 5
@@ -1508,7 +1508,7 @@
                             IncludeItemTypes: ['Movie'],
                             Recursive: true,
                             Filters: 'IsPlayed',
-                            Fields: 'UserData,People',
+                            Fields: 'PrimaryImageAspectRatio,UserData,People',
                             SortBy: 'DatePlayed',
                             SortOrder: 'Descending',
                             Limit: 5
@@ -1550,7 +1550,7 @@
                             IncludeItemTypes: ['Movie'],
                             Recursive: true,
                             Filters: 'IsPlayed',
-                            Fields: 'UserData,People',
+                            Fields: 'PrimaryImageAspectRatio,UserData,People',
                             SortBy: 'Random',
                             Limit: 20
                         }
@@ -1580,7 +1580,7 @@
                             IncludeItemTypes: ['Movie'],
                             Recursive: true,
                             Filters: 'IsPlayed',
-                            Fields: 'UserData,People',
+                            Fields: 'PrimaryImageAspectRatio,UserData,People',
                             SortBy: 'DatePlayed',
                             SortOrder: 'Descending',
                             Limit: 5
@@ -1621,7 +1621,7 @@
                             Filters: 'IsFavorite',
                             SortBy: 'Random',
                             Limit: 20,
-                            Fields: 'UserData,People'
+                            Fields: 'PrimaryImageAspectRatio,UserData,People'
                         }
                     },
                     name: 'Because you liked {Title}',
@@ -1728,7 +1728,7 @@
                         queryOptions: {
                             IncludeItemTypes: ['BoxSet'],
                             Recursive: true,
-                            Fields: 'RecursiveItemCount,ChildCount,TotalRecordCount',
+                            Fields: 'PrimaryImageAspectRatio,RecursiveItemCount,ChildCount,TotalRecordCount',
                             Limit: 500,
                             SortBy: 'TotalRecordCount'
                         }
@@ -1828,7 +1828,7 @@
                             IncludeItemTypes: ['Episode'],
                             Recursive: true,
                             Filters: 'IsPlayed',
-                            Fields: 'UserData,People',
+                            Fields: 'PrimaryImageAspectRatio,UserData,People',
                             SortBy: 'Random',
                             Limit: 20
                         }
@@ -1858,7 +1858,7 @@
                             IncludeItemTypes: ['Episode'],
                             Recursive: true,
                             Filters: 'IsPlayed',
-                            Fields: 'UserData,People',
+                            Fields: 'PrimaryImageAspectRatio,UserData,People',
                             SortBy: 'DatePlayed',
                             SortOrder: 'Descending',
                             Limit: 5
@@ -1892,7 +1892,7 @@
                             Filters: 'Likes',
                             SortBy: 'Random',
                             Limit: 20,
-                            Fields: 'UserData,People'
+                            Fields: 'PrimaryImageAspectRatio,UserData,People'
                         }
                     },
                     name: 'Because you liked {Title}',
@@ -2041,7 +2041,7 @@
                             IncludeItemTypes: ['Episode'],
                             Recursive: true,
                             Filters: 'IsPlayed',
-                            Fields: 'UserData,People',
+                            Fields: 'PrimaryImageAspectRatio,UserData,People',
                             SortBy: 'DatePlayed',
                             SortOrder: 'Descending',
                             Limit: 5
@@ -2077,7 +2077,7 @@
                             IncludeItemTypes: ['Episode'],
                             Recursive: true,
                             Filters: 'IsPlayed',
-                            Fields: 'UserData,People',
+                            Fields: 'PrimaryImageAspectRatio,UserData,People',
                             SortBy: 'DatePlayed',
                             SortOrder: 'Descending',
                             Limit: 5
@@ -2113,7 +2113,7 @@
                             IncludeItemTypes: ['Episode'],
                             Recursive: true,
                             Filters: 'IsPlayed',
-                            Fields: 'UserData,People',
+                            Fields: 'PrimaryImageAspectRatio,UserData,People',
                             SortBy: 'DatePlayed',
                             SortOrder: 'Descending',
                             Limit: 5
@@ -2156,7 +2156,7 @@
                             IncludeItemTypes: ['Episode'],
                             Recursive: true,
                             Filters: 'IsPlayed',
-                            Fields: 'UserData,People',
+                            Fields: 'PrimaryImageAspectRatio,UserData,People',
                             SortBy: 'DatePlayed',
                             SortOrder: 'Descending',
                             Limit: 5
@@ -2357,7 +2357,7 @@
                             IncludeItemTypes: ['Movie'],
                             Recursive: true,
                             Filters: 'IsPlayed',
-                            Fields: 'UserData,People',
+                            Fields: 'PrimaryImageAspectRatio,UserData,People',
                             SortBy: 'Random',
                             Limit: 20
                         }
@@ -2387,7 +2387,7 @@
                             IncludeItemTypes: ['Movie'],
                             Recursive: true,
                             Filters: 'IsPlayed',
-                            Fields: 'UserData,People',
+                            Fields: 'PrimaryImageAspectRatio,UserData,People',
                             SortBy: 'DatePlayed',
                             SortOrder: 'Descending',
                             Limit: 5
@@ -2418,7 +2418,7 @@
                             IncludeItemTypes: ['Movie'],
                             Recursive: true,
                             Filters: 'IsFavorite',
-                            Fields: 'UserData,People',
+                            Fields: 'PrimaryImageAspectRatio,UserData,People',
                             SortBy: 'Random',
                             Limit: 20
                         }
@@ -2455,7 +2455,7 @@
                             IncludeItemTypes: ['Episode'],
                             Recursive: true,
                             Filters: 'IsPlayed',
-                            Fields: 'UserData,People',
+                            Fields: 'PrimaryImageAspectRatio,UserData,People',
                             SortBy: 'Random',
                             Limit: 20
                         }
@@ -2485,7 +2485,7 @@
                             IncludeItemTypes: ['Episode'],
                             Recursive: true,
                             Filters: 'IsPlayed',
-                            Fields: 'UserData,People',
+                            Fields: 'PrimaryImageAspectRatio,UserData,People',
                             SortBy: 'DatePlayed',
                             SortOrder: 'Descending',
                             Limit: 5
@@ -2516,7 +2516,7 @@
                             IncludeItemTypes: ['Episode'],
                             Recursive: true,
                             Filters: 'IsFavorite',
-                            Fields: 'UserData,People',
+                            Fields: 'PrimaryImageAspectRatio,UserData,People',
                             SortBy: 'Random',
                             Limit: 20
                         }
