@@ -244,15 +244,34 @@
             container.dataset.parPicker = '1';
         }
 
+        /* Probe with the SAME card class the container actually holds.
+         *
+         * The two portrait card types are sized by different rules --
+         * jellyfin-web gives `.overflowPortraitCard { width: 31.2vw }` and lets
+         * the padder turn that into a height, while `.portraitCard` has no width
+         * rule of its own and takes one from its container. Probing an overflow
+         * row with a plain portraitCard therefore measures a box the row never
+         * uses: on a series page it read 245px where the skin's own cards were
+         * 394px, so every poster row on that page came out about a quarter
+         * shorter than the skin drew it. The row height is the skin's, so the
+         * probe has to be the skin's card.
+         */
+        const sample = container.querySelector(
+            '.card.portraitCard:not([data-par-probe]), .card.overflowPortraitCard:not([data-par-probe])'
+        );
+        const overflow = !!sample && sample.classList.contains('overflowPortraitCard');
+
         const probe = document.createElement('div');
-        probe.className = 'card portraitCard';
+        probe.className = overflow ? 'card overflowPortraitCard' : 'card portraitCard';
         probe.setAttribute('data-par-probe', '1');
         probe.style.visibility = 'hidden';
         // Belt and braces alongside the stylesheet rule: in a grid the
         // container's `flex: auto` would stretch a lone probe to the full width.
         probe.style.setProperty('flex', '0 0 auto', 'important');
         probe.innerHTML = '<div class="cardBox cardBox-bottompadded"><div class="cardScalable">'
-            + '<div class="cardPadder cardPadder-portrait"></div></div></div>';
+            + '<div class="cardPadder '
+            + (overflow ? 'cardPadder-overflowPortrait' : 'cardPadder-portrait')
+            + '"></div></div></div>';
         container.appendChild(probe);
 
         const scalable = probe.querySelector('.cardScalable');
