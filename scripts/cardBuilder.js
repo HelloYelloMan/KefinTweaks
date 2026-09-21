@@ -3473,6 +3473,16 @@
                  * feature knowing about the other; both are inert unless their
                  * own feature is switched on. */
                 card.dataset.ar = String(ratio);
+
+                /* And the class the CSS-only implementation sizes from.
+                 *
+                 * Poster Aspect reads a par-NN class rather than an attribute,
+                 * because a class can be turned into a number by the stylesheet
+                 * with no JavaScript involved. The File Transformation rule puts
+                 * it on the cards JELLYFIN builds; these are built here, so it
+                 * has to be added here too or they fall back to the default
+                 * ratio and come out all the same width. */
+                card.classList.add('par-' + Math.round(ratio * 100));
             }
 
             // Use data-src for lazy loading instead of immediate backgroundImage
