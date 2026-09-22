@@ -486,11 +486,62 @@
 /* Below ~1230px the page gutter is narrower than the picker's 43px offset, so
    the box would reach it. Flat px, not a percentage: the picker's offset does
    not scale, so neither should the room left for it. Both selectors move
-   together here too. */
-@media (max-width: 1300px) {
+   together here too.
+
+   FLOORED AT 600px, because a flat 48px stops being small when the screen is.
+   On a 390px phone it is 12% of the viewport handed to a strip that measures
+   21px and is `position: fixed` -- it floats over the content and needs no
+   reservation at all, which is the same thing the [data-par-slack] rule below
+   already says. Measured at 390px: the grid's content box was 329px of a 390px
+   screen, and the library came out two cards wide.
+
+   Above the floor the reasoning still holds: at 600px this is 8% of the width,
+   and it is the desktop and tablet layouts where the box really does reach the
+   picker. Below it, Jellyfin's own .padded-right-withalphapicker handling
+   applies instead. */
+@media (max-width: 1300px) and (min-width: 600px) {
     .padded-right-withalphapicker,
     .itemsContainer[data-par-picker] {
         padding-right: 48px !important;
+    }
+}
+
+/* PHONES: the column count wins, and the height gives way.
+ *
+ * Everywhere else this feature is height-led -- the skin fixes the row height
+ * and each card's width follows from its own ratio. That is deliberate and is
+ * not changed here for any other layout.
+ *
+ * A narrow wrapping grid is the one place it cannot hold. Jellyfin sizes these
+ * cards at an exact third of the container, which leaves nothing for a gap, so
+ * a skin with `column-gap` (ElegantFin: 1em) overflows the row by exactly the
+ * gaps and the third card wraps. Measured on a 390px screen: container 377px,
+ * three cards 377px, two gaps 30px -- 30px over, and the library came out two
+ * cards wide. Losing a gap is not an option (they are the skin's spacing) and
+ * neither is a wider screen, so the height is what gives.
+ *
+ * So below Jellyfin's own 4-column breakpoint (43.75em, where .portraitCard
+ * goes from 33.333% to 25%), drive the card from WIDTH instead: a third of
+ * what is left after the gaps, with the height following the card's own ratio.
+ * Three cards fit, and they are shorter than the skin would have drawn them.
+ *
+ * --par-gap is published by posterAspect.js, because the gap belongs to the
+ * skin and CSS cannot read it. It falls back to 0, which is correct for a skin
+ * that sets no gap -- there the thirds already fit and nothing changes. */
+@media (max-width: 43.74em) {
+    .par-on.vertical-wrap > .card.portraitCard:not([data-par-probe]),
+    .par-on.vertical-wrap > .card.overflowPortraitCard:not([data-par-probe]) {
+        width: calc((100% - 2 * var(--par-gap, 0px)) / 3) !important;
+    }
+
+    /* Height follows the width through the ratio, instead of being pinned to
+       the measured row height. aspect-ratio is width/height, and --par-ar is
+       already that for this card -- set per card by the par-NNN ladder, so a
+       card keeps its own shape rather than an assumed one. */
+    .par-on.vertical-wrap > .card.portraitCard:not([data-par-probe]) .cardScalable,
+    .par-on.vertical-wrap > .card.overflowPortraitCard:not([data-par-probe]) .cardScalable {
+        height: auto !important;
+        aspect-ratio: var(--par-ar, 0.7013) !important;
     }
 }
 

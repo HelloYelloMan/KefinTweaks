@@ -353,6 +353,15 @@
     function measureContainer(container) {
         if (!skinReadyCached()) return false;
 
+        /* Before the settled-container fast path, not after it.
+         *
+         * The gap is `1em` in ElegantFin, so it resolves late -- observed at
+         * 7.2px and then 14.88px within one load as fonts settled. Publishing
+         * it only alongside a full measurement meant the container was measured
+         * once, early, with the gap still unresolved, and the value never
+         * caught up. It is one getComputedStyle on one container per page. */
+        publishColumnGap(container);
+
         const sig = skinSignatureCached();
 
         /* Fast path: settled container, width from the observer, no layout.
@@ -505,6 +514,33 @@
         knownWidth.set(container, width);
         trackWidth(container);
         return true;
+    }
+
+    /**
+     * Publish the grid's column gap, so CSS can subtract it.
+     *
+     * Jellyfin sizes a wrapping grid's cards as an exact fraction of the
+     * container -- `.portraitCard { width: 33.333% }` -- which fills the row
+     * with nothing left over. A skin that adds `column-gap` (ElegantFin sets
+     * `column-gap: var(--itemColumnGap)`, 1em) therefore pushes the last card
+     * of every row onto the next one: three 33.333% cards plus two gaps is
+     * wider than the container by exactly the gaps.
+     *
+     * The gap cannot be read in CSS, and it is the skin's value rather than
+     * ours, so read it once per measurement and hand it to the stylesheet.
+     * Only the wrapping grid needs it; a horizontal row scrolls and does not
+     * care how many fit.
+     */
+    function publishColumnGap(container) {
+        if (!container.classList.contains('vertical-wrap')) return;
+        const gap = parseFloat(getComputedStyle(container).columnGap);
+        const next = gap > 0 ? gap + 'px' : '';
+        // Only write on a change: this runs on every measure call now, and a
+        // custom property is a style invalidation for the whole subtree.
+        if (container.dataset.parGap === next) return;
+        container.dataset.parGap = next;
+        if (next) container.style.setProperty('--par-gap', next);
+        else container.style.removeProperty('--par-gap');
     }
 
     /**
