@@ -401,6 +401,64 @@
     aspect-ratio: var(--par-ar, 0.7013) !important;
 }
 
+/* EPISODE CARDS -- the same model as posters, on the backdrop shapes.
+ *
+ * The row height is the skin's; width follows the still's own ratio. So a
+ * 4:3 still comes out NARROWER than a 16:9 one, never taller, and no row
+ * changes height. jellyfin-web draws these width-led
+ * (.overflowBackdropCard { width: 23.5vw }, .backdropCard { width: 25% }
+ * and friends) with a 56.25% padder; the script's second probe measures the
+ * height that produces and publishes it as --par-hb, exactly as --par-h is for
+ * posters.
+ *
+ * Episodes only. A movie or series drawn as a backdrop card shows a Thumb whose
+ * shape has nothing to do with its PrimaryImageAspectRatio. The fallback is
+ * 1.7778 rather than the poster default because 16:9 IS the skin's shape here:
+ * an episode with no ratio renders exactly as it would without this file.
+ *
+ * Gated on [data-par-hb], set only when the episode probe measured sanely.
+ * .detailImageContainer excluded for the same reason as posters -- an item
+ * page's cover is not a row.
+ */
+.par-on[data-par-hb]:not(.detailImageContainer) > .card.backdropCard[data-type="Episode"]:not([data-par-probe]),
+.par-on[data-par-hb]:not(.detailImageContainer) > .card.overflowBackdropCard[data-type="Episode"]:not([data-par-probe]) {
+    box-sizing: border-box !important;
+    width: calc(var(--par-hb) * var(--par-ar, 1.7778) + var(--par-padb, 0px)) !important;
+    transition: none !important;
+}
+
+.par-on[data-par-hb][data-layout="grid"] > .card.backdropCard[data-type="Episode"]:not([data-par-probe]),
+.par-on[data-par-hb][data-layout="grid"] > .card.overflowBackdropCard[data-type="Episode"]:not([data-par-probe]) {
+    flex: 0 0 auto !important;
+}
+
+.par-on[data-par-hb]:not(.detailImageContainer) > .card.backdropCard[data-type="Episode"]:not([data-par-probe]) .cardPadder,
+.par-on[data-par-hb]:not(.detailImageContainer) > .card.overflowBackdropCard[data-type="Episode"]:not([data-par-probe]) .cardPadder {
+    padding-bottom: 0 !important;
+    height: 100%;
+}
+
+.par-on[data-par-hb]:not(.detailImageContainer) > .card.backdropCard[data-type="Episode"]:not([data-par-probe]) .cardScalable,
+.par-on[data-par-hb]:not(.detailImageContainer) > .card.overflowBackdropCard[data-type="Episode"]:not([data-par-probe]) .cardScalable {
+    height: var(--par-hb) !important;
+    width: 100% !important;
+    aspect-ratio: auto !important;
+}
+
+.par-on[data-par-hb]:not(.detailImageContainer) > .card.backdropCard[data-type="Episode"]:not([data-par-probe]) .cardImageContainer,
+.par-on[data-par-hb]:not(.detailImageContainer) > .card.overflowBackdropCard[data-type="Episode"]:not([data-par-probe]) .cardImageContainer {
+    background-size: cover;
+}
+
+.par-on[data-par-hb]:not(.detailImageContainer) > .card.backdropCard[data-type="Episode"]:not([data-par-probe]):hover,
+.par-on[data-par-hb]:not(.detailImageContainer) > .card.overflowBackdropCard[data-type="Episode"]:not([data-par-probe]):hover,
+.par-on[data-par-hb]:not(.detailImageContainer) > .card.backdropCard[data-type="Episode"]:not([data-par-probe]):focus-within,
+.par-on[data-par-hb]:not(.detailImageContainer) > .card.overflowBackdropCard[data-type="Episode"]:not([data-par-probe]):focus-within {
+    contain: layout style !important;
+    position: relative;
+    z-index: 2;
+}
+
 /* Let the hover zoom paint outside the card.
  *
  * Jellyfin sets `contain: layout style paint` on cards, which clips anything

@@ -47,7 +47,15 @@
     const WARN = (...a) => console.warn('[KefinTweaks PosterAspect]', ...a);
 
     const ON_CLASS = 'par-on';
-    const CARD_SELECTOR = '.card.portraitCard, .card.overflowPortraitCard';
+    /* Posters, plus EPISODE cards on the backdrop shapes.
+     *
+     * Only episodes, deliberately. Movies and series are also drawn as backdrop
+     * cards in thumb-style sections, but there they show a Thumb while their
+     * PrimaryImageAspectRatio describes the POSTER (~0.67) -- sized by it, a
+     * 16:9 thumb would become a sliver. An episode's Primary is the still it
+     * actually shows, so its ratio is the picture's. */
+    const CARD_SELECTOR = '.card.portraitCard, .card.overflowPortraitCard, '
+        + '.card.backdropCard[data-type="Episode"], .card.overflowBackdropCard[data-type="Episode"]';
     const PICKER_GAP = 12;
     const SKIN_KEY = 'kefinTweaks_selectedSkin';
     const SKIN_DEADLINE = Date.now() + 8000;
@@ -460,25 +468,45 @@
             : (container.classList.contains('scrollSlider')
                 || !!(container.closest && container.closest('.emby-scroller')));
 
-        const probe = document.createElement('div');
-        probe.className = overflow ? 'card overflowPortraitCard' : 'card portraitCard';
-        probe.setAttribute('data-par-probe', '1');
-        probe.style.visibility = 'hidden';
-        // Belt and braces alongside the stylesheet rule: in a grid the
-        // container's `flex: auto` would stretch a lone probe to the full width.
-        probe.style.setProperty('flex', '0 0 auto', 'important');
-        probe.innerHTML = '<div class="cardBox cardBox-bottompadded"><div class="cardScalable">'
-            + '<div class="cardPadder '
-            + (overflow ? 'cardPadder-overflowPortrait' : 'cardPadder-portrait')
-            + '"></div></div></div>';
-        container.appendChild(probe);
+        const makeProbe = (cardClass, padderClass) => {
+            const p = document.createElement('div');
+            p.className = 'card ' + cardClass;
+            p.setAttribute('data-par-probe', '1');
+            p.style.visibility = 'hidden';
+            // Belt and braces alongside the stylesheet rule: in a grid the
+            // container's `flex: auto` would stretch a lone probe to the full width.
+            p.style.setProperty('flex', '0 0 auto', 'important');
+            p.innerHTML = '<div class="cardBox cardBox-bottompadded"><div class="cardScalable">'
+                + '<div class="cardPadder ' + padderClass + '"></div></div></div>';
+            return p;
+        };
 
-        const scalable = probe.querySelector('.cardScalable');
-        const box = scalable.getBoundingClientRect();
+        /* A second probe for episode cards, taken in the same forced layout.
+         *
+         * The container cannot say which shape it will hold: a .scrollSlider
+         * row carries posters on one page and episodes on the next, and it is
+         * measured before either arrives. Guessing is what shrank the detail
+         * rows by a quarter. So measure both and publish both -- posters read
+         * --par-h, episodes read --par-hb -- and whichever cards turn up find
+         * the skin's own height for their shape already waiting. Two probes cost
+         * one layout, not two: both are inserted before either is read. */
+        const probe = makeProbe(
+            overflow ? 'overflowPortraitCard' : 'portraitCard',
+            overflow ? 'cardPadder-overflowPortrait' : 'cardPadder-portrait');
+        const bprobe = makeProbe(
+            overflow ? 'overflowBackdropCard' : 'backdropCard',
+            overflow ? 'cardPadder-overflowBackdrop' : 'cardPadder-backdrop');
+        container.appendChild(probe);
+        container.appendChild(bprobe);
+
+        const box = probe.querySelector('.cardScalable').getBoundingClientRect();
         const card = probe.getBoundingClientRect();
+        const bbox = bprobe.querySelector('.cardScalable').getBoundingClientRect();
+        const bcard = bprobe.getBoundingClientRect();
         // Insert, read, remove, all synchronously: layout is forced, but no
-        // frame containing the probe is ever painted.
+        // frame containing the probes is ever painted.
         probe.remove();
+        bprobe.remove();
 
         if (!box.height || !box.width || !card.width) return false;
 
@@ -502,6 +530,19 @@
 
         container.style.setProperty('--par-h', Math.round(box.height) + 'px');
         container.style.setProperty('--par-pad', pad + 'px');
+
+        // Episode shape: same sanity as the poster probe, applied separately.
+        // data-par-hb gates the episode rules, so a container whose backdrop
+        // probe failed leaves its episode cards entirely to the skin.
+        if (bbox.height && bbox.width && bcard.width && bcard.width <= width * 0.9) {
+            container.style.setProperty('--par-hb', Math.round(bbox.height) + 'px');
+            container.style.setProperty('--par-padb', Math.max(0, Math.round(bcard.width - bbox.width)) + 'px');
+            container.dataset.parHb = '1';
+        } else {
+            delete container.dataset.parHb;
+            container.style.removeProperty('--par-hb');
+            container.style.removeProperty('--par-padb');
+        }
         container.dataset.parAt = String(width);
         container.dataset.parSkin = sig;
         container.classList.add(ON_CLASS);
