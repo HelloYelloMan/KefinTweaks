@@ -277,23 +277,30 @@
         // wraps the data paths rather than joining postProcess.
         const needsSmartFilter = !!(sectionConfig.refreshUserData || sectionConfig.postFetchFilter);
 
+        // A non-stale cache hit hands ensureData() back this same payload; reuse
+        // the filtered result instead of refreshing its UserData a second time.
+        const initialRaw = queryResult.data;
+        const initialData = needsSmartFilter
+            ? await applySmartFilter(sectionConfig, postProcess(sectionConfig, initialRaw))
+            : postProcess(sectionConfig, initialRaw);
+
         let mappedDataPromise = null;
         const ensureData = () => {
             if (!mappedDataPromise) {
                 const raw = typeof queryResult.ensureData === 'function'
                     ? queryResult.ensureData()
                     : queryResult.dataPromise;
-                mappedDataPromise = Promise.resolve(raw)
-                    .then((data) => postProcess(sectionConfig, data))
-                    .then((data) => needsSmartFilter ? applySmartFilter(sectionConfig, data) : data);
+                mappedDataPromise = Promise.resolve(raw).then((data) => {
+                    if (needsSmartFilter && initialRaw != null && data === initialRaw) return initialData;
+                    const processed = postProcess(sectionConfig, data);
+                    return needsSmartFilter ? applySmartFilter(sectionConfig, processed) : processed;
+                });
             }
             return mappedDataPromise;
         };
 
         const result = {
-            data: needsSmartFilter
-                ? await applySmartFilter(sectionConfig, postProcess(sectionConfig, queryResult.data))
-                : postProcess(sectionConfig, queryResult.data),
+            data: initialData,
             isStale: queryResult.isStale === true,
             isStalePromise: queryResult.isStalePromise,
             ensureData

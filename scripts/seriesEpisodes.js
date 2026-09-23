@@ -776,8 +776,13 @@
         }
 
         let observer = null;
+        let frame = 0;
         const stop = () => {
             clearTimeout(timer);
+            if (frame) {
+                cancelAnimationFrame(frame);
+                frame = 0;
+            }
             if (observer) {
                 observer.disconnect();
                 observer = null;
@@ -788,10 +793,19 @@
         // for a slow first paint.
         const timer = setTimeout(stop, 5000);
 
+        // One check per frame, not per mutation batch: tryHide reads computed style
+        // per season card, and while the page loads its lazy images write class and
+        // style every few ms, so each batch forced a whole-page style recalc for up
+        // to 5s (always the full 5s on a multi-season show, where it never matches).
+        // In rAF the read lands just before the frame's own recalc, still pre-paint.
         observer = new MutationObserver(() => {
-            if (tryHide()) {
-                stop();
-            }
+            if (frame) return;
+            frame = requestAnimationFrame(() => {
+                frame = 0;
+                if (observer && tryHide()) {
+                    stop();
+                }
+            });
         });
 
         // #animePipelineReleases arriving is a childList change on the page, and

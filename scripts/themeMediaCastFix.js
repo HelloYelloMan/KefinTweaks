@@ -825,7 +825,10 @@
         ensureHeadroomObserver();
         if (!hdrCtlListeners) {
             hdrCtlListeners = true;
-            window.addEventListener('scroll', positionHeaderControls, true); // capture: inner scrollers too
+            // Document scroll only (it reaches window; element scrolls do not).
+            // Inner row scrollers change nothing this reads, and each one cost a
+            // forced layout while a theme played.
+            window.addEventListener('scroll', positionHeaderControls, { passive: true });
             window.addEventListener('resize', positionHeaderControls);
         }
         return headerCtl;
@@ -981,7 +984,10 @@
                 advancePlaylist();
             };
             node.onerror = () => {
-                if (node !== el || node._tmTried || node._played) return;
+                if (node !== el) return;
+                // Failed mid-stream: ended will never fire, so advance as if it had.
+                if (node._played) { LOG('theme video failed mid-stream, advancing'); advancePlaylist(); return; }
+                if (node._tmTried) return;
                 node._tmTried = true;
                 LOG('theme video media error, retrying via transcode');
                 node.src = transcodeVideoUrl(item.Id, null);
@@ -1020,7 +1026,10 @@
             advancePlaylist();
         };
         node.onerror = () => {
-            if (node !== el || node._tmTried || node._played) return;
+            if (node !== el) return;
+            // Failed mid-stream: ended will never fire, so advance as if it had.
+            if (node._played) { LOG('theme song failed mid-stream, advancing'); advancePlaylist(); return; }
+            if (node._tmTried) return;
             node._tmTried = true;
             LOG('theme song media error, retrying via transcode');
             node.src = audioTranscodeUrl(item.Id);
@@ -1146,11 +1155,23 @@
         return true;
     }
 
+    // jellyfin-web inserts the bar once, as a direct child of .appfooter, itself a
+    // direct child of <body>, so only those two child lists can announce it. A
+    // body-wide subtree observer here ran for the whole session whenever nothing
+    // was played through the bar (local video never creates it).
     if (!attachStateObserver()) {
+        let footer = null;
+        const watchFooter = () => {
+            if (footer) return;
+            footer = document.querySelector('body > .appfooter');
+            if (footer) bootObserver.observe(footer, { childList: true });
+        };
         const bootObserver = new MutationObserver(() => {
-            if (attachStateObserver()) bootObserver.disconnect();
+            if (attachStateObserver()) { bootObserver.disconnect(); return; }
+            watchFooter();
         });
-        bootObserver.observe(document.body, { childList: true, subtree: true });
+        bootObserver.observe(document.body, { childList: true });
+        watchFooter();
     }
 
     // ---- Feature configuration modal (the "Configure" button on the KefinTweaks

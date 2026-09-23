@@ -1104,6 +1104,11 @@
                         ? ApiClient.serverAddress()
                         : window.location.origin;
 
+                    // Disc and Art are not inherited into the item DTO; the parents'
+                    // tags let the chain request by tag instead of probing blind.
+                    itemResp._kefinParentTags = await this.requestParentImageTags(itemResp);
+                    if (signal.aborted) return;
+
                     record = { item: itemResp, domain };
                     this.itemCacheSet(itemId, record);
                 }
@@ -1178,6 +1183,24 @@
             }
         }
 
+        // ImageTags of the item's parent and series, by id; null when unknown,
+        // in which case the art chain falls back to probing as before.
+        async requestParentImageTags(item) {
+            const ids = [...new Set([item.ParentId, item.SeriesId].filter(Boolean))];
+            if (!ids.length || typeof ApiClient === 'undefined') return null;
+            try {
+                const userId = ApiClient.getCurrentUserId?.() || this.userId;
+                const res = await ApiClient.getItems(userId, {
+                    Ids: ids.join(','), EnableUserData: false, EnableTotalRecordCount: false
+                });
+                const map = {};
+                (res?.Items || []).forEach((i) => { map[i.Id] = i.ImageTags || {}; });
+                return map;
+            } catch (e) {
+                return null;
+            }
+        }
+
         itemCacheSet(key, value) {
             if (this.itemCache.size >= ITEM_CACHE_MAX) {
                 const firstKey = this.itemCache.keys().next().value;
@@ -1239,21 +1262,34 @@
             };
 
             if (item.ImageTags?.Logo) addLogo(item.Id || itemId, item.ImageTags.Logo);
-            addLogo(item.SeasonId);
-            addLogo(item.SeriesId);
-            addLogo(item.ParentId);
+            if (item.SeriesId) {
+                // Server-resolved nearest of season -> series (the same order as
+                // above); absent means neither has one, so nothing to probe blind.
+                addLogo(item.ParentLogoItemId, item.ParentLogoImageTag);
+            } else {
+                addLogo(item.ParentId);
+            }
 
             // --- ARTWORK URLs (with type metadata) ---
             const discEntries = [];
             const clearArtEntries = [];
 
+            const parentTags = item._kefinParentTags || null;
+            // Known tags: request by tag or skip. Unknown (lookup failed): blind, as before.
+            const addParent = (list, type, kind, id) => {
+                if (!id) return;
+                const tags = parentTags && parentTags[id];
+                if (!tags) list.push({ url: blindUrl(type, id), type: kind });
+                else if (tags[type]) list.push({ url: tagUrl(type, tags[type], id), type: kind });
+            };
+
             if (item.ImageTags?.Disc) discEntries.push({ url: tagUrl('Disc', item.ImageTags.Disc), type: 'disc' });
-            if (item.ParentId) discEntries.push({ url: blindUrl('Disc', item.ParentId), type: 'disc' });
-            if (item.SeriesId) discEntries.push({ url: blindUrl('Disc', item.SeriesId), type: 'disc' });
+            addParent(discEntries, 'Disc', 'disc', item.ParentId);
+            addParent(discEntries, 'Disc', 'disc', item.SeriesId);
 
             if (item.ImageTags?.Art) clearArtEntries.push({ url: tagUrl('Art', item.ImageTags.Art), type: 'clearart' });
-            if (item.ParentId) clearArtEntries.push({ url: blindUrl('Art', item.ParentId), type: 'clearart' });
-            if (item.SeriesId) clearArtEntries.push({ url: blindUrl('Art', item.SeriesId), type: 'clearart' });
+            addParent(clearArtEntries, 'Art', 'clearart', item.ParentId);
+            addParent(clearArtEntries, 'Art', 'clearart', item.SeriesId);
 
             const artEntries = FORCE_CLEARART
                 ? [...clearArtEntries, ...discEntries]

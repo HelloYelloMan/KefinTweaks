@@ -384,6 +384,9 @@
             }
         }
 
+        // Inside Jellyfin's .hide the answer is 0 wide; get it without forcing
+        // layout. The sweep retries once the section is shown.
+        if (container.closest('.hide')) return false;
         const width = Math.round(container.getBoundingClientRect().width);
         if (!width) return false;
         if (container.dataset.parSkin === sig) {
@@ -468,6 +471,15 @@
             : (container.classList.contains('scrollSlider')
                 || !!(container.closest && container.closest('.emby-scroller')));
 
+        /* The probe already failed here under the same skin, width, card shape,
+         * picker and gap, so it would fail the same way again: ElegantFin hides
+         * the portrait cover on every item page, and that container was probed,
+         * forced and rejected on every sweep. invalidate() clears this, and any
+         * change to the key's inputs retries naturally. */
+        const rejectKey = [sig, width, overflow ? 'o' : 'p',
+            container.dataset.parPicker || '', container.dataset.parGap || ''].join('|');
+        if (container.dataset.parReject === rejectKey) return false;
+
         const makeProbe = (cardClass, padderClass) => {
             const p = document.createElement('div');
             p.className = 'card ' + cardClass;
@@ -508,7 +520,10 @@
         probe.remove();
         bprobe.remove();
 
-        if (!box.height || !box.width || !card.width) return false;
+        if (!box.height || !box.width || !card.width) {
+            container.dataset.parReject = rejectKey;
+            return false;
+        }
 
         /* Sanity: a card is never most of the container.
          *
@@ -520,6 +535,7 @@
         if (card.width > width * 0.9) {
             WARN('Probe measured ' + Math.round(card.width) + 'px in a '
                 + width + 'px container; ignoring this measurement.');
+            container.dataset.parReject = rejectKey;
             return false;
         }
 
@@ -543,6 +559,7 @@
             container.style.removeProperty('--par-hb');
             container.style.removeProperty('--par-padb');
         }
+        delete container.dataset.parReject;
         container.dataset.parAt = String(width);
         container.dataset.parSkin = sig;
         container.classList.add(ON_CLASS);
@@ -669,6 +686,7 @@
             delete c.dataset.parAt;
             delete c.dataset.parSkin;
         });
+        document.querySelectorAll('[data-par-reject]').forEach((c) => { delete c.dataset.parReject; });
         scheduleSweep();
     }
 

@@ -193,8 +193,10 @@
                 }
             }, 250);
         });
+        // The item arrives as data-id on .btnUserRating (setItem). childList only
+        // ever caught the ~0.7s position/duration text rewrites, each one running
+        // the whole header check for the length of playback.
         osdItemObserver.observe(osdPage, {
-            childList: true,
             subtree: true,
             attributes: true,
             attributeFilter: ['data-id']
@@ -413,7 +415,18 @@
 
         // ImageTags is authoritative for the item itself, so only probe when
         // the image actually exists - most episodes carry no logo of their own.
-        if (item.ImageTags?.[type]) addCandidate(item.Id || itemId, item.ImageTags[type]);
+        if (item.ImageTags?.[type]) {
+            addCandidate(item.Id || itemId, item.ImageTags[type]);
+            return urls[0];               // tagged = exists; no probe
+        }
+        // The server walks season -> series itself: ParentLogoItemId is the NEAREST
+        // one with a logo (this list's order), and its absence on an episode means
+        // neither has one. Tagged, the URL is also cached for a year. The server
+        // never fills ParentArt*, so ClearArt mode still probes below.
+        if (type === 'Logo' && item.SeriesId) {
+            addCandidate(item.ParentLogoItemId, item.ParentLogoImageTag);
+            return urls[0] || null;
+        }
         addCandidate(item.SeasonId);
         addCandidate(item.SeriesId);
         addCandidate(item.ParentId);

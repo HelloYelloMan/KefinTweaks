@@ -71,8 +71,12 @@
             if (previous) previous.call(this, event);
             try {
                 const raw = event.Data || event.data;
-                const msg = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                if (msg && msg.MessageType === 'Sessions') lastSessionsMessage = Date.now();
+                // Test the text: jellyfin-web already parses every frame once, and
+                // Sessions payloads are the large ones.
+                const isSessions = typeof raw === 'string'
+                    ? /"MessageType"\s*:\s*"Sessions"/.test(raw)
+                    : !!(raw && raw.MessageType === 'Sessions');
+                if (isSessions) lastSessionsMessage = Date.now();
             } catch (err) { /* malformed frame is not ours to report */ }
         };
 

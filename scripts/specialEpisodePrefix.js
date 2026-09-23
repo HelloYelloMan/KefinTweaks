@@ -153,6 +153,9 @@
     }
 
     const triedIds = new Set();
+    // Ids the server says are not season-zero episodes: no rendering can make them
+    // yield the template, so unlike triedIds this is never cleared.
+    const notSpecial = new Set();
     // A library with no specials would otherwise keep probing for the life of the
     // page as new cards scroll in. Five batches is plenty to find one where any
     // exist, and an episode or season page derives from the first round anyway.
@@ -172,7 +175,7 @@
         for (const scope of visibleScopes()) {
             for (const card of scope.querySelectorAll('[data-id]')) {
                 const id = card.getAttribute('data-id');
-                if (!id || triedIds.has(id)) continue;
+                if (!id || triedIds.has(id) || notSpecial.has(id)) continue;
                 const el = card.querySelector('.cardText-first, .cardText > bdi, .listItemBodyText:not(.secondary)');
                 const rendered = (el ? el.textContent : '').trim();
                 if (!rendered) continue;
@@ -202,7 +205,7 @@
         const byId = new Map(items.map((item) => [item.Id, item]));
         for (const { id, rendered } of candidates) {
             const item = byId.get(id);
-            if (!item || item.Type !== 'Episode' || item.ParentIndexNumber !== 0) continue;
+            if (!item || item.Type !== 'Episode' || item.ParentIndexNumber !== 0) { notSpecial.add(id); continue; }
             if (!item.Name || rendered === item.Name || !rendered.endsWith(item.Name)) continue;
             const derived = rendered.slice(0, rendered.length - item.Name.length) + '{0}';
             if (setTemplate(derived)) {
@@ -259,7 +262,11 @@
     }
 
     function stripInUnobserved(root) {
-        const scopes = root && root.querySelectorAll ? [root] : visibleScopes();
+        // The page on screen plus any open dialog -- not the cached hidden pages,
+        // each of which is swept again by onViewPage when it is shown.
+        const scopes = root && root.querySelectorAll
+            ? [root]
+            : visibleScopes().concat(Array.from(document.querySelectorAll('.dialogContainer')));
         let changed = 0;
         const seen = new Set();
         scopes.forEach((scope) => scope.querySelectorAll(TEXT_SELECTORS).forEach((el) => {
@@ -299,7 +306,7 @@
                     if (!ok) return;
                 }
             }
-            const n = stripIn(document);
+            const n = stripIn();
             if (n) LOG(`Stripped the special prefix from ${n} title(s)`);
         }, 150);
     }
@@ -318,7 +325,15 @@
         // The observer is detached across our own writes: setting textContent and
         // the marker attribute are themselves mutations, and feeding them back in
         // would schedule a sweep for every title we fix.
-        observer = new MutationObserver(() => scheduleSweep());
+        // Only an inserted ELEMENT can bring a new title; text-only rewrites land
+        // in already-marked elements. This drops the player OSD's ~0.7s clock text.
+        observer = new MutationObserver((records) => {
+            for (const r of records) {
+                for (const n of r.addedNodes) {
+                    if (n.nodeType === 1) { scheduleSweep(); return; }
+                }
+            }
+        });
         observer.observe(document.body, OBSERVE_OPTIONS);
 
         if (window.KefinTweaksUtils?.onViewPage) {
