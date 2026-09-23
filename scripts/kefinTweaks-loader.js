@@ -927,6 +927,10 @@
         ]);
 
         const stamp = [
+            // Generator version. The stamp decides whether the stored entry is
+            // rewritten, so bump this whenever buildInjectorScript's output changes
+            // or existing installs keep running the old script. g2: console gate.
+            'g2',
             root,
             String(majorVersion == null ? 'unknown' : majorVersion),
             featuresDisabled ? 'config-only' : 'full',
@@ -1077,6 +1081,14 @@
             '  if (window.KefinTweaksScriptsPreloaded) return;',
             '  var cfg = window.KefinTweaksConfig || {};',
             '  if (cfg.enabled !== true) return;',
+            // Same console gate as injector.js and kefinTweaks-plugin.js. This
+            // entry runs first, and without it a console skipped only injector.js
+            // while every feature script and skin still loaded from here.
+            '  try {',
+            "    if (localStorage.getItem('kefinTweaks.allowConsole') !== '1' && cfg.disableOnConsoles !== false) {",
+            "      if (/\\bXbox\\b|PlayStation|PLAYSTATION|\\bNintendo\\b|WiiU|NintendoBrowser/i.test(navigator.userAgent || '')) return;",
+            '    }',
+            '  } catch (e) {}',
             '  var symbolicRoot = cfg.kefinTweaksRoot || \'\';',
             '  var isExperimental = /@experimental(\\/|$)/i.test(String(symbolicRoot));',
             '  var isOfficialCdn = /cdn\\.jsdelivr\\.net\\/gh\\/ranaldsgift\\/KefinTweaks@/i.test(String(symbolicRoot));',
