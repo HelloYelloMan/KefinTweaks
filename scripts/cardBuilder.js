@@ -3096,9 +3096,9 @@
      * Jellyfin's, everything infiniteScroll appends is ours.
      *
      * Two things follow from fixing it. The picture arrives at its own shape, so
-     * nothing is thrown away; and trueAspectCards no longer has to rewrite the
-     * URL after the fact, which is what made cards visibly reload and resize
-     * after their first paint.
+     * nothing is thrown away; and no card has to have its URL rewritten after
+     * the fact, which is what made cards visibly reload and resize after their
+     * first paint.
      *
      * FANART IS THE FALLBACK, not 2:3, because that is what the artwork here is
      * ranked to prefer. An item with no ratio recorded is far likelier to be a
@@ -3464,47 +3464,27 @@
         }
 
         if (imageUrl) {
-            /* Stamp the aspect ratio while the item is still in hand.
+            /* Stamp the aspect ratio while the item is still in hand, as the
+             * par-NN class Poster Aspect sizes from.
              *
-             * trueAspectCards otherwise has to look this up after the card is in
-             * the DOM, which means the card is painted at the container's default
-             * shape and then corrected -- the resize that made entering a library
-             * look choppy. Everything needed is right here at build time, so the
-             * card can be emitted at its own shape and never move.
+             * Poster Aspect reads a class rather than an attribute, because a
+             * class can be turned into a number by the stylesheet with no
+             * JavaScript involved. The File Transformation rule puts it on the
+             * cards JELLYFIN builds; these are built here, so it has to be added
+             * here too or they fall back to the default ratio and come out all
+             * the same width. Having it at build time means the card is emitted
+             * at its own shape and never moves.
              *
              * Only when the picture IS this item's own Primary. A portrait card
              * for an episode carries its SERIES poster, and the episode's ratio
              * describes its 16:9 still, which is how that row turned into
              * letterboxes the first time round.
              *
-             * The variable does nothing unless the feature is switched on, so
-             * this is inert otherwise.
+             * The class does nothing unless Poster Aspect is switched on.
              */
             const ownPrimary = imageUrl.includes(`/Items/${item.Id}/Images/Primary`);
             const ratio = item?.PrimaryImageAspectRatio;
             if (ownPrimary && typeof ratio === 'number' && ratio > 0) {
-                card.style.setProperty('--kefin-card-ratio', ratio.toFixed(4));
-                card.dataset.kefinRatioSet = '1';   // the sweep can skip it entirely
-
-                /* Same number, under the name the OTHER implementation reads.
-                 *
-                 * Aspect Cards takes its ratio from data-ar, which the File
-                 * Transformation rule stamps onto the cards JELLYFIN builds.
-                 * These cards are built here instead, so that rule never reaches
-                 * them -- which is why home rows stayed uniform while library
-                 * pages worked. Emitting it here closes that gap without either
-                 * feature knowing about the other; both are inert unless their
-                 * own feature is switched on. */
-                card.dataset.ar = String(ratio);
-
-                /* And the class the CSS-only implementation sizes from.
-                 *
-                 * Poster Aspect reads a par-NN class rather than an attribute,
-                 * because a class can be turned into a number by the stylesheet
-                 * with no JavaScript involved. The File Transformation rule puts
-                 * it on the cards JELLYFIN builds; these are built here, so it
-                 * has to be added here too or they fall back to the default
-                 * ratio and come out all the same width. */
                 card.classList.add('par-' + Math.round(ratio * 100));
 
                 /* Ask for the picture at that same ratio. Backdrop-shaped cards

@@ -360,8 +360,8 @@
 
         /* Always ask for PrimaryImageAspectRatio.
          *
-         * The card builder stamps it onto each card as data-ar, which is what
-         * the aspect-ratio card features size from. A query that does not ask
+         * The card builder stamps it onto each card as a par-NN class, which is what
+         * Poster Aspect sizes from. A query that does not ask
          * for it produces items with no ratio, and those cards silently fall
          * back to one uniform shape -- which is how the same film ended up
          * showing full art in one row and cropped in another, purely because

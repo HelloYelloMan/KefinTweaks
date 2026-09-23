@@ -1,11 +1,11 @@
 // Poster Aspect -- true-aspect poster cards, sized in the first painted frame.
 //
-// A SECOND, SEPARATE implementation of what True Aspect Poster Cards does. Both
-// exist so they can be compared; run one or the other, never both.
+// A rewrite of True Aspect Poster Cards, which it replaced; that feature was
+// removed on 2026-09-23 (git history has it).
 //
 // WHY A REWRITE, AND WHAT IS ACTUALLY DIFFERENT
 //
-// The first implementation gives every card its ratio from JavaScript, in a
+// The first implementation gave every card its ratio from JavaScript, in a
 // MutationObserver callback. That callback is a microtask, so in principle it
 // runs after the cards are in the DOM and before the frame is painted -- but
 // only if the script is already running when the cards appear. On a hard

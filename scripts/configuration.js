@@ -1177,7 +1177,7 @@
     // Build script toggle switches
     function buildScriptToggles(scripts) {
         // Features that have configuration options (not just toggles)
-        const featuresWithConfig = new Set(['homeScreen', 'search', 'flattenSingleSeasonShows', 'skinManager', 'customMenuLinks', 'seriesInfo', 'versionPreferences', 'thumbnailScrubber', 'themeMediaCastFix', 'pauseScreen', 'osdLogo', 'watchTogether', 'userManager', 'trueAspectCards']);
+        const featuresWithConfig = new Set(['homeScreen', 'search', 'flattenSingleSeasonShows', 'skinManager', 'customMenuLinks', 'seriesInfo', 'versionPreferences', 'thumbnailScrubber', 'themeMediaCastFix', 'pauseScreen', 'osdLogo', 'watchTogether', 'userManager']);
         
         const scriptNames = [
             { key: 'watchlist', label: 'Watchlist', desc: 'Allows your users to add items to their Watchlist. The Watchlist page shows an overview of all items on a user\'s Watchlist, as well as their Series Progress and Movie History. It also includes a Statistics page with an overview of your user watched stats.' },
@@ -1215,8 +1215,7 @@
             { key: 'osdLogo', label: 'Player Logo', desc: 'Shows the media\'s logo (or ClearArt) on the video player OSD while the playback controls are visible, with optional transparency trimming and OSD drop shadows.' },
             { key: 'pauseScreen', label: 'Pause Screen', desc: 'Shows a rich overlay with the media\'s logo, plot, details, disc/clear art and playback progress when playback stays paused for a few seconds. Works with the HTML5 web player and external players (mpv-shim etc.).' },
             { key: 'themeMediaCastFix', label: 'Theme Media', desc: 'Plays theme songs and videos in the web client, including while casting to an mpv-shim or other remote player. Replaces the native Play Theme Music/Videos toggles and adds subtle on-video controls.' },
-            { key: 'trueAspectCards', label: 'True Aspect Poster Cards', desc: 'Sizes each poster card to its own image rather than cropping everything to one shape. Cards keep a single row height and take their width from the image aspect ratio, so a wider cover gets a wider card. Off by default - it changes how many cards fit per row.' },
-            { key: 'posterAspect', label: 'Poster Aspect Cards (rewrite)', desc: 'A separate rewrite of True Aspect Poster Cards. The aspect ratio is written into the card markup as a class by the File Transformation plugin, so CSS sizes every card as the browser parses it - no JavaScript per card and nothing to correct afterwards. The row height is the skin\'s own, measured once per container before its cards exist. Enable this OR True Aspect Poster Cards, never both.' },
+            { key: 'posterAspect', label: 'Poster Aspect Cards', desc: 'Sizes each poster card to its own image rather than cropping everything to one shape. The aspect ratio is written into the card markup as a class by the File Transformation plugin, so CSS sizes every card as the browser parses it - no JavaScript per card and nothing to correct afterwards. The row height is the skin\'s own, measured once per container before its cards exist.' },
             { key: 'specialEpisodePrefix', label: 'No "Special - " Prefix', desc: 'Removes the "Special - " that Jellyfin prepends to the title of every episode in season zero, everywhere it appears - cards, season pages and episode pages. The prefix is localized, so the exact wording is learned once from your server rather than assumed, then cached.' },
             { key: 'virtualSpecials', label: 'Virtual Specials Tweaks', desc: 'Three fixes to collection pages. Borrows a backdrop and logo for collections that have neither, preferring the series that shares the collection\'s AniDB id over the show whose Specials folder it sits in. Fills in the Studios row, which Jellyfin builds but never populates for a collection. Removes the "Special - " that Jellyfin prepends to the title of every episode in a Specials season, on collection pages only.' }
         ];
@@ -1244,7 +1243,7 @@
 
         return visibleScripts.map(script => {
             // Match injector defaults: most scripts on unless set false; opt-in scripts require true
-            const defaultDisabled = ['thumbnailScrubber', 'watchTogether', 'userManager', 'updoot', 'trueAspectCards', 'posterAspect'].includes(script.key);
+            const defaultDisabled = ['thumbnailScrubber', 'watchTogether', 'userManager', 'updoot', 'posterAspect'].includes(script.key);
             const isEnabled = defaultDisabled
                 ? scripts[script.key] === true
                 : scripts[script.key] !== false;

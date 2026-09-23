@@ -49,8 +49,7 @@
         jeSpoilerGuardScope: true, // Scope Jellyfin Enhanced's Spoiler Guard image refresh to the item that changed
         mediaTags: true,          // Add a Tags row to the item-details metadata table
         specialEpisodePrefix: true, // Drop the "Special - " prefix from season-zero episode titles
-        trueAspectCards: false,   // Size poster cards to their own aspect ratio instead of one fixed shape
-        posterAspect: false,   // Rewrite of the above; CSS-sized from a ratio class, height measured before the cards exist
+        posterAspect: false,   // Size poster cards to their own aspect ratio; CSS-sized from a ratio class, height measured before the cards exist
         osdLogo: true,            // Media logo/ClearArt on the video OSD
         pauseScreen: true,        // Rich pause screen overlay (logo, plot, artwork, progress)
         themeMediaCastFix: true,  // Theme media playback while a remote/cast target is connected
@@ -202,13 +201,6 @@
             css: null,
             dependencies: ['modal', 'toaster', 'utils'],
             description: 'Series info configuration for KefinTweaks'
-        },
-        {
-            name: 'trueAspectCards-configuration',
-            script: '../configuration/trueAspectCards-configuration.js',
-            css: null,
-            dependencies: ['modal', 'toaster', 'utils'],
-            description: 'True aspect poster cards configuration for KefinTweaks'
         },
         {
             name: 'versionPreferences-configuration',
@@ -619,14 +611,7 @@
             script: 'posterAspect.js',
             css: 'posterAspect.css',
             dependencies: ['utils'],
-            description: 'Rewrite of true-aspect poster cards. The ratio arrives as a class in the card markup (via the File Transformation plugin) so CSS sizes each card as it is parsed, and the row height is measured once per container BEFORE its cards exist. Cards are correct in the first painted frame, with no correction afterwards. Use INSTEAD of True Aspect Poster Cards.'
-        },
-        {
-            name: 'trueAspectCards',
-            script: 'trueAspectCards.js',
-            css: 'trueAspectCards.css',
-            dependencies: ['utils'],
-            description: 'Sizes each poster card to its own image instead of cropping everything to one shape. Cards keep a single row height and take their width from the image aspect ratio, so wider covers get wider cards.'
+            description: 'Sizes each poster card to its own image instead of cropping everything to one shape. The ratio arrives as a class in the card markup (via the File Transformation plugin) so CSS sizes each card as it is parsed, and the row height is measured once per container BEFORE its cards exist. Cards are correct in the first painted frame, with no correction afterwards.'
         },
         {
             name: 'osdLogo',
@@ -661,7 +646,7 @@
     const CONFIG_DEPENDENCY_NAMES = [
         'modal', 'toaster', 'utils', 'homeScreenConfig2', 'ui', 'homeScreen-migration',
         'homeScreen-configuration', 'search-configuration', 'seriesEpisodes-configuration',
-        'seriesInfo-configuration', 'trueAspectCards-configuration',
+        'seriesInfo-configuration',
         'versionPreferences-configuration', 'skinManager-configuration',
         'customMenuLinks-configuration', 'thumbnailScrubber-configuration',
         'watchTogether-configuration', 'userManager-configuration', 'apiHelper'
