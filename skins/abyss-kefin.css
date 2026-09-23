@@ -209,3 +209,24 @@
     -webkit-filter: none;
     filter: none;
 }
+
+/* No white frame on a hovered card's overlay.
+ *
+ * Abyss gives every .cardOverlayContainer a 1px border -- transparent at rest,
+ * rgba(245,245,247,0.2) on :hover (both !important) -- and also darkens the
+ * overlay to rgba(0,0,0,0.7). The white frame is painted over the darkened
+ * edge, so the outermost pixel of the picture comes out lighter than the rest
+ * and reads as the darkening stopping short of the edge.
+ *
+ * Measured at 3x DPR on a hovered episode card: edge 99.6 against 59 inside;
+ * with this rule, 63.7 against 59 -- what is left is the picture's own edge.
+ * A native jellyfin poster card shows the same ring (105 against 72); it is
+ * just far easier to see over the bright edges of episode stills.
+ *
+ * Colour only, so the overlay keeps its 1px border box and nothing inside it
+ * moves. The selector has to out-rank Abyss's `.cardOverlayContainer:hover`,
+ * which is also !important. This file only loads with Abyss.
+ */
+.card .cardScalable .cardOverlayContainer:hover {
+    border-color: transparent !important;
+}
