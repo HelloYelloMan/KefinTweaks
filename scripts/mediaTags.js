@@ -185,6 +185,9 @@
                 } catch (e) {
                     return;
                 }
+                // A slow item fetch can resolve after the next page's handler has
+                // started; leave that page's observer alone.
+                if (!page.isConnected || page.classList.contains('hide')) return;
                 // Tear down any observer from the previous details page before
                 // (re)starting for this one.
                 stopObserving();

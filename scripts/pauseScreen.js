@@ -917,8 +917,16 @@
         // Detect pause state from OSD play/pause button icon.
         // Jellyfin's OSD uses a .btnPause button whose inner icon span
         // toggles between 'pause' (playing) and 'play_arrow' (paused).
+        // jellyfin-web keeps up to three views cached, so a previous video's OSD
+        // page can still be in the DOM (hidden) and come first in document order.
+        _activeOsdQuery(selector) {
+            const page = document.querySelector('#videoOsdPage:not(.hide)')
+                || document.querySelector('.videoOsdPage:not(.hide)');
+            return page ? page.querySelector(selector) : null;
+        }
+
         _detectExternalPause() {
-            const osd = document.querySelector('.videoOsdBottom');
+            const osd = this._activeOsdQuery('.videoOsdBottom');
             if (!osd) return false;
 
             const btn = osd.querySelector('.btnPause, .btnPlay, .playPauseButton');
@@ -940,7 +948,7 @@
         }
 
         _clickPlayButton() {
-            const osd = document.querySelector('.videoOsdBottom');
+            const osd = this._activeOsdQuery('.videoOsdBottom');
             if (!osd) return;
             const btn = osd.querySelector('.btnPause, .btnPlay, .playPauseButton');
             if (btn) btn.click();
@@ -949,17 +957,17 @@
         // Read progress from OSD time text elements.
         _readExternalProgress() {
             // Try slider value first (0-100 range)
-            const slider = document.querySelector('.osdPositionSlider, #osdPositionSlider');
+            const slider = this._activeOsdQuery('.osdPositionSlider, #osdPositionSlider');
             if (slider && slider.value !== undefined && slider.max) {
                 const pct = parseFloat(slider.value) / parseFloat(slider.max || 100);
-                const durText = document.querySelector('.osdDurationText');
+                const durText = this._activeOsdQuery('.osdDurationText');
                 const dur = durText ? this._parseTimeText(durText.textContent) : 0;
                 if (dur > 0) return { current: pct * dur, duration: dur };
             }
 
             // Fall back to time text elements
-            const posEl = document.querySelector('.osdPositionText');
-            const durEl = document.querySelector('.osdDurationText');
+            const posEl = this._activeOsdQuery('.osdPositionText');
+            const durEl = this._activeOsdQuery('.osdDurationText');
             return {
                 current:  posEl ? this._parseTimeText(posEl.textContent) : 0,
                 duration: durEl ? this._parseTimeText(durEl.textContent) : 0,
@@ -1025,7 +1033,10 @@
 
         showOverlay() {
             if (this._userDismissed) return;
-            if (!document.querySelector('.videoOsdBottom')) return;
+            // Already up: re-showing would record the overlay itself as the focus
+            // to restore on resume, and redo the artwork layout on every mouse move.
+            if (this.overlay.getAttribute('aria-hidden') === 'false') return;
+            if (!this._activeOsdQuery('.videoOsdBottom')) return;
 
             this.prevFocused = document.activeElement;
             document.documentElement.classList.add('pause-screen-active');
@@ -1978,6 +1989,7 @@
             this.overlayDetails.replaceChildren();
             this.overlayLogo.removeAttribute('src');
             this.overlayLogo.onerror = null;
+            this.overlayLogo.style.display = 'none'; // inline block would beat :not([src])
             this.overlayDisc.removeAttribute('src');
             this.overlayDisc.onerror = null;
             this.overlayDisc.onload  = null;

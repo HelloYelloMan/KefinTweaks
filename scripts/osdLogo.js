@@ -222,7 +222,7 @@
             let targetContainer;
 
             if (USE_CLEARART) {
-                targetContainer = document.querySelector('.videoOsdBottom');
+                targetContainer = osdPage && osdPage.querySelector('.videoOsdBottom');
                 // Fallback: .videoOsd does not exist, and .skinHeader is not inside
                 // the OSD page anyway, so closest() could never have found anything.
                 if (!targetContainer) targetContainer = getActiveOsdPage();

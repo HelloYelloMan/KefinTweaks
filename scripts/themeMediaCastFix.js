@@ -417,7 +417,11 @@
             betweenDelayTimer = setTimeout(() => {
                 betweenDelayTimer = null;
                 if (currentOwnerId == null) return; // stopped during delay
+                // The poll stopped itself when el went null, and the play listeners
+                // bail without an el, so nothing watched for playback during the gap.
+                if (isRealPlaybackActive()) { stopTheme(); return; }
                 playItem(nextItem, playlistIsVideo);
+                startPlaybackWatch();
             }, delayMs);
         } else {
             // No delay: play next immediately (playItem crossfades the outgoing item).
@@ -1120,6 +1124,7 @@
         }
         const opts = (e.detail && e.detail.options) || {};
         if (!opts.supportsThemeMedia) {
+            loadSeq++; // cancel a loadTheme still in flight for the page we just left
             stopTheme();
         }
     }, true);
