@@ -401,6 +401,31 @@
     aspect-ratio: var(--par-ar, 0.7013) !important;
 }
 
+/* The same for a landscape or square cover -- an episode page's still, most often.
+ *
+ * jellyfin-web picks the cover's shape from its ratio (cardImage.ts: >= 1.33 is
+ * backdrop, above 0.8 square) and requests the image at that true ratio, then
+ * pins the box to the shape's padder: 16:9 for backdrop. A 4:3 still is 1.333,
+ * so it lands in the backdrop bucket and was cropped to 16:9.
+ *
+ * Not gated on .par-on: the script finds a cover's container through a portrait
+ * card, and a backdrop cover is not one (nor an Episode-typed row card). Nothing
+ * here needs a measurement -- the width is the skin's and the height follows
+ * from the ratio -- so the ratio class the transformation stamps is enough, and
+ * a cover without one (no known ratio) keeps jellyfin-web's shape. */
+.detailImageContainer > .card.backdropCard[class*="par-"] .cardPadder,
+.detailImageContainer > .card.squareCard[class*="par-"] .cardPadder {
+    padding-bottom: 0 !important;
+    height: auto !important;
+}
+
+.detailImageContainer > .card.backdropCard[class*="par-"] .cardScalable,
+.detailImageContainer > .card.squareCard[class*="par-"] .cardScalable {
+    height: auto !important;
+    width: 100% !important;
+    aspect-ratio: var(--par-ar) !important;
+}
+
 /* EPISODE CARDS -- the same model as posters, on the backdrop shapes.
  *
  * The row height is the skin's; width follows the still's own ratio. So a
