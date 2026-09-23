@@ -2269,15 +2269,20 @@ div[data-tab="watchlist"] .loading-message {
    so a sibling combinator says the same thing, stays live, and costs nothing: no
    :has(), no ancestor invalidation.
 
-   Whether a card HAS a playstate button at all is fixed when the card is built, so
-   that half stays a static class (.kefin-has-playstate, set in cardBuilder.js).
+   The other half, hiding the button on cards with no playstate button, is gone:
+   it keyed on a .kefin-has-playstate class that the upstream merge dropped from
+   cardBuilder.js and that native cards never had, so it hid the button everywhere.
+   Upstream never had that rule.
+
+   Known gap: the watchlist button is inserted BEFORE the played button (watchlist.js
+   insertBefore, cardBuilder.js append order), so the sibling rule below never matches
+   and played items keep the button. A fix needs :has(), whose cost is unmeasured.
 
    The .mainDetailButtons rules below keep :has(): that subject is a single element
    per page, so its invalidation cost is negligible. Upstream 1271143 tightened that
    first one to require .playstatebutton-played as well as [data-played]; that fix is
    kept, only the card-level selectors are ours. */
 button[data-played="true"] ~ .watchlist-button,
-.card:not(.kefin-has-playstate) .watchlist-button,
 .mainDetailButtons:has(button[data-played].playstatebutton-played) .watchlist-icon,
 .mainDetailButtons:not(:has(button[data-played])) .watchlist-icon,
 .mainDetailButtons:not(:has(button[data-played])) .btnRecommend {
