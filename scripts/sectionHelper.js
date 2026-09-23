@@ -1163,7 +1163,8 @@
             // Over-request, because filtering removes items after the query and a
             // short row is worse than a slightly larger fetch. SmartSimilar already
             // doubles its own limit, so it is left alone.
-            if (instanceConfig.type !== 'SmartSimilar' && instanceConfig.queries) {
+            // (type is always 'discovery' here; the kind is what says SmartSimilar)
+            if (discoveryKind !== 'SmartSimilar' && instanceConfig.queries) {
                 for (const q of instanceConfig.queries) {
                     if (q.queryOptions && q.queryOptions.Limit) {
                         q.queryOptions.Limit = q.queryOptions.Limit * 2;

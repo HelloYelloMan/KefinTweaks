@@ -317,9 +317,9 @@
         if (!page) return null;
         
         let activeTab = null;
-        if (page === 'tv.html') {
+        if (page === 'tv.html' || page === 'tv') {
             activeTab = document.querySelector("#seriesTab.is-active");
-        } else if (page === 'movies.html') {
+        } else if (page === 'movies.html' || page === 'movies') {
             activeTab = document.querySelector("#moviesTab.is-active");
         }
         

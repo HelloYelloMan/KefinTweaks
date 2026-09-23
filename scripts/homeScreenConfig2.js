@@ -2196,7 +2196,8 @@
             sections: [
                 {
                     id: 'directedByTopDirectorShows',
-                    type: 'Person',
+                    type: 'discovery',
+                    discoveryType: 'Person',
                     source: 'Dynamic',
                     personType: 'Director',
                     name: 'Directed by {Person}',
@@ -2209,7 +2210,8 @@
                 },
                 {
                     id: 'writtenByTopWriterShows',
-                    type: 'Person',
+                    type: 'discovery',
+                    discoveryType: 'Person',
                     source: 'Dynamic',
                     personType: 'Writer',
                     name: 'Written by {Person}',
@@ -2222,7 +2224,8 @@
                 },
                 {
                     id: 'starringTopActorShows',
-                    type: 'Person',
+                    type: 'discovery',
+                    discoveryType: 'Person',
                     source: 'Dynamic',
                     personType: 'Actor',
                     name: 'Starring {Person}',
@@ -2242,7 +2245,8 @@
             sections: [
                 {
                     id: 'starringActorRecentlyWatchedShows',
-                    type: 'Person',
+                    type: 'discovery',
+                    discoveryType: 'Person',
                     source: 'Dynamic',
                     personType: 'Actor',
                     sourceType: 'watched-recent',
@@ -2256,7 +2260,8 @@
                 },
                 {
                     id: 'directedByDirectorRecentlyWatchedShows',
-                    type: 'Person',
+                    type: 'discovery',
+                    discoveryType: 'Person',
                     source: 'Dynamic',
                     personType: 'Director',
                     sourceType: 'watched-recent',
@@ -2270,7 +2275,8 @@
                 },
                 {
                     id: 'writtenByWriterRecentlyWatchedShows',
-                    type: 'Person',
+                    type: 'discovery',
+                    discoveryType: 'Person',
                     source: 'Dynamic',
                     personType: 'Writer',
                     sourceType: 'watched-recent',
@@ -2291,7 +2297,8 @@
             sections: [
                 {
                     id: 'becauseYouWatchedShow',
-                    type: 'Similar',
+                    type: 'discovery',
+                    discoveryType: 'Similar',
                     source: 'Dynamic',
                     sourceType: 'watched',
                     name: 'Because you watched {Title}',
@@ -2303,7 +2310,8 @@
                 },
                 {
                     id: 'becauseYouRecentlyWatchedShow',
-                    type: 'Similar',
+                    type: 'discovery',
+                    discoveryType: 'Similar',
                     source: 'Dynamic',
                     sourceType: 'watched-recent',
                     name: 'Because you recently watched {Title}',
@@ -2323,7 +2331,8 @@
             sections: [
                 {
                     id: 'becauseYouLikedShow',
-                    type: 'Similar',
+                    type: 'discovery',
+                    discoveryType: 'Similar',
                     source: 'Dynamic',
                     sourceType: 'liked',
                     name: 'Because you liked {Title}',

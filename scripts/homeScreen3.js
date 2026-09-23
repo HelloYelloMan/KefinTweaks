@@ -1676,6 +1676,13 @@
             WARN('Failed to apply user overrides to discovery sections:', e);
         }
 
+        // Before `order` is stamped: rendering sorts by it and cardBuilder writes it
+        // to style.order, so a reshuffle after this point is silently undone.
+        separateSpotlights(selectedConfigs, state.lastDiscoveryEndedWithSpotlight);
+        state.lastDiscoveryEndedWithSpotlight = selectedConfigs.length
+            ? isSpotlightSection(selectedConfigs[selectedConfigs.length - 1])
+            : state.lastDiscoveryEndedWithSpotlight;
+
         selectedConfigs.forEach((section) => {
             section.order = state.discoverySectionOrder++;
             // Mark discovery render set so section roots get data-discovery-section
@@ -1684,11 +1691,6 @@
         });
 
         //localCache.set('discoveryBuffer', selectedConfigs);
-
-        separateSpotlights(selectedConfigs, state.lastDiscoveryEndedWithSpotlight);
-        state.lastDiscoveryEndedWithSpotlight = selectedConfigs.length
-            ? isSpotlightSection(selectedConfigs[selectedConfigs.length - 1])
-            : state.lastDiscoveryEndedWithSpotlight;
 
         return selectedConfigs;
     }
