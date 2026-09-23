@@ -329,7 +329,12 @@ window.KefinTweaksConfig = ${JSON.stringify(config, null, 2)};`;
      */
     async function withCacheToken(url) {
         try {
-            const response = await fetch(url, { method: 'HEAD', cache: 'no-cache' });
+            const response = await fetch(url, {
+                method: 'HEAD',
+                cache: 'no-cache',
+                // A stalled HEAD must not hold the file back; the catch falls back to the bare URL
+                signal: (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(3000) : undefined
+            });
             if (!response.ok) return url;
             const validator = response.headers.get('etag')
                 || response.headers.get('last-modified');

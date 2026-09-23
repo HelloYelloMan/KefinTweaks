@@ -1244,7 +1244,7 @@
 
         return visibleScripts.map(script => {
             // Match injector defaults: most scripts on unless set false; opt-in scripts require true
-            const defaultDisabled = script.key === 'thumbnailScrubber' || script.key === 'watchTogether' || script.key === 'userManager';
+            const defaultDisabled = ['thumbnailScrubber', 'watchTogether', 'userManager', 'updoot', 'trueAspectCards', 'posterAspect'].includes(script.key);
             const isEnabled = defaultDisabled
                 ? scripts[script.key] === true
                 : scripts[script.key] !== false;

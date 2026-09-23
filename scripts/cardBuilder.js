@@ -6773,6 +6773,8 @@
         if (!container) return;                       // home rows only
         if (observedHomeRow && observedHomeRow.isConnected) return;
 
+        // The observer holds its targets strongly; drop the row a re-render detached
+        if (observedHomeRow && homeRowSizeObserver) homeRowSizeObserver.unobserve(observedHomeRow);
         observedHomeRow = verticalSection;
         if (!homeRowSizeObserver) {
             homeRowSizeObserver = new ResizeObserver((entries) => {
