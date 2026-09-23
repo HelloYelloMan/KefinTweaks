@@ -874,9 +874,21 @@
             processed = flattenSeriesEpisodes(processed);
         }
 
-        if (sectionConfig.type === 'series-episodes' && Array.isArray(processed)) {
-            processed = [...processed].sort((a, b) => (a.IndexNumber || 0) - (b.IndexNumber || 0));
-        }
+        /* series-episodes keeps the SERVER's order -- do not sort it here.
+         *
+         * /Shows/{id}/Episodes already places a season's specials where their
+         * metadata says (AirsBeforeEpisodeNumber inline, AirsAfterSeasonNumber
+         * after the finale). IndexNumber restarts at 1 for season 0, so sorting
+         * on it collapses that placement: special 1 beside episode 1, and so on.
+         *
+         * This was the second copy of that sort. seriesEpisodes.js's own
+         * postProcessEpisodes had it too and was fixed there, but only the first
+         * render goes through that function -- the refresh button and the
+         * generic load paths come through here. So the row looked right on load
+         * and scrambled the moment it was refreshed. Measured on Neon Genesis
+         * Evangelion: the server returns E1-E24, Death, Rebirth, E25, E26, then
+         * the films, because Death and Rebirth are marked airs-before S1E25.
+         */
 
 /*         if (sectionConfig.id === 'popularTVNetworks') {
             // Sort items randomly
@@ -953,7 +965,18 @@
         }
 
         // Deduplicate items based on ProviderIds. Look for match imdb, tmdb or tvdb ids
-        processed = deduplicateItems(processed);
+        //
+        // Not for series-episodes. The dedupe exists to merge the same title
+        // appearing in two libraries; one season's episode list cannot contain
+        // that, and distinct episodes legitimately share provider ids. Neon
+        // Genesis Evangelion's specials "Death" and "Rebirth" are separate items
+        // (AniDB 4001 and 7178) that IMDb and TVDB both list as the one combined
+        // film -- tt0169880, 357967 -- so this dropped Rebirth every time the row
+        // was refreshed, while the first render (which never comes through here)
+        // showed both.
+        if (sectionConfig.type !== 'series-episodes') {
+            processed = deduplicateItems(processed);
+        }
 
         return processed;
     }
