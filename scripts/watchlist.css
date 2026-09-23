@@ -2274,15 +2274,19 @@ div[data-tab="watchlist"] .loading-message {
    cardBuilder.js and that native cards never had, so it hid the button everywhere.
    Upstream never had that rule.
 
-   Known gap: the watchlist button is inserted BEFORE the played button (watchlist.js
-   insertBefore, cardBuilder.js append order), so the sibling rule below never matches
-   and played items keep the button. A fix needs :has(), whose cost is unmeasured.
+   The watchlist button is inserted BEFORE the played button (watchlist.js
+   insertBefore, cardBuilder.js append order), so `button[data-played] ~
+   .watchlist-button` could never match and played items kept the button. It is a
+   sibling-relative :has() instead. That is not the pattern removed above: the
+   subject is the watchlist button alone, not every .card, and the argument only
+   looks at its following siblings in a two- or three-button container, so neither
+   inserting a card nor anything inside one causes an ancestor walk.
 
    The .mainDetailButtons rules below keep :has(): that subject is a single element
    per page, so its invalidation cost is negligible. Upstream 1271143 tightened that
    first one to require .playstatebutton-played as well as [data-played]; that fix is
    kept, only the card-level selectors are ours. */
-button[data-played="true"] ~ .watchlist-button,
+.watchlist-button:has(~ button[data-played="true"]),
 .mainDetailButtons:has(button[data-played].playstatebutton-played) .watchlist-icon,
 .mainDetailButtons:not(:has(button[data-played])) .watchlist-icon,
 .mainDetailButtons:not(:has(button[data-played])) .btnRecommend {

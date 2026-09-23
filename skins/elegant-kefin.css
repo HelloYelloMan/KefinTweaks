@@ -1,5 +1,9 @@
 .slide .watchlist-button:not(:hover) {
     background: transparent;
+    /* ElegantFin's own media-bar buttons are `background: none; color:
+       var(--textColor)`. Clearing only the background left watchlist.css's black
+       icon on the dark backdrop. The green active state is !important and wins. */
+    color: var(--textColor);
 }
 
 .docspinner {

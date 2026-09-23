@@ -82,19 +82,23 @@
     }
 
     /**
-     * Turn 'Special - {0}' into /Special - (.+)/ -- deliberately NOT anchored.
+     * Turn 'Special - {0}' into /(^|\s-\s)Special - (.+?)$/.
      *
+     * Anchored to the start of the text OR to Jellyfin's own ' - ' separator.
      * The detail page subtitle is built as `tvSeasonHtml + ' - ' + name`, so the
-     * special prefix sits in the middle of "Specials - Special - Title" rather
-     * than at the start. An anchored pattern would miss exactly the page where
-     * the prefix is most visible.
+     * prefix sits in the middle of "Specials - Special - Title" there, and a
+     * start-only anchor would miss it. Unanchored, though, it cut the words out
+     * of any title that merely contains them: "The Holiday Special - Part 1"
+     * became "The Holiday Part 1". getDisplayName only ever puts the prefix at
+     * the start of the name, and the name is only ever joined on with ' - ', so
+     * those two positions are the only ones it can occupy.
      */
     function setTemplate(value) {
         if (!value || value.indexOf('{0}') === -1) return false;
         const [before, after] = value.split('{0}');
         if (!before && !after) return false; // '{0}' alone strips nothing
         template = value;
-        pattern = new RegExp(escapeRegExp(before) + '(.+?)' + escapeRegExp(after) + '$');
+        pattern = new RegExp('(^|\\s-\\s)' + escapeRegExp(before) + '(.+?)' + escapeRegExp(after) + '$');
         return true;
     }
 
@@ -245,7 +249,7 @@
         while ((node = walker.nextNode())) {
             const text = node.nodeValue;
             if (!text) continue;
-            const next = text.replace(pattern, '$1');
+            const next = text.replace(pattern, '$1$2');
             if (next !== text) pending.push([node, next]);
         }
         pending.forEach(([n, value]) => { n.nodeValue = value; changed++; });

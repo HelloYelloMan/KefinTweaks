@@ -3506,6 +3506,14 @@
                  * has to be added here too or they fall back to the default
                  * ratio and come out all the same width. */
                 card.classList.add('par-' + Math.round(ratio * 100));
+
+                /* Ask for the picture at that same ratio. Backdrop-shaped cards
+                 * request a fixed 474x267 crop, so a 4:3 episode still came back
+                 * cut to 16:9 and was then cropped again by the 4:3 box above. */
+                if (padderClass === 'cardPadder-backdrop') {
+                    imageUrl = imageUrl.replace('fillHeight=267&fillWidth=474',
+                        `fillHeight=${Math.round(474 / ratio)}&fillWidth=474`);
+                }
             }
 
             // Use data-src for lazy loading instead of immediate backgroundImage
