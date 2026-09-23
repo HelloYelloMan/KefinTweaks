@@ -117,7 +117,6 @@
 
     // Z-index layer map - disc is always behind all text/UI
     const Z = {
-        backdrop:  0,
         disc:      5,
         details:   10,
         progress:  10,
@@ -163,7 +162,6 @@
             this.overlayPlot     = null;
             this.overlayDetails  = null;
             this.overlayDisc     = null;
-            this.overlayBackdrop = null;
             this.progressWrap    = null;
             this.progressBar     = null;
             this.progressMeta    = null;
@@ -291,13 +289,6 @@
                     position: relative; width: 100%; height: 100%;
                     backdrop-filter: blur(var(--pause-screen-blur)) brightness(1.0);
                     outline: none;
-                }
-
-                #pause-screen-backdrop {
-                    position: absolute; inset: 0;
-                    background-position: center; background-size: cover;
-                    opacity: .28; pointer-events: none;
-                    z-index: ${Z.backdrop};
                 }
 
                 #pause-screen-logo {
@@ -482,9 +473,6 @@
             this.overlayContent.id = 'pause-screen-content';
             this.overlayContent.tabIndex = -1;
 
-            this.overlayBackdrop = document.createElement('div');
-            this.overlayBackdrop.id = 'pause-screen-backdrop';
-
             this.overlayLogo = document.createElement('img');
             this.overlayLogo.id = 'pause-screen-logo';
             this.overlayLogo.alt = 'Show logo';
@@ -535,7 +523,6 @@
             });
 
             // Assemble - disc inside overlayContent
-            this.overlayContent.appendChild(this.overlayBackdrop);
             this.overlayContent.appendChild(this.overlayLogo);
             this.overlayContent.appendChild(this.overlayDetails);
             this.overlayContent.appendChild(this.overlayPlot);
@@ -1295,17 +1282,8 @@
                 ? [...clearArtEntries, ...discEntries]
                 : [...discEntries, ...clearArtEntries];
 
-            // --- BACKDROP URL ---
-            const backdropUrl = item.BackdropImageTags?.[0]
-                ? tagUrl('Backdrop', item.BackdropImageTags[0])
-                : null;
-
             this.applyImage(this.overlayLogo, logoUrls);
             this.applyArtwork(artEntries);
-
-            if (backdropUrl) {
-                this.overlayBackdrop.style.backgroundImage = `url("${backdropUrl}")`;
-            }
 
             this.updateProgress();
         }
@@ -2040,7 +2018,6 @@
             this.overlayDisc.style.left      = 'var(--art-pos-left)';
             this.overlayDisc.style.right     = 'auto';
             this.overlayDisc.style.transform = 'translateX(-50%) translateZ(0)';
-            this.overlayBackdrop.style.backgroundImage = '';
             this.setProgress(0, 0);
         }
 

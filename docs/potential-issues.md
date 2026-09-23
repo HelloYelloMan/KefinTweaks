@@ -79,8 +79,6 @@ or the document `viewshow` event.
   show `-12:34`, `_parseTimeText` returns a negative duration: 0%, no "Ends at".
 - **User id and token are captured once**, so signing in as another user without a
   reload makes `fetchItemInfo` fail for the rest of the session.
-- **Episodes get no backdrop**: only the item's own `BackdropImageTags` are used,
-  not `ParentBackdropImageTags`.
 
 ## Cast Session Watchdog: re-subscribes where no feed exists
 
