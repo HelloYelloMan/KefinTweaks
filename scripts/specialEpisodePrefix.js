@@ -68,10 +68,12 @@
 
     function storageKey() {
         try {
-            // The wording is Jellyfin's translation, so it differs per display
-            // language; globalize sets <html lang>.
-            return STORAGE_PREFIX + (ApiClient.serverId() || 'unknown')
-                + '_' + (document.documentElement.lang || '');
+            // Per server only. Keying by <html lang> as well was tried and broke
+            // it: lang is not set yet when the script first reads the cache, so
+            // the load and the save used different keys, the learned wording was
+            // never found again, and a page with no special card on it to learn
+            // from (an episode page) stripped nothing.
+            return STORAGE_PREFIX + (ApiClient.serverId() || 'unknown');
         } catch (e) {
             return STORAGE_PREFIX + 'unknown';
         }

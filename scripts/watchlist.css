@@ -2286,11 +2286,17 @@ div[data-tab="watchlist"] .loading-message {
    per page, so its invalidation cost is negligible. Upstream 1271143 tightened that
    first one to require .playstatebutton-played as well as [data-played]; that fix is
    kept, only the card-level selectors are ours. */
-.watchlist-button:has(~ button[data-played="true"]),
 .mainDetailButtons:has(button[data-played].playstatebutton-played) .watchlist-icon,
 .mainDetailButtons:not(:has(button[data-played])) .watchlist-icon,
 .mainDetailButtons:not(:has(button[data-played])) .btnRecommend {
     display: none;
+}
+
+/* visibility, not display: taking the button out of the row moved the buttons
+   beside it, so watched and unwatched cards laid their buttons out differently.
+   A hidden button keeps its slot and cannot be clicked. */
+.watchlist-button:has(~ button[data-played="true"]) {
+    visibility: hidden;
 }
 
 /* Import/Export Modal Styles */
