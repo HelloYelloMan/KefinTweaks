@@ -209,3 +209,23 @@
     -webkit-filter: none;
     filter: none;
 }
+
+/* Show Abyss's hover frame on every card, not just ours.
+ *
+ * Abyss draws a 1px rgba(245,245,247,0.2) border on `.cardOverlayContainer:hover`.
+ * But jellyfin-web gives the overlay `pointer-events: none`, so on its own
+ * cards the overlay only counts as hovered while the pointer is over one of
+ * its buttons -- a corner of the card hits the image, a sibling of the
+ * overlay, and the frame never appears. KefinTweaks' cards put a link inside
+ * the overlay that fills it, so on ours the frame shows anywhere on the card.
+ * Measured on a series page: corner hits land inside the overlay for the flat
+ * season row, and on the image for Specials, Cast & Crew and More Like This.
+ *
+ * Keying the frame on the CARD being hovered makes every card behave like
+ * ours. Same colour as Abyss's own rule; its border-color transition still
+ * applies. Out-ranks the rest-state `.cardOverlayContainer { border: ...
+ * !important }`. Only loads with Abyss.
+ */
+.card:hover .cardScalable .cardOverlayContainer {
+    border-color: rgba(245, 245, 247, 0.2) !important;
+}
