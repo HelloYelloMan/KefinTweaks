@@ -68,7 +68,10 @@
 
     function storageKey() {
         try {
-            return STORAGE_PREFIX + (ApiClient.serverId() || 'unknown');
+            // The wording is Jellyfin's translation, so it differs per display
+            // language; globalize sets <html lang>.
+            return STORAGE_PREFIX + (ApiClient.serverId() || 'unknown')
+                + '_' + (document.documentElement.lang || '');
         } catch (e) {
             return STORAGE_PREFIX + 'unknown';
         }

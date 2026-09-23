@@ -746,6 +746,9 @@
                 } catch (e) {
                     return;
                 }
+                // A slow fetch can resolve after the next page's handler has
+                // started; tearing down here would remove that page's guard.
+                if (page.classList.contains('hide')) return;
 
                 // Tear down the previous page's observer and logo binding first.
                 stopObserving();
@@ -765,6 +768,7 @@
                 if (item.Type !== 'Episode' || !item.SeasonId) return;
 
                 const season  = await getSeason(item.SeasonId);
+                if (page.classList.contains('hide')) return;
                 const title   = resolveTitle(season);
                 const logoUrl = seasonLogoUrl(season);
                 // Nothing to show: no usable season title AND no season logo.

@@ -931,7 +931,7 @@
 
         const currentNextUpItem = document.querySelector('.libraryPage:not(.hide) .nextUpEpisode');
 
-        if (currentNextUpItem.dataset.id === nextUpItem.Id) {
+        if (currentNextUpItem?.dataset.id === nextUpItem.Id) {
             LOG('Next Up item is the same as the current one, skipping');
             return;
         }

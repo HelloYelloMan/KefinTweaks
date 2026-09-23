@@ -627,10 +627,12 @@
         teardown = [];
     }
 
-    function waitFor(selector, startedAt) {
+    // Scoped to the page: jellyfin-web keeps up to three views cached, and an
+    // older collection page can come first in the document.
+    function waitFor(root, selector, startedAt) {
         return new Promise(resolve => {
             const tick = () => {
-                const el = document.querySelector(selector);
+                const el = root.querySelector(selector);
                 if (el) { resolve(el); return; }
                 if (Date.now() - startedAt >= POLL_TIMEOUT_MS) { resolve(null); return; }
                 setTimeout(tick, POLL_INTERVAL_MS);
@@ -660,12 +662,19 @@
 
                 let item;
                 try { item = await itemPromise; } catch (e) { return; }
+                // A slow item fetch can resolve after the next page's handler has
+                // started; stopAll() here would cancel that page's work.
+                if (page.classList.contains('hide')) return;
 
                 stopAll();
                 if (!item || item.Type !== 'BoxSet' || !item.Id) return;
 
                 const token = viewToken;
-                const alive = () => token === viewToken;
+                // stopAll() only runs when another details page opens, so leaving
+                // for Home or a library must also count, or the art retries would
+                // repaint the borrowed backdrop there.
+                const alive = () => token === viewToken
+                    && page.isConnected && !page.classList.contains('hide');
 
                 // --- artwork, from last visit's answer, before anything else -
                 // This runs before the children fetch on purpose: it needs only
@@ -698,7 +707,7 @@
                 });
 
                 // --- studios -------------------------------------------------
-                waitFor('.itemDetailsGroup', Date.now()).then(group => {
+                waitFor(page, '.itemDetailsGroup', Date.now()).then(group => {
                     if (!group || !alive()) return;
                     teardown.push(makeBoundedObserver(
                         group, () => injectStudios(page, item), POLL_TIMEOUT_MS));
@@ -707,7 +716,9 @@
                 // --- names ---------------------------------------------------
                 const names = specialNamesFrom(children);
                 if (names.size) {
-                    waitFor('.collectionItemsContainer', Date.now()).then(container => {
+                    // The stable parent, not the first .collectionItemsContainer:
+                    // there is one per item type, and a refresh rebuilds them.
+                    waitFor(page, '.collectionItems', Date.now()).then(container => {
                         if (!container || !alive()) return;
                         teardown.push(makeBoundedObserver(
                             container, () => applyNames(container, names), OBSERVE_MS));
