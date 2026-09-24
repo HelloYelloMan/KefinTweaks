@@ -93,7 +93,8 @@
                 return null;
             }
 
-            if (window.ApiClient._appName === 'Jellyfin Web' && window.ApiClient._appVersion) {
+            // Jellyfin 12 stores the app name URI-encoded ('Jellyfin%20Web').
+            if (String(window.ApiClient._appName).replace(/%20/g, ' ') === 'Jellyfin Web' && window.ApiClient._appVersion) {
                 cachedJellyfinMajorVersion = getMajorServerVersion(window.ApiClient._appVersion);
                 return cachedJellyfinMajorVersion;
             }

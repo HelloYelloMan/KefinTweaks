@@ -930,7 +930,8 @@
             // Generator version. The stamp decides whether the stored entry is
             // rewritten, so bump this whenever buildInjectorScript's output changes
             // or existing installs keep running the old script. g2: console gate.
-            'g2',
+            // g3: Jellyfin 12's URI-encoded app name in version detection.
+            'g3',
             root,
             String(majorVersion == null ? 'unknown' : majorVersion),
             featuresDisabled ? 'config-only' : 'full',
@@ -966,7 +967,8 @@
                         }
                     }
                     if (!window.ApiClient) return null;
-                    if (window.ApiClient._appName === 'Jellyfin Web' && window.ApiClient._appVersion) {
+                    // Jellyfin 12 stores the app name URI-encoded ('Jellyfin%20Web').
+                    if (String(window.ApiClient._appName).replace(/%20/g, ' ') === 'Jellyfin Web' && window.ApiClient._appVersion) {
                         window.KefinTweaks._jellyfinMajorVersion = parseMajorVersion(window.ApiClient._appVersion);
                         return window.KefinTweaks._jellyfinMajorVersion;
                     }
@@ -1133,7 +1135,7 @@
             '          }',
             '        }',
             '        if (!window.ApiClient) return null;',
-            "        if (window.ApiClient._appName === 'Jellyfin Web' && window.ApiClient._appVersion) {",
+            "        if (String(window.ApiClient._appName).replace(/%20/g, ' ') === 'Jellyfin Web' && window.ApiClient._appVersion) {",
             '          window.KefinTweaks._jellyfinMajorVersion = parseMajorVersion(window.ApiClient._appVersion);',
             '          return window.KefinTweaks._jellyfinMajorVersion;',
             '        }',

@@ -738,6 +738,13 @@
             );
             return;
         }
+        // Jellyfin 12's legacy layout has its own drawer and no MUI toolbar, and
+        // the toolbar observer would run on every DOM mutation for nothing.
+        // Changing the layout needs a reload, so checking once is enough.
+        if (window.KefinTweaksUtils?.isModernUI && !window.KefinTweaksUtils.isModernUI()) {
+            LOG('Skipping desktop hamburger menu; legacy layout in use');
+            return;
+        }
         start();
     }
 

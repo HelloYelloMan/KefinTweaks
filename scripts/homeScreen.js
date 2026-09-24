@@ -2174,7 +2174,9 @@
      */
     async function getWatchlistUrl() {
         let homePageSuffix = '.html';
-        if (ApiClient._serverInfo.Version?.split('.')[1] > 10) {
+        // Jellyfin 12 is '12.x', so the minor part alone no longer tells us.
+        const [majorPart, minorPart] = String(ApiClient._serverInfo.Version || '').split('.').map(Number);
+        if (majorPart > 10 || minorPart > 10) {
             homePageSuffix = '';
         }
 

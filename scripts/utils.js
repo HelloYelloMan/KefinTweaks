@@ -1162,7 +1162,34 @@
         return true;
     }
 
+    // Jellyfin 12 layout values that still run the legacy app. Everything else,
+    // including a 10.11-saved 'desktop'/'mobile', an invalid 'experimental' and
+    // no value at all, is the modern React layout (jellyfin-web layoutManager).
+    const LEGACY_LAYOUTS_V12 = ['desktop-legacy', 'mobile-legacy', 'tv'];
+
+    function getServerMajorVersionSync() {
+        const api = window.ApiClient;
+        if (!api) return null;
+        // The server's version, not the app's: a native app reports its own.
+        const version = (api._serverInfo && api._serverInfo.Version) || api._serverVersion || api._appVersion || '';
+        const parts = String(version).split('.').map(Number);
+        if (!parts[0]) return null;
+        return parts[0] === 10 ? parts[1] : parts[0];
+    }
+
+    /**
+     * Whether jellyfin-web is running its modern (MUI) layout rather than the
+     * legacy one. On 12 this is decided by the saved layout setting, exactly as
+     * jellyfin-web decides it; the old DOM test (".MuiBox-root exists") is wrong
+     * there, because 12's legacy details page renders MUI boxes too.
+     */
     function isModernUI() {
+        if (getServerMajorVersionSync() >= 12) {
+            if (document.documentElement.classList.contains('layout-tv')) return false;
+            let saved = null;
+            try { saved = localStorage.getItem('layout'); } catch (e) { /* storage blocked */ }
+            return !LEGACY_LAYOUTS_V12.includes(saved);
+        }
         return document.querySelector('.MuiBox-root') !== null;
     }
 
@@ -2807,6 +2834,7 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
 
     // Expose utilities to global scope
     window.KefinTweaksUtils = {
+        isModernUI,
         onViewPage,
         notifyHandlers,
         getCurrentView,

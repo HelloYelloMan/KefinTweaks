@@ -34,7 +34,9 @@
                 console.log("[KefinTweaks DashboardButtonFix]: No history to go back. Redirecting to home page.");
 
                 // Changes this to the page you'd like to return to by default
-                const homeUrl = ApiClient.serverVersion().split('.')[1] > 10 ? 'home' : 'home.html';
+                // Jellyfin 12 is '12.x', so the minor part alone no longer tells us.
+                const [majorPart, minorPart] = String(ApiClient.serverVersion()).split('.').map(Number);
+                const homeUrl = majorPart > 10 || minorPart > 10 ? 'home' : 'home.html';
                 Dashboard.navigate(`/${homeUrl}`);
             }
         }, true);

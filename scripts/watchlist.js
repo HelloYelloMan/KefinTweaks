@@ -7479,7 +7479,10 @@ In the Custom Tabs plugin, add a new tab with the following HTML content:
 
 		// Major version of Jellyfin
 		const jellyfinVersion = await window.KefinTweaks.getJellyfinMajorVersion();
-		const isModernUI = document.querySelector('.MuiBox-root') !== null;
+		// Custom Tabs tabs are not rendered in the modern layout.
+		const isModernUI = window.KefinTweaksUtils?.isModernUI
+			? window.KefinTweaksUtils.isModernUI()
+			: document.querySelector('.MuiBox-root') !== null;
 
 		// If watchlist tab index is null or undefined, add to top navigation
 		if (watchlistTabIndex === null || watchlistTabIndex === undefined || isModernUI) {

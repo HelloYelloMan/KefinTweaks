@@ -76,7 +76,9 @@
         };
 
         // Don't append .html for server versions 10.11 and above
-        const urlSuffix = ApiClient._appVersion.split('.')[1] > 10 ? '' : '.html'
+        // Jellyfin 12 is '12.x', so the minor part alone no longer tells us.
+        const [majorPart, minorPart] = String(ApiClient._appVersion).split('.').map(Number);
+        const urlSuffix = majorPart > 10 || minorPart > 10 ? '' : '.html'
 
         let queryParams = '';
         if (item.ParentId) {
@@ -472,6 +474,11 @@
     
     // DOM manipulation
     function isModernUI() {
+        // utils knows Jellyfin 12's layout setting; the DOM test alone misfires
+        // there because 12's legacy details page renders MUI boxes too.
+        if (window.KefinTweaksUtils?.isModernUI) {
+            return window.KefinTweaksUtils.isModernUI();
+        }
         return !!document.querySelector('.MuiBox-root');
     }
 
