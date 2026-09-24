@@ -610,7 +610,7 @@
             name: 'posterAspect',
             script: 'posterAspect.js',
             css: 'posterAspect.css',
-            dependencies: ['utils'],
+            dependencies: ['utils', 'userHelper'],
             description: 'Sizes each poster card to its own image instead of cropping everything to one shape. The ratio arrives as a class in the card markup (via the File Transformation plugin) so CSS sizes each card as it is parsed, and the row height is measured once per container BEFORE its cards exist. Cards are correct in the first painted frame, with no correction afterwards.'
         },
         {

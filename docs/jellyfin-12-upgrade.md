@@ -29,6 +29,7 @@ feature detection or by server version. None of it has run in a browser yet.
 | 2.4 | infiniteScroll and headerTabs legacy-only; removeContinue hides React cards instead of removing them; `pages:['home']` no longer matches `#/homevideos`; osdLogo uses the modern OSD bar; theme-video controls anchor to the MUI app bar | e53e2f2 |
 | #12 | removeContinue also resets alternate versions that carry progress (12 resumes from the last-played version) | e53e2f2 |
 | #14 | Conflicting `Filters` pairs are reduced to the last one, as 10.11 did, instead of a 400 | 01e3275 |
+| #5 | posterAspect waits for sign-in before registering its rules: on 12 it ran first, its only attempt found no admin, and no card got a ratio class (found on the test server, 58 cards classed after the fix) | see log |
 
 **Deliberately not done** (needs a browser, or is a later clean-up):
 - Things 12 now does natively (§3) are all left in place, per Robert: castSessionWatchdog (inert on 12), backdropLeakFix, and the rest.

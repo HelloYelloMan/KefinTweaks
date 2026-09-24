@@ -835,6 +835,10 @@
             return;
         }
         try {
+            // This runs as the page boots, before sign-in has finished on 12, and
+            // there is no second attempt -- so without the wait the rule was never
+            // registered and no card carried a ratio class.
+            await window.userHelper?.waitForLogin?.();
             const user = await ApiClient.getCurrentUser();
             if (user?.Policy?.IsAdministrator) await ensureTransformation();
         } catch (e) {
