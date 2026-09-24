@@ -3103,11 +3103,85 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
         loadedSkinUrls.clear();
     }
     
+    /* Profile button in the toolbar's top-right corner (Jellyfin 12 modern
+     * layout, every skin).
+     *
+     * jellyfin-web gives the modern toolbar its 3.3% page gutter on the right
+     * (~93px on a wide screen), so the header's last button, the profile, sits
+     * well in from the edge. Robert wants it in the corner: as far from the
+     * right edge as it is from the top. The top gap is whatever the skin makes
+     * it -- (toolbar height - avatar height) / 2: 12px under Abyss (64/40), 9px
+     * under ElegantFin (48/30), 4px with no skin (48/40) -- so it is measured,
+     * not hard-coded, and written as the toolbar's right padding. The buttons
+     * stay in their row, keeping each skin's own spacing between search and the
+     * profile.
+     *
+     * Re-measured when the toolbar or the avatar changes size (a skin switch, a
+     * breakpoint) and on every view, since React remounts the toolbar (after the
+     * video player, for one). The padding goes on the element itself: a
+     * stylesheet would need a cache token feature stylesheets do not get, and
+     * React does not manage this element's style attribute. */
+    const PROFILE_BUTTON_SELECTOR = 'header.MuiAppBar-root > .MuiToolbar-root [aria-controls="app-user-menu"]';
+    let profileCornerToolbar = null;
+    let profileCornerObserver = null;
+
+    function syncProfileCornerInset() {
+        const button = profileCornerToolbar && profileCornerToolbar.querySelector('[aria-controls="app-user-menu"]');
+        if (!button) return;
+        const gap = button.getBoundingClientRect().top - profileCornerToolbar.getBoundingClientRect().top;
+        if (!(gap >= 0)) return;
+        const inset = Math.round(gap * 10) / 10 + 'px';
+        // !important: ElegantFin sets the side padding with !important, which a
+        // plain inline style does not beat.
+        if (profileCornerToolbar.style.getPropertyValue('padding-right') !== inset) {
+            profileCornerToolbar.style.setProperty('padding-right', inset, 'important');
+        }
+    }
+
+    function attachProfileCorner() {
+        const button = document.querySelector(PROFILE_BUTTON_SELECTOR);
+        const toolbar = button && button.closest('.MuiToolbar-root');
+        if (!toolbar) return false;
+        if (toolbar !== profileCornerToolbar) {
+            profileCornerToolbar = toolbar;
+            if (profileCornerObserver) profileCornerObserver.disconnect();
+            if (typeof ResizeObserver === 'function') {
+                profileCornerObserver = new ResizeObserver(syncProfileCornerInset);
+                profileCornerObserver.observe(toolbar);
+                profileCornerObserver.observe(button);
+            }
+        }
+        syncProfileCornerInset();
+        return true;
+    }
+
+    function initProfileCorner() {
+        // The toolbar mounts after sign-in and may not exist yet; look for it
+        // briefly, then leave it to the view hook.
+        let tries = 0;
+        const poll = () => {
+            if (attachProfileCorner() || ++tries >= 40) return;
+            setTimeout(poll, 250);
+        };
+        poll();
+        document.addEventListener('viewshow', () => {
+            requestAnimationFrame(() => {
+                if (!profileCornerToolbar || !profileCornerToolbar.isConnected) {
+                    attachProfileCorner();
+                } else {
+                    syncProfileCornerInset();
+                }
+            });
+        });
+    }
+
     // Initialize when DOM is ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initialize);
+        document.addEventListener('DOMContentLoaded', initProfileCorner);
     } else {
         initialize();
+        initProfileCorner();
     }
 
     LOG('Initialized successfully');
