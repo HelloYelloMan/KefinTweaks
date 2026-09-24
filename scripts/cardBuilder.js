@@ -2029,6 +2029,7 @@
                     await new Promise(resolve => setTimeout(resolve, 150));
                 }
 
+                releaseSkeleton(skeletonContainer);
                 if (!items || items.length === 0) {
                     // Remove container if no items
                     skeletonContaineElement.remove();
@@ -2071,6 +2072,7 @@
                 ensureCardBorders(realContainer);
             }).catch(error => {
                 console.error('[KefinTweaks CardBuilder] Error loading items for progressive enhancement:', error);
+                releaseSkeleton(skeletonContainer);
                 // Optionally remove skeleton on error or show error state
                 if (skeletonContaineElement) {
                     skeletonContaineElement.remove();
@@ -2483,6 +2485,7 @@
                 // When promise resolves, replace skeleton with real spotlight
                 items.then(async items => {
                     // Remove the skeleton container if it exists
+                    releaseSkeleton(skeletonSpotlightContainer);
                     let skeletonContainerElement = document.querySelector(`[data-skeleton-id="${randomId}"]`);
     
                     // Let's try to find the skeleton 20 times every 100ms
@@ -2510,6 +2513,7 @@
                 }).catch(error => {
                     console.error('[KefinTweaks CardBuilder] Error loading items for spotlight progressive enhancement:', error);
                     // Optionally remove skeleton on error or show error state
+                    releaseSkeleton(skeletonSpotlightContainer);
                     skeletonSpotlightContainer.remove();
                 });
 
@@ -6449,6 +6453,7 @@
         bannerContainer.appendChild(itemsContainer);
         container.appendChild(bannerContainer);
 
+        watchSkeleton(container);
         return container;
     }
 
@@ -6510,6 +6515,7 @@
 
         registerScrollSectionScrollButtons(verticalSection);
 
+        watchSkeleton(verticalSection);
         return verticalSection;
     }
 
@@ -6559,6 +6565,73 @@
             @keyframes skeleton-pulse {
                 0%, 100% { opacity: 0.5; }
                 50% { opacity: 1; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // Skeleton placeholders pulse (skeleton-pulse, infinite) until their section's
+    // items arrive -- and sections below the fold only fetch once scrolled near,
+    // so on an idle home page their skeletons pulse indefinitely out of sight.
+    // Measured on the home screen: 553 running animations, ~60 style
+    // recalculations a second, 160-360ms of main-thread work per second while
+    // doing nothing (Chromium; heavier skins cost more per recalc). So a skeleton
+    // container starts paused and only pulses while it is on or near screen.
+    // The containers are released where they are replaced or removed: an
+    // IntersectionObserver never reports a target removed before it was ever
+    // visible, so it would otherwise hold them for the page's lifetime.
+    const SKELETON_OFFSCREEN_ATTR = 'data-skeleton-offscreen';
+    const watchedSkeletons = new Set();
+    const skeletonVisibility = typeof IntersectionObserver === 'function'
+        ? new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                entry.target.toggleAttribute(SKELETON_OFFSCREEN_ATTR, !entry.isIntersecting);
+            });
+            sweepSkeletons();
+        }, { rootMargin: '300px 0px' })
+        : null;
+
+    // Watched from where skeleton sections are built, so every caller is
+    // covered. Starts paused: a section that never scrolls into view never
+    // pulses.
+    function watchSkeleton(container) {
+        if (!skeletonVisibility || !container) return;
+        sweepSkeletons();
+        container.setAttribute(SKELETON_OFFSCREEN_ATTR, '');
+        skeletonVisibility.observe(container);
+        watchedSkeletons.add(container);
+    }
+
+    function releaseSkeleton(container) {
+        if (!skeletonVisibility || !container) return;
+        skeletonVisibility.unobserve(container);
+        watchedSkeletons.delete(container);
+    }
+
+    // Skeletons are replaced or removed along many paths, and a target removed
+    // before it was ever visible gets no observer callback. Drop any that have
+    // left the page whenever the observer fires or a new one is watched.
+    // (isConnected is false both before insertion and after removal, so only
+    // drop those that were seen connected once.)
+    function sweepSkeletons() {
+        watchedSkeletons.forEach((el) => {
+            if (el.isConnected) {
+                el.dataset.skeletonSeen = '1';
+            } else if (el.dataset.skeletonSeen) {
+                releaseSkeleton(el);
+            }
+        });
+    }
+
+    if (!document.getElementById('skeleton-offscreen-style')) {
+        const style = document.createElement('style');
+        style.id = 'skeleton-offscreen-style';
+        // !important: the padders and spotlight item set their animation inline.
+        style.textContent = `
+            [${SKELETON_OFFSCREEN_ATTR}] .skeleton-padder,
+            [${SKELETON_OFFSCREEN_ATTR}] .skeleton-text-line,
+            [${SKELETON_OFFSCREEN_ATTR}] .skeleton-spotlight-item {
+                animation-play-state: paused !important;
             }
         `;
         document.head.appendChild(style);
