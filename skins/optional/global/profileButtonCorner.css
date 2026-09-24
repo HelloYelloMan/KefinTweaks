@@ -1,0 +1,43 @@
+/* KefinTweaks -- Profile Button In Top-Right Corner (global add-on)
+ *
+ * Jellyfin 12's modern layout. Puts the profile (user menu) button in the
+ * toolbar's top-right corner: the same distance from the right edge as from
+ * the top, mirroring the menu button in the top-left corner, and apart from
+ * the search/cast group instead of next to it inside the toolbar's 3.3% side
+ * padding.
+ *
+ * It leaves the row: absolutely placed in a square as tall as the toolbar,
+ * pinned to its right edge, button centred. So right gap = top gap by
+ * construction, at any toolbar height (12px on the 64px desktop bar). MUI's
+ * Toolbar is position:relative, so it is the anchor. The toolbar keeps at
+ * least 4.5rem of right padding (a 64px square plus a gap) so on narrow
+ * screens the buttons cannot run under the avatar; at 3.3% of a wide screen
+ * it already has more than that. The safe-area term is jellyfin-web's own
+ * (.padded-right is max(3.3%, env(safe-area-inset-right))).
+ *
+ * Found by the button inside it (aria-controls="app-user-menu", jellyfin-web
+ * components/toolbar/UserMenuButton.tsx), not by position, so nothing added to
+ * the toolbar can flip it. The order/margin reset is for Abyss, which moves
+ * this box to the far left with a higher-specificity
+ * `.MuiToolbar-root:has(> .MuiStack-root:first-of-type) > .MuiBox-root:last-child
+ * { order: -1; margin-right: auto }`; harmless under other skins.
+ *
+ * No effect on the legacy layout, which has no MUI toolbar outside the
+ * dashboard. */
+
+header.MuiAppBar-root > .MuiToolbar-root > .MuiBox-root:has([aria-controls="app-user-menu"]) {
+    order: initial !important;
+    margin: 0 !important;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+header.MuiAppBar-root > .MuiToolbar-root:has(> .MuiBox-root [aria-controls="app-user-menu"]) {
+    padding-right: max(3.3%, 4.5rem, env(safe-area-inset-right));
+}
