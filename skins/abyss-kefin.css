@@ -132,6 +132,23 @@
     min-height: 7.2em;
 }
 
+/* One title rhythm on series, season and episode pages.
+ *
+ * abyss.css gives `.itemName { margin: .5em 0 !important }` and nothing to
+ * `.parentName`. Which of the two opens the ribbon depends on the page:
+ *
+ *   series    h1.itemName (the title)        -> 13px above and below
+ *   season    h1.parentName (the series)     -> 0
+ *   episode   h1.parentName, h3.itemName     -> 0, then 9px each side
+ *
+ * So a series title sat 14px lower with a 21px gap under it, a season's lines
+ * were 8px apart, and an episode's gaps ran 9 / 16 / 7px. Robert chose the
+ * season look for all three: nothing above the first line, the same small gap
+ * after every line, the last of them before the details row. */
+#itemDetailPage .detailRibbon .nameContainer > :is(.itemName, .parentName) {
+    margin: 0 0 0.5rem !important;
+}
+
 /* Pick the count / played pill text colour from the accent it sits on.
  *
  * abyss.css paints both pills with the accent and sets no colour, so the digits

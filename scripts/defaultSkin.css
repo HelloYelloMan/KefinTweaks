@@ -37,3 +37,32 @@ div#seriesScheduleSection {
 .itemBackdrop {
     pointer-events: none;
 }
+/* Default skin only: make room in the item page ribbon for a third title line.
+ *
+ * jellyfin-web makes .detailRibbon a fixed 7.2em band on desktop, pulled up over
+ * the backdrop by its own height, with its contents centred. An episode with an
+ * original title has three title lines -- series, episode, original title --
+ * plus the details row, and that block is taller than the band, so it spills
+ * out above it. Measured: the text starting 8px above the band.
+ *
+ * The band has to grow UPWARD, not down as it does under Abyss. The cover is
+ * `float: left` and drawn 193px above where it is laid out, so its float box
+ * starts exactly at the ribbon's bottom edge. The ribbon is a flex container,
+ * which steps sideways around any float it overlaps: letting it grow downward
+ * by a single pixel shoved the whole ribbon right by the cover's width (615px).
+ * Taller by the same amount it is pulled up keeps the bottom edge where it was.
+ *
+ * Only when there IS a third title line, so every other page stays exactly as
+ * jellyfin-web draws it. That is a subtitle holding a link (the episode's
+ * "Season 1 - 1. Title") plus an original title. Counting children is not
+ * enough: a season page also carries an h3.subtitle, but the server's branding
+ * CSS hides a subtitle with no link in it (`.subtitle:not(:has(a))`), so it
+ * takes no room. If that branding rule goes, a season page with an original
+ * title may need this too. The :has() subject is the ribbon itself, one
+ * element, so it is cheap to keep current. Scoped by the marker skinManager sets, because
+ * this sheet loads under every skin and ElegantFin lays the page out its own
+ * way. */
+html[data-kefin-skin="Default"].layout-desktop #itemDetailPage .detailRibbon:has(.nameContainer > .subtitle a):has(.nameContainer > .originalTitle) {
+    height: 9.6em;
+    margin-top: -9.6em;
+}

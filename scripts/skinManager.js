@@ -2937,6 +2937,17 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
         // needs it on every load, not only when the CSS is (re)attached.
         applyRequiredBaseTheme(skin);
 
+        /* Name the skin on <html>, so a stylesheet can target one skin.
+         *
+         * Every other skin can be targeted by its own stylesheet, which only
+         * loads with it. Default loads no CSS at all, so a rule meant for
+         * Default alone has nowhere to live except a sheet that loads for every
+         * skin (defaultSkin.css) -- and without this marker it would reach
+         * ElegantFin and Abyss too. Written only on a change: it is on <html>. */
+        if (skin?.name && document.documentElement.dataset.kefinSkin !== skin.name) {
+            document.documentElement.dataset.kefinSkin = skin.name;
+        }
+
         // Check if this skin is already loaded by looking at the DOM
         const currentSkinLink = document.querySelector('link[data-kefin-skin="true"]');
         const currentSkinName = currentSkinLink ? currentSkinLink.getAttribute('data-skin') : null;
