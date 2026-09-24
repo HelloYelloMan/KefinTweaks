@@ -282,11 +282,41 @@
         }
     }
     
+    // Modern layout: the crumbs are dressed as the header's own library buttons,
+    // so they follow whatever styling the active skin gives those (ElegantFin's
+    // pills, Abyss's glass buttons, MUI's defaults) instead of being bare text.
+    // Jellyfin 12 has no breadcrumb component of its own to borrow.
+    //
+    // The template is a real library link in the app bar: its classes carry
+    // MUI's generated button style (the css-* class) and match every skin rule
+    // written for those links. Not the server/brand link (it has an <img>
+    // start icon, which ElegantFin styles as a masthead) and not the active
+    // library (colorPrimary, the highlighted pill). State classes are dropped.
+    const NAV_BUTTON_TEMPLATE = 'header.MuiAppBar-root .MuiToolbar-root .MuiStack-root a.MuiButton-root:not(.MuiButton-colorPrimary):not(:has(img))';
+    const NAV_BUTTON_FALLBACK = ['MuiButtonBase-root', 'MuiButton-root', 'MuiButton-text', 'MuiButton-textInherit',
+        'MuiButton-sizeMedium', 'MuiButton-textSizeMedium', 'MuiButton-colorInherit'];
+    const TRANSIENT_CLASS = /^Mui-(focusVisible|disabled|selected|active)$/;
+
+    function isModernBreadcrumbs() {
+        return !!(breadcrumbContainer && breadcrumbContainer.closest('.kefinTweaks-breadcrumbs-wrapper--modern'));
+    }
+
+    function styleAsNavButton(element) {
+        const template = document.querySelector(NAV_BUTTON_TEMPLATE);
+        const classes = template
+            ? [...template.classList].filter((c) => !TRANSIENT_CLASS.test(c))
+            : NAV_BUTTON_FALLBACK;
+        element.classList.add(...classes, 'kefinTweaks-breadcrumb-button');
+    }
+
     // Create breadcrumb element from structure definition
     async function createBreadcrumbElementFromStructure(elementDef, item) {
         const element = document.createElement('span');
         element.className = 'kefinTweaks-breadcrumb-element';
         element.textContent = elementDef.text;
+        if (isModernBreadcrumbs()) {
+            styleAsNavButton(element);
+        }
         
         if (elementDef.clickable) {
             element.style.cursor = 'pointer';
@@ -522,6 +552,11 @@
         breadcrumbContainer = document.createElement('div');
         breadcrumbContainer.id = 'kefinTweaks-breadcrumbs';
         breadcrumbContainer.className = 'kefinTweaks-breadcrumbs';
+        if (isModern) {
+            // Same role as the header's library-link group, so a skin that frames
+            // that group (Abyss's glass bar around .MuiStack-root) frames this too.
+            breadcrumbContainer.classList.add('MuiStack-root');
+        }
         
         // Create popover container
         const popoverContainer = document.createElement('div');
@@ -852,6 +887,13 @@
     function createSeparator() {
         const separator = document.createElement('span');
         separator.className = 'kefinTweaks-breadcrumb-separator';
+        if (isModernBreadcrumbs()) {
+            // A chevron between button-styled crumbs; the slash reads as text.
+            separator.classList.add('material-icons');
+            separator.setAttribute('aria-hidden', 'true');
+            separator.textContent = 'chevron_right';
+            return separator;
+        }
         separator.textContent = ' / ';
         separator.style.margin = '0 8px';
         return separator;

@@ -158,3 +158,37 @@
 	max-width: initial !important;
 	white-space: nowrap;
 }
+
+/* Modern layout: the crumbs carry the header library buttons' classes (see
+   styleAsNavButton in breadcrumbs.js), so the skin styles them. What is left
+   here only undoes this sheet's own text-crumb rules, which would otherwise win:
+   `.kefinTweaks-breadcrumbs span { display: inline }` breaks the buttons'
+   inline-flex layout, the container's padding and colour would offset and tint
+   them, and the pointer-hover underline is a text-link affordance. */
+.kefinTweaks-breadcrumbs-wrapper--modern .kefinTweaks-breadcrumbs {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.25rem;
+	padding: 0.25rem 0;
+	color: inherit;
+	font-size: inherit;
+	overflow: visible;
+}
+
+.kefinTweaks-breadcrumbs-wrapper--modern .kefinTweaks-breadcrumbs .kefinTweaks-breadcrumb-button {
+	display: inline-flex;
+	white-space: nowrap;
+}
+
+.kefinTweaks-breadcrumbs-wrapper--modern .kefinTweaks-breadcrumbs span[style*="cursor: pointer"]:hover {
+	text-decoration: none !important;
+}
+
+.kefinTweaks-breadcrumbs-wrapper--modern .kefinTweaks-breadcrumb-separator {
+	display: inline-flex;
+	font-size: 1.25rem;
+	opacity: 0.6;
+	user-select: none;
+}
+
