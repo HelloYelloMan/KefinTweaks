@@ -121,7 +121,8 @@
             /* Drop Shadow for Top Header Icons - only inside the playback OSD */
             .skinHeader.osdHeader .paper-icon-button-light,
             .skinHeader.osdHeader .headerButton,
-            .skinHeader.osdHeader .headerLeft {
+            .skinHeader.osdHeader .headerLeft,
+            .videoOsd-appBar .MuiIconButton-root {
                 filter: drop-shadow(0 1px 3px rgba(0,0,0,0.8));
             }
 
@@ -135,6 +136,7 @@
 
             /* Text Shadows for Title and Time */
             .skinHeader.osdHeader .pageTitle,
+            .videoOsd-appBar .MuiTypography-root,
             .videoOsdBottom .osdTitle,
             .videoOsdBottom .osdTitleSmall,
             .videoOsdBottom .osdMediaInfo,
@@ -229,7 +231,13 @@
                 // the OSD page anyway, so closest() could never have found anything.
                 if (!targetContainer) targetContainer = getActiveOsdPage();
             } else {
-                targetContainer = header.querySelector('.headerRight') || header;
+                // Jellyfin 12's modern layout draws its own OSD header (a MUI
+                // toolbar, .videoOsd-appBar) and keeps the legacy .skinHeader
+                // mounted but hidden -- a logo put there is never seen. The
+                // legacy header still gets osdHeader toggled, so it stays the
+                // thing to watch; only the logo goes into the visible bar.
+                targetContainer = document.querySelector('.videoOsd-appBar')
+                    || header.querySelector('.headerRight') || header;
             }
 
             if (targetContainer) ensureLogo(targetContainer);
@@ -253,6 +261,9 @@
         let logoImg = document.getElementById('forced-osd-logo');
         if (!logoImg) {
             logoImg = createLogoElement(container);
+        } else if (!USE_CLEARART && !container.contains(logoImg)) {
+            // The modern OSD header is remounted on every visit to the player.
+            container.appendChild(logoImg);
         }
 
         const itemId = await getReliableItemId();

@@ -125,8 +125,14 @@
                 // Call API to remove from continue watching
                 await removeFromContinueWatching(itemId);
                 
-                // Remove the card from the DOM
-                card.remove();
+                // Remove the card from the DOM -- unless React rendered it (Jellyfin
+                // 12's modern library pages): React would throw on its next render
+                // trying to remove a node that is already gone, so hide it instead.
+                if (Object.keys(card).some((k) => k.startsWith('__reactFiber$'))) {
+                    card.style.display = 'none';
+                } else {
+                    card.remove();
+                }
                 
                 LOG(`Successfully removed item ${itemId} from continue watching`);
             } catch (error) {
@@ -222,6 +228,40 @@
         } catch (error) {
             ERROR('Failed to reset progress:', error);
             throw error;
+        }
+
+        await resetAlternateVersions(itemId);
+    }
+
+    // Jellyfin 12 makes resume version-aware: an item with alternate versions
+    // resumes from whichever version was played last, and Continue Watching shows
+    // that version's progress on the primary. Resetting only the primary leaves
+    // the card where it is, so reset any version that still has progress too.
+    // Each grouped version's media source id is that version's item id.
+    async function resetAlternateVersions(itemId) {
+        const norm = (id) => String(id || '').replace(/-/g, '').toLowerCase();
+        let item;
+        try {
+            item = await ApiClient.getItem(ApiClient.getCurrentUserId(), itemId);
+        } catch (error) {
+            WARN('Could not read versions for', itemId, error);
+            return;
+        }
+        const versionIds = (item?.MediaSources || [])
+            .map((source) => source.Id)
+            .filter((id) => id && norm(id) !== norm(itemId));
+        for (const versionId of versionIds) {
+            try {
+                const versionData = await fetchUserData(versionId);
+                if (versionData?.PlaybackPositionTicks > 0) {
+                    await updateUserDataProgress(versionId, versionData);
+                    LOG(`Also reset progress for version ${versionId} of ${itemId}`);
+                }
+            } catch (error) {
+                // A source that is not an item of its own (a multi-part file,
+                // say) has no user data; nothing to reset there.
+                WARN('Could not reset version', versionId, error);
+            }
         }
     }
 

@@ -504,6 +504,9 @@
     
         // Register onViewPage handler to sync active tab state
         window.KefinTweaksUtils.onViewPage((view, element, hash) => {
+            // Jellyfin 12's modern layout keeps the legacy header (and its tabs)
+            // mounted but hidden, and drives its own tabs from the URL.
+            if (window.KefinTweaksUtils.isModernUI?.()) return;
             LOG('onViewPage handler triggered for view:', view);
             addClickListeners();
             // Get selected tab from hash

@@ -785,8 +785,16 @@
         if (!headerCtl) return;
         if (!themeControlsActive) { setControlsVisible(false); return; }
 
-        const header = document.querySelector('.skinHeader');
-        const right = document.querySelector('.headerRight');
+        let header = document.querySelector('.skinHeader');
+        let right = document.querySelector('.headerRight');
+        // Jellyfin 12's modern layout keeps the legacy header mounted but hidden
+        // (it measures 0 tall and 0 wide) and shows a MUI app bar instead. Anchor
+        // to that, or the controls end up in the top-left corner.
+        if (header && header.offsetHeight === 0) {
+            const bar = document.querySelector('.MuiAppBar-root');
+            header = bar;
+            right = bar && (bar.querySelector('.MuiToolbar-root') || bar);
+        }
         if (!header || !right) { setControlsVisible(false); return; }
 
         // Hide once scrolled past the wiggle room. Window-level scroll on these pages

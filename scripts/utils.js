@@ -307,8 +307,15 @@
         const currentUrl = window.location.hash;
         
         // Check if the current URL matches any of the specified pages
+        const currentView = (getCurrentView() || '').replace(/\.html$/, '');
         return pages.some(page => {
             if (typeof page === 'string') {
+                // A plain page name must not claim a longer route that merely
+                // starts with it: Jellyfin 12's modern layout adds #/homevideos,
+                // which 'home' would otherwise match.
+                if (/^[A-Za-z]+$/.test(page) && currentView && currentView !== page && currentView.startsWith(page)) {
+                    return false;
+                }
                 // Check if URL hash contains the page pattern
                 return currentUrl.includes(`/${page}.html`) || currentUrl.includes(`/${page}`) || currentUrl.includes(page);
             } else if (page instanceof RegExp) {

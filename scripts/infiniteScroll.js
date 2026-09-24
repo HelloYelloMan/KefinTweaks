@@ -775,6 +775,11 @@
     function shouldInitialize() {
         if (hasInitialized) return false;
 
+        // Jellyfin 12's modern layout renders library grids with React and pages
+        // them with its own controls; cards appended into its container vanish on
+        // the next render and throw off the paging. Legacy layout only.
+        if (window.KefinTweaksUtils?.isModernUI?.()) return false;
+
         const page = getCurrentPage();
         const container = getContainer();
         
