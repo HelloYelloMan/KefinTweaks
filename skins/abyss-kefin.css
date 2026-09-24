@@ -234,3 +234,21 @@
 .card:hover .cardScalable .cardOverlayContainer {
     border-color: rgba(245, 245, 247, 0.2) !important;
 }
+
+/* Profile button: top right, apart from the other buttons.
+ *
+ * Abyss moves the modern toolbar's profile box to the far left
+ * (`.MuiToolbar-root:has(> .MuiStack-root:first-of-type) > .MuiBox-root:last-child
+ * { order: -1; margin-right: auto }`). Robert wants it on the right, in the
+ * corner, separated from the search/cast group, at the same height as the
+ * other buttons and inset by the toolbar's own right padding.
+ *
+ * Targeted by the button inside it (aria-controls="app-user-menu", jellyfin-web
+ * components/toolbar/UserMenuButton.tsx), not by :last-child, so it cannot flip
+ * when something else is added to the toolbar. !important because Abyss's rule
+ * has the higher specificity. */
+header.MuiAppBar-root > .MuiToolbar-root > .MuiBox-root:has([aria-controls="app-user-menu"]) {
+	order: initial !important;
+	margin-right: 0 !important;
+	margin-left: 1.5em !important;
+}

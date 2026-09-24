@@ -536,7 +536,16 @@
         
         wrapper.appendChild(breadcrumbContainer);
         wrapper.appendChild(popoverContainer);
-        mount.appendChild(wrapper);
+        if (isModern && mount.lastElementChild) {
+            // Not as the toolbar's last child: skins select the profile box as
+            // `.MuiToolbar-root > .MuiBox-root:last-child` (Abyss moves it with
+            // that), and appending here stopped the rule matching from the first
+            // breadcrumb page until a reload. Positioned absolutely, so where it
+            // sits among the toolbar's children changes nothing visually.
+            mount.insertBefore(wrapper, mount.lastElementChild);
+        } else {
+            mount.appendChild(wrapper);
+        }
         
         log(isModern
             ? 'Created breadcrumb container inside .MuiToolbar-root'
