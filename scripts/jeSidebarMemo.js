@@ -30,10 +30,11 @@
 //
 // SAFETY
 // ------
-// * Only POSITIVE results are cached, and only while the element is still
-//   connected. A null result is never cached, so nothing is delayed during the
-//   window before the drawer exists — JE's own "wait and retry" behaviour is
-//   untouched.
+// * POSITIVE results are cached only while the element is still connected. A
+//   null result is cached only in Jellyfin 12's modern layout, where it is the
+//   steady answer on desktop (see memoisedGetSidebarContainer); elsewhere it is
+//   never cached, so nothing is delayed during the window before the drawer
+//   exists — JE's own "wait and retry" behaviour is untouched.
 // * The cache is dropped on every `viewshow`, so a navigation always revalidates.
 // * Everything is feature-detected and wrapped in try/catch: if Jellyfin Enhanced
 //   is absent, renamed, or restructured by an update, this silently does nothing.
@@ -49,6 +50,7 @@
     const TTL_MS = 2000;
 
     let cached = null;
+    let cachedNull = false;
     let cachedAt = 0;
 
     function patch() {
@@ -64,12 +66,29 @@
             if (cached && cached.isConnected && (now - cachedAt) < TTL_MS) {
                 return cached;
             }
+            // Jellyfin 12's modern layout: the answer on a desktop-width window is
+            // always null. JE's first check reads offsetParent on the legacy
+            // drawer, which modern keeps mounted inside a display:none header, so
+            // it forces a full style flush and fails every time; and modern has
+            // no MUI drawer above 900px. Only positive results were cached, so
+            // every body mutation paid that flush -- measured at 7s of a 22s
+            // scroll down the home screen. Cache the null too, for the same TTL
+            // and viewshow reset; a drawer that appears on a narrow window is
+            // then picked up within TTL_MS.
+            if (cachedNull && (now - cachedAt) < TTL_MS) {
+                return null;
+            }
             const result = original.apply(this, arguments);
+            cachedNull = false;
             if (result && result.isConnected) {
                 cached = result;
                 cachedAt = now;
             } else {
                 cached = null;
+                if (!result && window.KefinTweaksUtils?.isModernUI?.()) {
+                    cachedNull = true;
+                    cachedAt = now;
+                }
             }
             return result;
         }
@@ -86,6 +105,7 @@
     // Any navigation may swap the drawer out entirely.
     document.addEventListener('viewshow', () => {
         cached = null;
+        cachedNull = false;
         cachedAt = 0;
     }, true);
 
