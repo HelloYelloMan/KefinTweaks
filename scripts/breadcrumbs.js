@@ -536,16 +536,16 @@
         
         wrapper.appendChild(breadcrumbContainer);
         wrapper.appendChild(popoverContainer);
-        if (isModern && mount.lastElementChild) {
-            // Not as the toolbar's last child: skins select the profile box as
-            // `.MuiToolbar-root > .MuiBox-root:last-child` (Abyss moves it with
-            // that), and appending here stopped the rule matching from the first
-            // breadcrumb page until a reload. Positioned absolutely, so where it
-            // sits among the toolbar's children changes nothing visually.
-            mount.insertBefore(wrapper, mount.lastElementChild);
-        } else {
-            mount.appendChild(wrapper);
-        }
+        // Appended as the toolbar's last child. Never put it directly before the
+        // profile box: Jellyfin Enhanced finds the header's button group as the
+        // profile box's previousElementSibling and prepends its buttons there, so
+        // its dice button landed inside our wrapper, on a line of its own under
+        // the header, whenever breadcrumbs were built first (a reload on a
+        // series page). The wrapper is positioned absolutely, so where it sits
+        // among the toolbar's children changes nothing visually. (Being last
+        // stops Abyss's `.MuiBox-root:last-child` rule from moving the profile
+        // box, which abyss-kefin.css undoes anyway.)
+        mount.appendChild(wrapper);
         
         log(isModern
             ? 'Created breadcrumb container inside .MuiToolbar-root'
