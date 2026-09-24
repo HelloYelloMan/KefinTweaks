@@ -298,6 +298,30 @@
                         name: 'OLED Dark Theme',
                         url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/OLEDTheme.css`,
                         enabled: false
+                    },
+                    {
+                        // TEMPORARY. mihaif7's companion sheet that makes ElegantFin
+                        // work on Jellyfin 12's Modern layout, which upstream
+                        // ElegantFin declines to support for now (lscambo13/ElegantFin
+                        // #309). Its own README calls it temporary: drop this once
+                        // upstream covers Modern. Every rule on a shared page is
+                        // scoped by body:has(.MuiAppBar-root), so the Legacy layout
+                        // is untouched.
+                        //
+                        // An optional include rather than one of the skin's urls:
+                        // includes load after the skin's files, and the sheet must
+                        // come after ElegantFin's Media Bar add-on (the Media Bar
+                        // Support include above), hence loadLast -- include order is
+                        // otherwise whatever order their requests finish in.
+                        //
+                        // Pinned to a release, not @main: it tracks the ElegantFin
+                        // version it was written against (v26.09.05, the base copy in
+                        // skins/), and a floating URL would change under us. Bump
+                        // both together.
+                        name: 'Jellyfin 12 Modern Layout Support (elegantfin-jf12)',
+                        url: 'https://cdn.jsdelivr.net/gh/mihaif7/elegantfin-jf12@v26.09.21/Theme/ElegantFin-jf12-modern-v26.09.21.css',
+                        enabled: true,
+                        loadLast: true
                     }
                 ]
             },

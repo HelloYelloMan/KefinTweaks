@@ -925,7 +925,7 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
                 const isEnabled = isOptionalIncludeEnabled(key, include.enabled || false, userConfig);
                 
                 if (isEnabled && include.url) {
-                    withSkinCacheToken(include.url).then((url) => loadOptionalIncludeCSS(url, skin.name));
+                    withSkinCacheToken(include.url).then((url) => loadOptionalIncludeCSS(url, skin.name, { last: include.loadLast === true }));
                 }
             });
         }
@@ -1008,7 +1008,7 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
      * @param {string} url - The CSS URL
      * @param {string} skinName - The skin name
      */
-    function loadOptionalIncludeCSS(url, skinName) {
+    function loadOptionalIncludeCSS(url, skinName, options = {}) {
         // Check if this CSS is already loaded in the DOM
         const existingLink = document.querySelector(`link[href="${url}"]`);
         if (existingLink) {
@@ -1037,6 +1037,18 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
             insertAfter = skinLinks[skinLinks.length - 1];
         } else {
             insertAfter = document.getElementById('cssTheme');
+        }
+
+        // An include flagged loadLast has to follow the skin's other includes
+        // (the elegantfin-jf12 companion must load after ElegantFin's Media Bar
+        // add-on). Includes arrive in whatever order their cache-token HEAD
+        // requests finish, each inserted straight after the skin, so their order
+        // is otherwise arbitrary. Put this one after every include present now;
+        // any that arrive later still go in right after the skin, ahead of it.
+        if (options.last) {
+            link.setAttribute('data-kefin-load-last', 'true');
+            const includes = document.querySelectorAll('link[data-kefin-optional-include="true"]');
+            if (includes.length > 0) insertAfter = includes[includes.length - 1];
         }
         
         if (insertAfter && insertAfter.parentNode) {
@@ -3128,9 +3140,16 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
     function syncProfileCornerInset() {
         const button = profileCornerToolbar && profileCornerToolbar.querySelector('[aria-controls="app-user-menu"]');
         if (!button) return;
-        const gap = button.getBoundingClientRect().top - profileCornerToolbar.getBoundingClientRect().top;
+        const bar = profileCornerToolbar.getBoundingClientRect();
+        const rect = button.getBoundingClientRect();
+        const gap = rect.top - bar.top;
         if (!(gap >= 0)) return;
-        const inset = Math.round(gap * 10) / 10 + 'px';
+        // The right gap is the padding plus whatever the skin adds after the
+        // button (the elegantfin-jf12 companion gives it margin-right: 0.93rem),
+        // so pad by what is left of the top gap once that is counted.
+        const padding = parseFloat(getComputedStyle(profileCornerToolbar).paddingRight) || 0;
+        const extra = (bar.right - rect.right) - padding;
+        const inset = Math.round(Math.max(0, gap - extra) * 10) / 10 + 'px';
         // !important: ElegantFin sets the side padding with !important, which a
         // plain inline style does not beat.
         if (profileCornerToolbar.style.getPropertyValue('padding-right') !== inset) {
