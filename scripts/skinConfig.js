@@ -206,15 +206,6 @@
                 // new key has no entry in either config, so this is what
                 // isOptionalIncludeEnabled falls through to.
                 enabled: true
-            },
-            {
-                // Jellyfin 12 modern layout only. Moved here from abyss-kefin.css
-                // so it applies under any skin; it also undoes Abyss's move of the
-                // button to the far left. On by default for the same reason as
-                // the two options above.
-                name: 'Profile Button In Top-Right Corner',
-                url: `${getKefinTweaksRoot()}skins/optional/global/profileButtonCorner.css`,
-                enabled: true
             }
         ],
         
