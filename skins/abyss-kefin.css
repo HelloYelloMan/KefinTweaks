@@ -253,3 +253,42 @@ header.MuiAppBar-root > .MuiToolbar-root > .MuiBox-root:has([aria-controls="app-
 	order: initial !important;
 	margin-right: 0 !important;
 }
+
+/* Item page ribbon: start the band where its contents start.
+ *
+ * Abyss paints .detailRibbon as a full-width rgba(0,0,0,.2) band on desktop.
+ * Its contents begin far in from the left -- the ribbon's padding-left reserves
+ * the poster's column (32.45vw from jellyfin-web, 28.45/23.45vw from Abyss at
+ * narrower widths) -- so the band ran under and beside the poster to the screen
+ * edge. Robert wants it cut short: starting just before the contents, with
+ * Abyss's rounding on the left corners, and still running to the right edge.
+ *
+ * The padding-left varies, so the band is not placed against it: it is a
+ * pseudo-element of .infoWrapper, the ribbon's first child, which always starts
+ * where the contents do. It reaches 1.5em left of it, out to the ribbon's right
+ * edge (clipped there by overflow:hidden), and over the ribbon's own 0.5em top
+ * and bottom padding (abyss.css). isolation:isolate on the ribbon keeps the
+ * z-index:-1 band above the page but below the contents. */
+:is(.layout-desktop, .layout-tv) #itemDetailPage .detailRibbon {
+	background: transparent !important;
+	isolation: isolate;
+	overflow: hidden;
+}
+
+:is(.layout-desktop, .layout-tv) #itemDetailPage .detailRibbon > .infoWrapper {
+	position: relative;
+	align-self: stretch;
+}
+
+:is(.layout-desktop, .layout-tv) #itemDetailPage .detailRibbon > .infoWrapper::before {
+	content: '';
+	position: absolute;
+	z-index: -1;
+	top: -0.5em;
+	bottom: -0.5em;
+	left: -1.5em;
+	right: -100vw;
+	background: rgba(0, 0, 0, 0.2);
+	border-radius: var(--abyss-radius, 12px) 0 0 var(--abyss-radius, 12px);
+	pointer-events: none;
+}
