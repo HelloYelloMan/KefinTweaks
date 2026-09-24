@@ -8,7 +8,10 @@ here has been tested on a 12 server yet. Items that need a live test are marked 
 Jellyfin changed its version scheme: after 10.11.x comes **12.0** (2026-09-07), then
 **12.1** (2026-09-14). `/System/Info` reports `"12.1.0"`.
 
-## 0. Status on branch `jellyfin12`
+## 0. Status on `master` (the Jellyfin 12 line)
+
+The 10.11 line is kept as branch `legacy-10.11` (formerly `experimental`); `master` was
+branched from it as `jellyfin12`.
 
 Every change is written to keep 10.11 behaving as before: each 12 path is chosen by
 feature detection or by server version. None of it has run in a browser yet.
@@ -44,7 +47,7 @@ feature detection or by server version. None of it has run in a browser yet.
 - Episode Show Title and Card Focus After Back live in the JS Injector config, not the repo (§3).
 
 **Deploying:**
-- The files changed against `experimental` are `helpers/websocketHelper.js`, `injector.js`, `kefinTweaks-plugin.js`, `skins/elegant-kefin.css` and, under `scripts/`: `apiHelper`, `breadcrumbs`, `dashboardButtonFix`, `hamburgerMenu`, `headerTabs`, `homeScreen`, `homeScreen3`, `infiniteScroll`, `kefinTweaks-loader`, `mediaTags`, `osdLogo`, `pauseScreen`, `posterAspect`, `removeContinue`, `search`, `subtitleSearch`, `themeMediaCastFix`, `updoot`, `utils`, `virtualSpecials`, `watchlist` (all `.js`).
+- The files changed against `legacy-10.11` are `helpers/websocketHelper.js`, `injector.js`, `kefinTweaks-plugin.js`, `skins/elegant-kefin.css` and, under `scripts/`: `apiHelper`, `breadcrumbs`, `dashboardButtonFix`, `hamburgerMenu`, `headerTabs`, `homeScreen`, `homeScreen3`, `infiniteScroll`, `kefinTweaks-loader`, `mediaTags`, `osdLogo`, `pauseScreen`, `posterAspect`, `removeContinue`, `search`, `subtitleSearch`, `themeMediaCastFix`, `updoot`, `utils`, `virtualSpecials`, `watchlist` (all `.js`).
 - The first admin page load after deploying or upgrading rewrites the baked `KefinTweaks-injector` entry and posterAspect's File Transformation rules. Reload once after that.
 - posterAspect's rules then need one more reload before jellyfin-web is served patched.
 
