@@ -490,9 +490,13 @@
     }
 
     function createBreadcrumbContainer() {
-        if (breadcrumbContainer) {
+        if (breadcrumbContainer && breadcrumbContainer.isConnected) {
             return breadcrumbContainer;
         }
+        // Jellyfin 12's modern toolbar is React-owned and remounted (after the
+        // video player, for one), taking our wrapper with it. Build a new one
+        // rather than keep writing into the detached copy.
+        breadcrumbContainer = null;
 
         const isModern = isModernUI();
         const mount = resolveBreadcrumbMount();
@@ -886,7 +890,9 @@
             log('Target breadcrumb structure:', targetStructure.elements.map(e => e.text));
             
             // Check if we need to create breadcrumbs from scratch
-            if (!breadcrumbContainer || !currentBreadcrumbs) {
+            // A container the toolbar has dropped (see createBreadcrumbContainer)
+            // has to be rebuilt in full; diffing into it would change nothing seen.
+            if (!breadcrumbContainer || !breadcrumbContainer.isConnected || !currentBreadcrumbs) {
                 log('Creating breadcrumbs from scratch');
                 await createBreadcrumbsFromScratch(targetStructure);
             } else {
@@ -913,7 +919,7 @@
     // Create breadcrumbs from scratch
     async function createBreadcrumbsFromScratch(targetStructure) {
         // Create container if it doesn't exist (retry briefly on ModernUI if toolbar not ready)
-        if (!breadcrumbContainer) {
+        if (!breadcrumbContainer || !breadcrumbContainer.isConnected) {
             breadcrumbContainer = await ensureBreadcrumbContainer();
         }
         if (!breadcrumbContainer) {

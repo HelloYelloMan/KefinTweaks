@@ -3,10 +3,20 @@
 	display: none;
 }
 
-.MuiToolbar-root:has(.kefinTweaks-breadcrumbs-wrapper) {
-	display: grid;
-	grid-template-columns: auto 1fr auto;
-	grid-template-rows: 1fr auto;
+/* Breadcrumbs take a full-width line of their own under the toolbar's row.
+   This used to turn the toolbar into a 3-column grid, which only works while it
+   has exactly three children. Jellyfin 12's has a variable number (drawer
+   button or server/library stack, the right-hand button box, the user menu,
+   plus our hamburger button), and the extras were placed into the wrong
+   columns, moving search/cast/our buttons out of the top-right corner.
+   Wrapping keeps the toolbar's own flex layout for the first line. */
+.MuiToolbar-root:has(> .kefinTweaks-breadcrumbs-wrapper) {
+	flex-wrap: wrap;
+}
+
+.MuiToolbar-root > .kefinTweaks-breadcrumbs-wrapper {
+	flex-basis: 100%;
+	order: 99;
 }
 
 @media (min-width: 768px) {

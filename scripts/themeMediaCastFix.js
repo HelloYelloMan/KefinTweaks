@@ -145,10 +145,43 @@
         }
         nativeRow.parentNode.insertBefore(clone, nativeRow.nextSibling);
     }
+    // Jellyfin 12's modern layout renders the Display page with React: there are
+    // no .fldThemeSong/.fldThemeVideo rows to clone, and its checkboxes load from
+    // and save to the native keys -- which forceNativeThemeOff keeps false. So the
+    // boxes always showed unchecked and changing them did nothing to our playback.
+    // Bind them to our keys instead: bring each box to our value when the page
+    // opens (clicking it, so React's own form state follows), and store every
+    // change. A Save writes the native keys too; forceNativeThemeOff resets those
+    // on the next view, before native theme media could start. The ids are the
+    // stable describedby ids on each FormControlLabel, not translated text.
+    const MODERN_THEME_LABELS = {
+        songs: 'display-settings-lib-theme-songs-description',
+        videos: 'display-settings-lib-theme-videos-description'
+    };
+    function bindModernThemeInputs() {
+        let found = false;
+        ['songs', 'videos'].forEach((which) => {
+            const input = document.querySelector(
+                '[aria-describedby="' + MODERN_THEME_LABELS[which] + '"] input[type="checkbox"]');
+            if (!input) return;
+            found = true;
+            if (input.dataset.kefinThemeBound) return;
+            input.dataset.kefinThemeBound = '1';
+            input.addEventListener('change', () => {
+                tmSet(which, input.checked);
+                LOG('theme ' + which + ' set to', input.checked);
+            });
+            const wanted = which === 'videos' ? enableThemeVideos() : enableThemeSongs();
+            if (input.checked !== wanted) input.click();
+        });
+        if (found) LOG('bound the Display page theme checkboxes');
+        return found;
+    }
+
     function customizeThemeSettings() {
         const songRow = document.querySelector('.fldThemeSong');
         const videoRow = document.querySelector('.fldThemeVideo');
-        if (!songRow && !videoRow) return false;
+        if (!songRow && !videoRow) return bindModernThemeInputs();
         if (document.querySelector('.kefinThemeToggle')) return true; // already applied
         if (songRow) rebindThemeRow(songRow, 'songs');
         if (videoRow) rebindThemeRow(videoRow, 'videos');
