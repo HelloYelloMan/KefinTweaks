@@ -1455,6 +1455,16 @@
                         name: 'Unblurred Backdrop and Theme Video',
                         url: `${getKefinTweaksRoot()}skins/optional/Abyss/unblurredBackdrop.css`,
                         enabled: false
+                    },
+                    {
+                        // Ours. Abyss's backdrop blur on every card badge is recomputed
+                        // each frame while scrolling; Robert found scrolling smoother
+                        // without it. On by default -- a brand new key has no entry in
+                        // either config, so isOptionalIncludeEnabled falls through to
+                        // this.
+                        name: 'No Blur Behind Card Badges (smoother scrolling)',
+                        url: `${getKefinTweaksRoot()}skins/optional/Abyss/noBadgeBlur.css`,
+                        enabled: true
                     }
                 ]
             },

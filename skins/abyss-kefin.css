@@ -292,15 +292,3 @@ header.MuiAppBar-root > .MuiToolbar-root > .MuiBox-root:has([aria-controls="app-
 	border-radius: var(--abyss-radius, 12px) 0 0 var(--abyss-radius, 12px);
 	pointer-events: none;
 }
-
-/* No backdrop blur behind card badges.
- *
- * abyss.css gives every .indicator (the unplayed-count and played badges on
- * each card) `backdrop-filter: blur(2px)`. A backdrop blur is recomputed every
- * frame while the page scrolls, and there is one per card: 36 on screen at once
- * in a library grid, 100 on the page. Robert confirmed scrolling is smoother
- * without it; at 2px the blur behind a small badge was barely visible anyway. */
-.indicator {
-	-webkit-backdrop-filter: none !important;
-	backdrop-filter: none !important;
-}

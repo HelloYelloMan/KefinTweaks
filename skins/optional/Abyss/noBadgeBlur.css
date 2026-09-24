@@ -1,0 +1,13 @@
+/* KefinTweaks -- Abyss: No Blur Behind Card Badges (optional include)
+ *
+ * abyss.css gives every .indicator (the unplayed-count and played badges on
+ * each card) `backdrop-filter: blur(2px)`. A backdrop blur is recomputed every
+ * frame while the page scrolls, and there is one per card: 36 on screen at once
+ * in a library grid, 100 on the page. Robert confirmed scrolling is smoother
+ * without it; at 2px the blur behind a small badge was barely visible anyway.
+ * A toggle rather than a line in abyss-kefin.css, like the unblurred backdrop:
+ * it trades a (small) part of Abyss's look for smoothness. */
+.indicator {
+	-webkit-backdrop-filter: none !important;
+	backdrop-filter: none !important;
+}
