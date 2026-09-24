@@ -117,6 +117,7 @@
      * shadowed -- narrow patterns make that less likely, not impossible.
      */
     const COVER_ENTRY_ID = 'b7d4f1a0-3c68-4e92-8a15-6f0b9d2c7e83';
+    const MODERN_CARD_ENTRY_ID = 'e2a9c4d7-5b18-4f63-9c0e-8d3f6a1b2c45';
 
     const ENTRIES_V11 = [
         {
@@ -154,6 +155,19 @@
             FilenamePattern: String.raw`itemDetails\.[0-9a-f]+\.chunk\.js`,
             SearchText: `'<div class="card '.concat(i,'Card">`,
             ReplaceText: `'<div class="card '.concat(i,'Card ',(t.PrimaryImageAspectRatio>0?'par-'+Math.round(t.PrimaryImageAspectRatio*100):''),'">`
+        },
+        /* Jellyfin 12's modern layout draws library grids with React cards
+         * (components/cardbuilder/Card/useCard.ts), which the card builder rule
+         * never reaches, so every poster there fell back to the default ratio.
+         * useCard builds the card's class list with classNames(); in the 12.1
+         * build that is chunk 52197, the item is `c`, and the list ends with
+         * {itemAction:...}. The ratio class goes in as one more argument. The
+         * library queries request PrimaryImageAspectRatio (hooks/useFetchItems). */
+        {
+            Id: MODERN_CARD_ENTRY_ID,
+            FilenamePattern: String.raw`52197\.[0-9a-f]+\.chunk\.js`,
+            SearchText: `{itemAction:H.A.tv}),C=L()("cardBox"`,
+            ReplaceText: `{itemAction:H.A.tv},c.PrimaryImageAspectRatio>0?"par-"+Math.round(100*c.PrimaryImageAspectRatio):""),C=L()("cardBox"`
         }
     ];
 
