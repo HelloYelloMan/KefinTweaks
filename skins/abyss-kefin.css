@@ -235,40 +235,33 @@
     border-color: rgba(245, 245, 247, 0.2) !important;
 }
 
-/* Profile button: in the top-right corner, apart from the other buttons.
+/* Profile button: at the right end of the modern toolbar, in the corner.
  *
- * Abyss moves the modern toolbar's profile box to the far left
+ * Abyss moves the profile box to the far left
  * (`.MuiToolbar-root:has(> .MuiStack-root:first-of-type) > .MuiBox-root:last-child
- * { order: -1; margin-right: auto }`). Robert wants it in the top-right corner
- * instead: at its usual distance from the top, and the same distance from the
- * right -- mirroring the menu button in the top-left corner -- rather than
- * inside the toolbar's 3.3% side padding next to search/cast.
+ * { order: -1; margin-right: auto }`), which Robert expects is a mistake Abyss
+ * will undo -- its own screenshots, all of the Legacy layout, keep it on the
+ * right. Until then: undo that move, and put the button in the corner.
  *
- * So it leaves the row: absolutely placed in a square as tall as the toolbar,
- * pinned to its right edge, button centred. Right gap = top gap by
- * construction, at any toolbar height (12px on the 64px desktop bar). The
- * search/cast group keeps its own place, which is what sets the two apart.
- * The toolbar keeps at least 4.5rem of right padding (a 64px square plus a
- * gap) so on narrow screens the buttons cannot run under the avatar; at 3.3%
- * of a wide screen it is already more than that.
+ * Corner = the same gap to the right edge as to the top. Abyss's toolbar is
+ * 64px tall and the button 40px, centred, so the top gap is 12px; the
+ * toolbar's right padding (jellyfin-web's 3.3% .padded-right page gutter,
+ * ~93px on a wide screen) becomes that same 12px. The button stays in the row,
+ * so Abyss's own `margin-left` on it (equal to the 7.1px `gap` between the
+ * other header buttons) spaces it from search exactly like its neighbours.
+ * (Placing it absolutely instead mis-centred it by half that margin: 8.4px on
+ * the right against 12px on top.)
  *
  * Found by the button inside it (aria-controls="app-user-menu", jellyfin-web
  * components/toolbar/UserMenuButton.tsx), not by :last-child, so nothing added
  * to the toolbar can flip it. !important because Abyss's rule has the higher
- * specificity. MUI's Toolbar is position:relative, so it is the anchor. */
+ * specificity. */
 header.MuiAppBar-root > .MuiToolbar-root > .MuiBox-root:has([aria-controls="app-user-menu"]) {
 	order: initial !important;
-	margin: 0 !important;
-	position: absolute;
-	top: 0;
-	bottom: 0;
-	right: 0;
-	aspect-ratio: 1;
-	display: flex;
-	align-items: center;
-	justify-content: center;
+	margin-right: 0 !important;
 }
 
 header.MuiAppBar-root > .MuiToolbar-root:has(> .MuiBox-root [aria-controls="app-user-menu"]) {
-	padding-right: max(3.3%, 4.5rem, env(safe-area-inset-right));
+	/* (64px toolbar - 40px button) / 2: the top gap. */
+	padding-right: max(12px, env(safe-area-inset-right));
 }
