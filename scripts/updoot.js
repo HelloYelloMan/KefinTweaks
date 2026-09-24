@@ -29,11 +29,11 @@
         async function fetchItemDetails(itemId) {
             console.log('Fetching item details for itemId:', itemId);
             try {
-                const url = `${serverUrl}/Items/${itemId}?api_key=${apiKey}`; // Fixed typo from original: 'melalui' to 'apiKey'
+                const url = `${serverUrl}/Items/${itemId}?ApiKey=${apiKey}`; // Fixed typo from original: 'melalui' to 'apiKey'
                 console.log('Requesting:', url);
                 const response = await fetch(url, {
                     method: 'GET',
-                    headers: { 'X-Emby-Token': apiKey }
+                    headers: { 'Authorization': `MediaBrowser Token="${apiKey}"` }
                 });
                 if (!response.ok) {
                     console.error('Fetch item details failed:', `HTTP ${response.status}`);
@@ -719,7 +719,7 @@
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-Emby-Token': apiKey // Added for potential backend auth
+                        'Authorization': `MediaBrowser Token="${apiKey}"` // Added for potential backend auth
                     }
                 });
                 if (!response.ok) {
@@ -776,10 +776,10 @@
                     });
 
                     const imageUrl = itemDetails.ImageTags?.Primary
-                        ? `${serverUrl}/Items/${itemId}/Images/Primary?api_key=${apiKey}`
+                        ? `${serverUrl}/Items/${itemId}/Images/Primary?ApiKey=${apiKey}`
                         : '';
                     const logoUrl = itemDetails.ImageTags?.Logo
-                        ? `${serverUrl}/Items/${itemId}/Images/Logo?api_key=${apiKey}`
+                        ? `${serverUrl}/Items/${itemId}/Images/Logo?ApiKey=${apiKey}`
                         : '';
 
                     card.innerHTML = `

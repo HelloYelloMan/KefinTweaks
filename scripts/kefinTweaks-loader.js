@@ -305,7 +305,7 @@
             name: 'cardBuilder',
             script: 'cardBuilder.js',
             css: 'cardBuilder.css',
-            dependencies: ['apiHelper', 'userHelper'],
+            dependencies: ['apiHelper', 'userHelper', 'websocketHelper'],
             description: 'Core card building functionality (required by other scripts)'
         },
         {
@@ -404,7 +404,7 @@
             name: 'homeScreen',
             script: 'homeScreen3.js',
             css: 'homeScreen.css',
-            dependencies: ['cardBuilder', 'localStorageCache', 'utils', 'userHelper', 'homeScreenConfig2', 'homeScreen-configuration', 'peopleCache', 'studiosCache', 'moviesCache', 'seriesCache', 'libraryCache', 'libraryCacheUtils', 'externalList', 'indexedDBCache', 'homeScreenConfigCommunity', 'dataHelper', 'apiHelper', 'sectionHelper', 'homeScreen-migration', 'homeScreen-user-configuration', 'homeScreenSectionConfigure', 'homeScreenPin'],
+            dependencies: ['cardBuilder', 'localStorageCache', 'utils', 'userHelper', 'homeScreenConfig2', 'homeScreen-configuration', 'peopleCache', 'studiosCache', 'moviesCache', 'seriesCache', 'libraryCache', 'libraryCacheUtils', 'externalList', 'indexedDBCache', 'homeScreenConfigCommunity', 'dataHelper', 'apiHelper', 'sectionHelper', 'homeScreen-migration', 'homeScreen-user-configuration', 'homeScreenSectionConfigure', 'homeScreenPin', 'websocketHelper'],
             priority: true, // Load immediately after dependencies to reduce UI disruption
             description: 'Adds custom home screen sections'
         },
@@ -1214,6 +1214,16 @@
         return !!(entry && entry.Enabled !== false);
     }
 
+    // Jellyfin 12 URI-encodes these when it creates the ApiClient, so deviceId() and
+    // friends come back already encoded; the server decodes the header once. Decode
+    // first, as jellyfin-web does, or a doubly encoded DeviceId registers these
+    // requests as a separate device and session.
+    function encodeAuthParam(value) {
+        let decoded = String(value);
+        try { decoded = decodeURIComponent(decoded); } catch (e) { /* not encoded */ }
+        return encodeURIComponent(decoded);
+    }
+
     function getInjectorAuthHeader() {
         const token = window.ApiClient && typeof window.ApiClient.accessToken === 'function'
             ? window.ApiClient.accessToken()
@@ -1229,11 +1239,11 @@
             ? window.ApiClient.deviceId()
             : '';
         const version = window.ApiClient._appVersion || window.ApiClient._serverVersion || '';
-        return 'MediaBrowser Client="' + encodeURIComponent(client)
-            + '", Device="' + encodeURIComponent(device)
-            + '", DeviceId="' + encodeURIComponent(deviceId)
-            + '", Version="' + encodeURIComponent(version)
-            + '", Token="' + encodeURIComponent(token) + '"';
+        return 'MediaBrowser Client="' + encodeAuthParam(client)
+            + '", Device="' + encodeAuthParam(device)
+            + '", DeviceId="' + encodeAuthParam(deviceId)
+            + '", Version="' + encodeAuthParam(version)
+            + '", Token="' + encodeAuthParam(token) + '"';
     }
 
     function isLoggedInForInjectorSync() {

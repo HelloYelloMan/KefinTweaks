@@ -438,7 +438,7 @@
     function audioDirectUrl(itemId) {
         return ApiClient.getUrl('Audio/' + itemId + '/stream', {
             static: true,
-            api_key: ApiClient.accessToken(),
+            ApiKey: ApiClient.accessToken(),
             deviceId: ApiClient.deviceId()
         });
     }
@@ -447,7 +447,7 @@
         // Forced mp3 transcode - always decodable in a bare <audio>.
         return ApiClient.getUrl('Audio/' + itemId + '/stream.mp3', {
             audioCodec: 'mp3',
-            api_key: ApiClient.accessToken(),
+            ApiKey: ApiClient.accessToken(),
             deviceId: ApiClient.deviceId()
         });
     }
@@ -458,7 +458,7 @@
             static: true,
             mediaSourceId: source.Id || itemId,
             tag: source.ETag,
-            api_key: ApiClient.accessToken(),
+            ApiKey: ApiClient.accessToken(),
             deviceId: ApiClient.deviceId()
         });
     }
@@ -470,7 +470,7 @@
             videoCodec: 'h264',
             audioCodec: 'aac',
             maxWidth: 1920,
-            api_key: ApiClient.accessToken(),
+            ApiKey: ApiClient.accessToken(),
             deviceId: ApiClient.deviceId()
         });
     }

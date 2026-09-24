@@ -434,12 +434,15 @@
         }
     }
 
+    let userDataListenerRegistered = false;
+    let userDataSectionConfigs = {};
+
     async function handleUserDataChanged(event, nextupSectionConfig, continueWatchingSectionConfig, continueWatchingAndNextUpSectionConfig) {
         LOG('UserDataChanged event received:', event);
         const userData = event.Data?.UserDataList?.[0];
         const parentItemUserData = event.Data?.UserDataList?.[1];
 
-        if (parentItemUserData.Key.includes('MusicAlbum')) {
+        if (parentItemUserData?.Key?.includes('MusicAlbum')) {
             return;
         }
 
@@ -585,11 +588,23 @@
         state.kefinContinueWatching = continueWatchingSectionConfig?.enabled === true || continueWatchingAndNextUpSectionConfig?.enabled === true;
         state.kefinLatestMedia = recentlyAddedSectionConfig?.enabled === true;
 
-        // Setup event listener for UserDataChanged
-        if (window.ApiClient && window.ApiClient.addEventListener) {
-            window.ApiClient.addEventListener('userdatachanged', (event) => {
-                handleUserDataChanged(event, nextupSectionConfig, continueWatchingSectionConfig, continueWatchingAndNextUpSectionConfig);
-            });
+        // Setup event listener for UserDataChanged. Registered once; each load only
+        // refreshes the section configs it reads. On Jellyfin 12 the apiclient never
+        // opens its own socket, so its 'userdatachanged' event never fires and the
+        // message has to come through websocketHelper (ApiClient.subscribe).
+        userDataSectionConfigs = { nextupSectionConfig, continueWatchingSectionConfig, continueWatchingAndNextUpSectionConfig };
+        if (!userDataListenerRegistered) {
+            const onUserDataChanged = (event) => {
+                const c = userDataSectionConfigs;
+                handleUserDataChanged(event, c.nextupSectionConfig, c.continueWatchingSectionConfig, c.continueWatchingAndNextUpSectionConfig);
+            };
+            if (window.websocketHelper?.listen) {
+                window.websocketHelper.listen('UserDataChanged', onUserDataChanged);
+                userDataListenerRegistered = true;
+            } else if (window.ApiClient && window.ApiClient.addEventListener) {
+                window.ApiClient.addEventListener('userdatachanged', onUserDataChanged);
+                userDataListenerRegistered = true;
+            }
         }
 
         // Set up mutation observer BEFORE rendering, so we can react when Jellyfin renders home sections

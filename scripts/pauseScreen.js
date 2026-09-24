@@ -1111,9 +1111,9 @@
 
         // Fetch a single item. ApiClient is preferred - it targets the endpoint
         // the connected server version actually exposes and signs the request
-        // with the full auth header, rather than the legacy X-Emby-Token which
-        // newer servers may reject. The raw REST calls are only a fallback for
-        // when ApiClient isn't on the page.
+        // with the full auth header. The raw REST calls are only a fallback for
+        // when ApiClient isn't on the page, and use the Authorization header too:
+        // Jellyfin 12 rejects the legacy X-Emby-Token.
         async requestItem(itemId, signal) {
             if (typeof ApiClient !== 'undefined' && typeof ApiClient.getItem === 'function') {
                 try {
@@ -1128,7 +1128,7 @@
                 ? ApiClient.serverAddress()
                 : window.location.origin;
             const options = {
-                headers: { 'X-Emby-Token': this.token, 'Accept': 'application/json' },
+                headers: { 'Authorization': `MediaBrowser Token="${this.token}"`, 'Accept': 'application/json' },
                 signal,
             };
 
@@ -1229,10 +1229,10 @@
 
             const tagUrl = (type, tag, id) => {
                 if (!tag) return null;
-                return `${domain}/Items/${id || itemId}/Images/${type}?tag=${tag}&api_key=${this.token}`;
+                return `${domain}/Items/${id || itemId}/Images/${type}?tag=${tag}&ApiKey=${this.token}`;
             };
             const blindUrl = (type, id) => {
-                return `${domain}/Items/${id}/Images/${type}?api_key=${this.token}`;
+                return `${domain}/Items/${id}/Images/${type}?ApiKey=${this.token}`;
             };
 
             // --- LOGO URLs ---

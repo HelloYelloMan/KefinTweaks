@@ -390,7 +390,7 @@
         if (!token) return null;
 
         const resp = await fetch(apiUrl, {
-            headers: { 'X-Emby-Token': token, 'Accept': 'application/json' },
+            headers: { 'Authorization': `MediaBrowser Token="${token}"`, 'Accept': 'application/json' },
             signal,
         });
         if (!resp.ok) return null;
@@ -409,7 +409,7 @@
         const addCandidate = (id, tag) => {
             if (!id || seen.has(id)) return;
             seen.add(id);
-            urls.push(`${domain}/Items/${id}/Images/${type}?api_key=${token}`
+            urls.push(`${domain}/Items/${id}/Images/${type}?ApiKey=${token}`
                 + (tag ? `&tag=${tag}` : ''));
         };
 

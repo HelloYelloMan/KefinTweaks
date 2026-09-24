@@ -578,9 +578,11 @@
             }
             
             LOG('Getting session with deviceId:', deviceId);
+            // Jellyfin 12 hands deviceId() back already URI-encoded.
+            const safeDecode = (v) => { try { return decodeURIComponent(v); } catch (e) { return v; } };
             
             // Get session from the endpoint with device ID
-            const response = await fetch(`${serverUrl}/Sessions?deviceId=${deviceId}`, {
+            const response = await fetch(`${serverUrl}/Sessions?deviceId=${encodeURIComponent(safeDecode(deviceId))}`, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',

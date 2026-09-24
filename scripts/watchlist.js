@@ -4850,8 +4850,31 @@ In the Custom Tabs plugin, add a new tab with the following HTML content:
 		let retries = 0;
 		// Use WebSocket to listen for UserDataChanged messages instead of intercepting fetch
 		// This is more reliable and doesn't interfere with fetch requests
+		// Check if this is a UserDataChanged message
+		function onUserDataMessage(data) {
+			if (data && data.MessageType === 'UserDataChanged' && data.Data && data.Data.UserDataList && data.Data.UserDataList.length > 0) {
+				const userData = data.Data.UserDataList[0];
+				if (userData.ItemId) {
+					LOG(`Detected UserDataChanged for item: ${userData.ItemId}, Played: ${userData.Played}`);
+					// Handle the watched status change (works for both played and unplayed)
+					handleItemWatchedStatusChange(userData.ItemId, userData.Played, userData.Likes).catch(err => {
+						ERR('Error handling UserDataChanged event:', err);
+					});
+				}
+			}
+		}
+
 		function setupWebSocketMonitoring() {
 			try {
+				// Jellyfin 12 never opens the apiclient socket; server messages come
+				// through the SDK instead, via ApiClient.subscribe.
+				if (window.ApiClient && typeof window.ApiClient.subscribe === 'function') {
+					window.ApiClient.subscribe(['UserDataChanged'], onUserDataMessage);
+					playbackMonitorInitialized = true;
+					LOG('Playback and watch status monitoring initialized via ApiClient.subscribe');
+					return true;
+				}
+
 				// Grab the actual socket
 				const socket = (window.ApiClient && (window.ApiClient.webSocket || window.ApiClient._webSocket)) || null;
 
@@ -4882,18 +4905,7 @@ In the Custom Tabs plugin, add a new tab with the following HTML content:
 
 						const messageData = event.Data || event.data;
 						const data = typeof messageData === 'string' ? JSON.parse(messageData) : messageData;
-
-						// Check if this is a UserDataChanged message
-						if (data.MessageType === 'UserDataChanged' && data.Data && data.Data.UserDataList && data.Data.UserDataList.length > 0) {
-							const userData = data.Data.UserDataList[0];
-							if (userData.ItemId) {
-								LOG(`Detected UserDataChanged for item: ${userData.ItemId}, Played: ${userData.Played}`);
-								// Handle the watched status change (works for both played and unplayed)
-								handleItemWatchedStatusChange(userData.ItemId, userData.Played, userData.Likes).catch(err => {
-									ERR('Error handling UserDataChanged event:', err);
-								});
-							}
-						}
+						onUserDataMessage(data);
 					} catch (err) {
 						// Log parse errors but don't break the original handler
 						WARN('WebSocket message parse error:', err);

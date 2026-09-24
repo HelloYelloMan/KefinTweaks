@@ -115,7 +115,7 @@
         
         LOG('Fetching active session for device:', deviceId);
         
-        const response = await fetch(`${serverUrl}/Sessions?deviceId=${deviceId}`, {
+        const response = await fetch(`${serverUrl}/Sessions?deviceId=${encodeAuthParam(deviceId)}`, {
             method: 'GET',
             headers: {
                 'Accept': 'application/json',
@@ -240,6 +240,16 @@
      * @param {string} [token]
      * @returns {string}
      */
+    // Jellyfin 12 URI-encodes these when it creates the ApiClient, so deviceId() and
+    // friends come back already encoded; the server decodes the header once. Decode
+    // first, as jellyfin-web does, or a doubly encoded DeviceId registers these
+    // requests as a separate device and session.
+    function encodeAuthParam(value) {
+        let decoded = String(value);
+        try { decoded = decodeURIComponent(decoded); } catch (e) { /* not encoded */ }
+        return encodeURIComponent(decoded);
+    }
+
     function getAuthHeaderForToken(token) {
         // ApiClient may not exist yet. Its caller guards with
         // `typeof ApiClient !== 'undefined'` and then calls this, which used to
@@ -255,13 +265,13 @@
         const deviceId = typeof api?.deviceId === 'function' ? api.deviceId() : '';
         const version = api?._appVersion || api?._serverVersion || '';
         const parts = [
-            `Client="${encodeURIComponent(client)}"`,
-            `Device="${encodeURIComponent(device)}"`,
-            `DeviceId="${encodeURIComponent(deviceId)}"`,
-            `Version="${encodeURIComponent(version)}"`
+            `Client="${encodeAuthParam(client)}"`,
+            `Device="${encodeAuthParam(device)}"`,
+            `DeviceId="${encodeAuthParam(deviceId)}"`,
+            `Version="${encodeAuthParam(version)}"`
         ];
         if (token) {
-            parts.push(`Token="${encodeURIComponent(token)}"`);
+            parts.push(`Token="${encodeAuthParam(token)}"`);
         }
         return `MediaBrowser ${parts.join(', ')}`;
     }

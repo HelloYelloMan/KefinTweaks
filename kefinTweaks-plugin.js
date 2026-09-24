@@ -39,6 +39,16 @@
     // checkAndLoadInjector runs on every login poll; only say this once.
     let consoleGateLogged = false;
 
+    // Jellyfin 12 URI-encodes these when it creates the ApiClient, so deviceId() and
+    // friends come back already encoded; the server decodes the header once. Decode
+    // first, as jellyfin-web does, or a doubly encoded DeviceId registers these
+    // requests as a separate device and session.
+    function encodeAuthParam(value) {
+        let decoded = String(value);
+        try { decoded = decodeURIComponent(decoded); } catch (e) { /* not encoded */ }
+        return encodeURIComponent(decoded);
+    }
+
     function getAuthHeader() {
         const token = ApiClient.accessToken();
         const client = typeof ApiClient.applicationName === 'function' ? ApiClient.applicationName() : 'Jellyfin Web';
@@ -46,11 +56,11 @@
         const deviceId = typeof ApiClient.deviceId === 'function' ? ApiClient.deviceId() : '';
         const version = ApiClient._appVersion || ApiClient._serverVersion || '';
         const parts = [
-            `Client="${encodeURIComponent(client)}"`,
-            `Device="${encodeURIComponent(device)}"`,
-            `DeviceId="${encodeURIComponent(deviceId)}"`,
-            `Version="${encodeURIComponent(version)}"`,
-            `Token="${encodeURIComponent(token)}"`
+            `Client="${encodeAuthParam(client)}"`,
+            `Device="${encodeAuthParam(device)}"`,
+            `DeviceId="${encodeAuthParam(deviceId)}"`,
+            `Version="${encodeAuthParam(version)}"`,
+            `Token="${encodeAuthParam(token)}"`
         ];
         return `MediaBrowser ${parts.join(', ')}`;
     }

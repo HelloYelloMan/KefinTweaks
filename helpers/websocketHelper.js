@@ -15,6 +15,53 @@
     const POLL_INTERVAL_MS = 1500;
     
     /**
+     * Fire every callback registered for a parsed { MessageType, Data } message.
+     */
+    function dispatch(data) {
+        const messageType = data && data.MessageType;
+        if (!messageType || !listeners[messageType]) return;
+        listeners[messageType].forEach(callback => {
+            try {
+                callback(data);
+            } catch (err) {
+                ERR(`Error in WebSocket listener for ${messageType}:`, err);
+            }
+        });
+    }
+
+    // Jellyfin 12 never opens the apiclient's own socket: jellyfin-web moved every
+    // server message onto the SDK and exposes it as ApiClient.subscribe(types, cb),
+    // which returns an unsubscribe function and passes { MessageType, Data }.
+    // Subscriptions belong to one ApiClient, so they are redone if it is replaced
+    // (sign-out, server switch).
+    let subscribedClient = null;
+    const subscribedTypes = new Set();
+
+    function canSubscribe() {
+        return !!(window.ApiClient && typeof window.ApiClient.subscribe === 'function');
+    }
+
+    function subscribeType(messageType) {
+        if (subscribedTypes.has(messageType)) return;
+        try {
+            window.ApiClient.subscribe([messageType], dispatch);
+            subscribedTypes.add(messageType);
+        } catch (err) {
+            ERR(`Error subscribing to ${messageType}:`, err);
+        }
+    }
+
+    function syncSubscriptions() {
+        if (!canSubscribe()) return false;
+        if (subscribedClient !== window.ApiClient) {
+            subscribedClient = window.ApiClient;
+            subscribedTypes.clear();
+        }
+        Object.keys(listeners).forEach(subscribeType);
+        return true;
+    }
+
+    /**
      * Returns the ApiClient WebSocket if available (e.g. after user has logged in).
      */
     function getSocket() {
@@ -28,6 +75,12 @@
      */
     function initialize() {
         if (isInitialized) return true;
+
+        if (syncSubscriptions()) {
+            isInitialized = true;
+            LOG('Subscribed through ApiClient.subscribe');
+            return true;
+        }
         
         try {
             const socket = getSocket();
@@ -48,19 +101,7 @@
                     const messageData = event.Data || event.data;
                     const data = typeof messageData === 'string' ? JSON.parse(messageData) : messageData;
                     
-                    // Get the MessageType
-                    const messageType = data.MessageType;
-                    
-                    if (messageType && listeners[messageType]) {
-                        // Fire all callbacks for this message type
-                        listeners[messageType].forEach(callback => {
-                            try {
-                                callback(data);
-                            } catch (err) {
-                                ERR(`Error in WebSocket listener for ${messageType}:`, err);
-                            }
-                        });
-                    }
+                    dispatch(data);
                 } catch (err) {
                     // Log parse errors but don't break the original handler
                     WARN('WebSocket message parse error:', err);
@@ -81,7 +122,10 @@
      * Safe to call multiple times; only one polling loop runs.
      */
     function startPolling() {
-        if (isInitialized) return;
+        if (isInitialized) {
+            syncSubscriptions();
+            return;
+        }
         if (pollingIntervalId != null) return; // already polling
         if (initialize()) return;
         
@@ -132,10 +176,9 @@
         listeners[messageType].push(callback);
         LOG(`Registered listener for message type: ${messageType} (${listeners[messageType].length} total listeners)`);
         
-        // Ensure we're polling for WebSocket if not yet initialized
-        if (!isInitialized) {
-            startPolling();
-        }
+        // Ensure we're polling for WebSocket if not yet initialized. Once
+        // subscribed, a new message type needs its own subscription.
+        startPolling();
     }
     
     /**
@@ -157,5 +200,13 @@
     
     // Start polling until ApiClient WebSocket is available (e.g. after user logs in)
     startPolling();
+
+    // On Jellyfin 12 a sign-in or server switch replaces window.ApiClient and
+    // drops our subscriptions with it; re-check occasionally.
+    setInterval(() => {
+        if (subscribedClient && subscribedClient !== window.ApiClient) {
+            syncSubscriptions();
+        }
+    }, 5000);
 })();
 
