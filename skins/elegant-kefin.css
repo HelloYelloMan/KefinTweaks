@@ -30,3 +30,50 @@
 .detailSection:has(.series-episodes-section)>#listChildrenCollapsible {
     grid-column: 1 / 5;
 }
+
+/* ---- Jellyfin 12 ------------------------------------------------------------
+   Each rule below is scoped so it cannot match 10.11's markup. */
+
+/* 12 removed .detailPageContent; the secondary sections (cast, similar,
+   collections...) now sit directly in .detailPageSecondaryContainer, so
+   ElegantFin's gap and side padding for the old wrapper no longer apply. */
+[dir=ltr] .detailPageSecondaryContainer:not(:has(> .detailPageContent)) {
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+    padding-left: var(--sidePadding) !important;
+    padding-right: var(--sidePadding) !important;
+}
+
+/* 12 renders the metadata rows with React: one wrapper div per type (empty
+   when the item has none), values in .focuscontainer-x instead of .content,
+   the label a MUI <p>. Every row is its wrapper's only child, so ElegantFin's
+   `.detailsGroupItem:not(:last-child)` separator never fires. Draw a top
+   border on each row after the first visible one instead. .genresGroup only
+   exists in 10.11's static template. */
+.itemDetailsGroup:not(:has(> .genresGroup)) > .detailsGroupItem {
+    border-bottom: none;
+}
+.itemDetailsGroup:not(:has(> .genresGroup)) > :is(.detailsGroupItem, div:has(> .detailsGroupItem)) ~ div > .detailsGroupItem,
+.itemDetailsGroup:not(:has(> .genresGroup)) > :is(.detailsGroupItem, div:has(> .detailsGroupItem)) ~ .detailsGroupItem {
+    border-top: var(--defaultBorder);
+}
+.detailsGroupItem > .focuscontainer-x {
+    color: var(--dimTextColor);
+    text-align: end;
+}
+.detailsGroupItem > .focuscontainer-x a {
+    font-weight: 400;
+}
+.detailsGroupItem > p.label {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+}
+
+/* 12's base theme.css now sets the empty-card padder colour, and it is linked
+   after the skin, so it wins at ElegantFin's specificity. */
+.card .cardBox:not(.visualCardBox) .cardPadder {
+    background-color: var(--lighterGradientPoint);
+}

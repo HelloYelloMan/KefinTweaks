@@ -103,10 +103,16 @@
         // Position: directly after Genres (i.e. between Genres and Studios, since
         // Genres renders before Studios). Fall back to just before Studios, else
         // append.
+        // Jellyfin 12 wraps each row in its own div, so position against the
+        // group's direct child that holds the row, not the row itself.
+        const topLevel = (el) => {
+            while (el && el.parentElement !== group) el = el.parentElement;
+            return el;
+        };
         if (genresRow) {
-            group.insertBefore(row, genresRow.nextSibling);
+            group.insertBefore(row, topLevel(genresRow).nextSibling);
         } else {
-            const studiosRow = findRowByLabel(group, /studio|network/i);
+            const studiosRow = topLevel(findRowByLabel(group, /studio|network/i));
             if (studiosRow) group.insertBefore(row, studiosRow);
             else group.appendChild(row);
         }

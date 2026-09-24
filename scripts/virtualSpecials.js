@@ -272,7 +272,10 @@
         const container = document.querySelector('.backdropContainer');
         if (!container) return;
 
-        const existing = container.querySelector('.displayingBackdropImage');
+        // The newest one: Jellyfin 12 leaves the previous image in place for
+        // 1.6s after a change, and the first match would be that stale one.
+        const displaying = container.querySelectorAll('.displayingBackdropImage');
+        const existing = displaying[displaying.length - 1];
         if (existing) {
             // Already showing the right thing, or showing the item's OWN
             // backdrop -- which outranks anything borrowed. Leave both alone.
@@ -488,9 +491,68 @@
         return link;
     }
 
+    // Jellyfin 12 renders the metadata rows with React: .itemDetailsGroup holds
+    // one wrapper div per type, always in the order Author, Creator, Director,
+    // Writer, Studio, Genre, each `.detailsGroupItem > p.label +
+    // .focuscontainer-x > span > a.button-link` or empty when the item has none.
+    // Studios render nothing at all for a BoxSet, so there is no row to fill.
+    // Our row goes in its own wrapper after the Studio slot; the React roots
+    // themselves are left alone.
+    const V12_STUDIO_SLOT = 4;
+
+    function injectStudiosV12(group, item) {
+        group.querySelectorAll(':scope > [' + STUDIOS_ATTR + ']').forEach(el => el.remove());
+
+        const studios = ((item && item.Studios) || []).filter(studio => studio && studio.Id);
+        if (!studios.length) return;
+
+        const serverId = item.ServerId
+            || (window.ApiClient && ApiClient.serverId && ApiClient.serverId());
+        const template = group.querySelector('.detailsGroupItem .focuscontainer-x a');
+        const sampleRow = group.querySelector('.detailsGroupItem');
+
+        let row;
+        let label;
+        let content;
+        if (sampleRow) {
+            // A clone keeps the MUI and skin classes the other rows carry.
+            row = sampleRow.cloneNode(true);
+            label = row.querySelector('.label');
+            content = row.querySelector('.focuscontainer-x');
+        }
+        if (!row || !label || !content) {
+            row = document.createElement('div');
+            row.className = 'detailsGroupItem';
+            label = document.createElement('p');
+            label.className = 'label';
+            content = document.createElement('div');
+            content.className = 'focuscontainer-x';
+            row.append(label, content);
+        }
+
+        content.innerHTML = '';
+        studios.forEach((studio, i) => {
+            const span = document.createElement('span');
+            if (i > 0) span.appendChild(document.createTextNode(', '));
+            span.appendChild(buildStudioLink(template, studio, serverId));
+            content.appendChild(span);
+        });
+        label.textContent = studios.length > 1 ? 'Studios' : 'Studio';
+
+        const wrapper = document.createElement('div');
+        wrapper.setAttribute(STUDIOS_ATTR, '1');
+        wrapper.appendChild(row);
+        const slot = group.children[V12_STUDIO_SLOT];
+        group.insertBefore(wrapper, slot ? slot.nextSibling : null);
+    }
+
     function injectStudios(page, item) {
         const groupEl = page.querySelector('.studiosGroup');
-        if (!groupEl) return;
+        if (!groupEl) {
+            const group = page.querySelector('.itemDetailsGroup');
+            if (group && !group.querySelector('.content')) injectStudiosV12(group, item);
+            return;
+        }
 
         const studios = (item && item.Studios) || [];
         const label = groupEl.querySelector('.studiosLabel');
