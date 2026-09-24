@@ -301,10 +301,45 @@
     function showVideo(node) {
         const c = node._kefinContainer;
         if (c) c.style.opacity = String(CONFIG.videoOpacity);
+        if (c && !c.classList.contains('kefin-theme-inpage')) {
+            visibleVideos.add(node);
+            syncPageTransparency();
+        }
     }
     function hideVideo(node) {
         const c = node._kefinContainer;
         if (c) c.style.opacity = '0';
+        if (visibleVideos.delete(node)) syncPageTransparency();
+    }
+
+    // The video sits at body.firstChild, behind the page. When Jellyfin plays a
+    // theme video itself, its player calls setBackdropTransparency(Backdrop):
+    // transparentDocument on <html>, backgroundContainer-transparent, and the
+    // backdrop layer hidden -- that is what lets the video show through. We never
+    // did, so wherever the background layer is opaque (Jellyfin 12's base theme)
+    // or the backdrop is a blurred image (Abyss), our video played underneath it.
+    // Do the same while one of ours is showing, and undo only what we added, so a
+    // state Jellyfin set for its own reasons is left alone. The in-page mobile
+    // variant is excluded: it already paints inside the page's .itemBackdrop.
+    const visibleVideos = new Set();
+    let transparencyAdded = null;
+    function syncPageTransparency() {
+        const want = visibleVideos.size > 0;
+        if (want && !transparencyAdded) {
+            transparencyAdded = [];
+            const add = (elem, cls) => {
+                if (elem && !elem.classList.contains(cls)) {
+                    elem.classList.add(cls);
+                    transparencyAdded.push([elem, cls]);
+                }
+            };
+            add(document.documentElement, 'transparentDocument');
+            add(document.querySelector('.backgroundContainer'), 'backgroundContainer-transparent');
+            add(document.querySelector('.backdropContainer'), 'hide');
+        } else if (!want && transparencyAdded) {
+            transparencyAdded.forEach(([elem, cls]) => elem.classList.remove(cls));
+            transparencyAdded = null;
+        }
     }
 
     // Fade a specific node's audio to `target` (fade-in). Captures the node so a
@@ -337,6 +372,7 @@
         }
         node.remove();
         if (node._kefinContainer) node._kefinContainer.remove();
+        if (visibleVideos.delete(node)) syncPageTransparency();
     }
 
     // Fade a node out over fadeMs, then remove it. Uses its own timer so several can
