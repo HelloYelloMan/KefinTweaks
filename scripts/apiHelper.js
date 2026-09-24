@@ -77,10 +77,29 @@
         return result.join(',');
     }
 
+    // Filter pairs that cancel each other out. 10.11 applied filters in order,
+    // so the last of a pair silently won; Jellyfin 12 answers 400 "Conflicting
+    // filters" instead, which would blank the whole section. Keep 10.11's result.
+    const CONFLICTING_FILTERS = [['IsPlayed', 'IsUnplayed'], ['IsFolder', 'IsNotFolder'], ['Likes', 'Dislikes']];
+
+    function dropConflictingFilters(value) {
+        const list = (Array.isArray(value) ? value : String(value).split(','))
+            .map((f) => String(f).trim())
+            .filter(Boolean);
+        const loser = new Set();
+        CONFLICTING_FILTERS.forEach(([a, b]) => {
+            const ia = list.lastIndexOf(a);
+            const ib = list.lastIndexOf(b);
+            if (ia !== -1 && ib !== -1) loser.add(ia > ib ? b : a);
+        });
+        return loser.size ? list.filter((f) => !loser.has(f)) : value;
+    }
+
     function applyQueryOptionsToParams(params, queryOptions, { skipFields = false } = {}) {
         Object.entries(queryOptions || {}).forEach(([key, value]) => {
             if (value === undefined || value === null) return;
             if (key === 'Limit' && value === 0) return;
+            if (key === 'Filters') value = dropConflictingFilters(value);
             if (key === 'Fields') {
                 if (skipFields) return;
                 params.set('Fields', mergeFields(params.get('Fields'), value));
