@@ -404,6 +404,41 @@
         widthObserver.observe(container);
     }
 
+    /* Home rows share one answer, so it is measured once.
+     *
+     * The design above measures a container before its cards arrive. That holds
+     * for jellyfin-web's builder, but KefinTweaks' home builds each section off
+     * the document and inserts it whole, 16 to 48 cards at once. So the
+     * getBoundingClientRect below forced the browser to style the entire new
+     * section there and then, WITHOUT par-on -- and once par-on and the
+     * variables were written, the section was styled a second time. Traced over
+     * a 10s home scroll: 86 forced recalcs, 93k elements, 862ms, the largest
+     * single source of recalc on the page.
+     *
+     * And every one of those rows got the same numbers. Home row cards are sized
+     * in vw, so the answer depends on the skin and the viewport width, not on
+     * the row: 22 rows under Abyss all measured 303/27/244px, Default and
+     * ElegantFin likewise, across rows from 2275 to 2298px wide.
+     *
+     * So the first home row measures and the rest reuse it, with no read at all.
+     * This runs in the observer's microtask, before the frame is styled, so a
+     * cached row gets par-on and its height before its cards are styled even
+     * once. Measured: home scroll 505 -> 466ms/s of main thread (432 with the
+     * feature off), and 152 -> 76 while sections keep streaming in at the
+     * bottom, with every card the same size to the pixel.
+     *
+     * Home rows only. Other pages hold rows the skin sizes differently from one
+     * another -- a details page under Abyss has a 336px row beside 303px ones --
+     * so they keep measuring each container, which is cheap there anyway. The
+     * key carries the viewport width, so a resize measures one row again. */
+    const homeRowCache = new Map();
+
+    function homeRowKey(container, sig) {
+        if (!container.classList.contains('scrollSlider')) return null;
+        if (!container.closest('.homeSectionsContainer')) return null;
+        return sig + '|' + window.innerWidth;
+    }
+
     function measureContainer(container) {
         if (!skinReadyCached()) return false;
 
@@ -427,6 +462,25 @@
             if (seen && settled) {
                 if (seen === settled) return true;
                 if (Math.abs(seen - settled) / settled < 0.05) return true;
+            }
+        }
+
+        const homeKey = homeRowKey(container, sig);
+        if (homeKey) {
+            if (container.dataset.parCached === homeKey) return true;
+            const known = homeRowCache.get(homeKey);
+            if (known) {
+                container.style.setProperty('--par-h', known.h);
+                container.style.setProperty('--par-pad', known.pad);
+                if (known.hb) {
+                    container.style.setProperty('--par-hb', known.hb);
+                    container.style.setProperty('--par-padb', known.padb);
+                    container.dataset.parHb = '1';
+                }
+                container.dataset.parSkin = sig;
+                container.dataset.parCached = homeKey;
+                container.classList.add(ON_CLASS);
+                return true;
             }
         }
 
@@ -606,6 +660,15 @@
             container.style.removeProperty('--par-padb');
         }
         delete container.dataset.parReject;
+        if (homeKey) {
+            homeRowCache.set(homeKey, {
+                h: Math.round(box.height) + 'px',
+                pad: pad + 'px',
+                hb: container.dataset.parHb ? container.style.getPropertyValue('--par-hb') : '',
+                padb: container.dataset.parHb ? container.style.getPropertyValue('--par-padb') : ''
+            });
+            container.dataset.parCached = homeKey;
+        }
         container.dataset.parAt = String(width);
         container.dataset.parSkin = sig;
         container.classList.add(ON_CLASS);
@@ -728,9 +791,11 @@
     }
 
     function invalidate() {
+        homeRowCache.clear();
         document.querySelectorAll('.' + ON_CLASS).forEach((c) => {
             delete c.dataset.parAt;
             delete c.dataset.parSkin;
+            delete c.dataset.parCached;
         });
         document.querySelectorAll('[data-par-reject]').forEach((c) => { delete c.dataset.parReject; });
         scheduleSweep();
