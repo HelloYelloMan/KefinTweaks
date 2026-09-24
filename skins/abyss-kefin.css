@@ -235,20 +235,40 @@
     border-color: rgba(245, 245, 247, 0.2) !important;
 }
 
-/* Profile button: top right, apart from the other buttons.
+/* Profile button: in the top-right corner, apart from the other buttons.
  *
  * Abyss moves the modern toolbar's profile box to the far left
  * (`.MuiToolbar-root:has(> .MuiStack-root:first-of-type) > .MuiBox-root:last-child
- * { order: -1; margin-right: auto }`). Robert wants it on the right, in the
- * corner, separated from the search/cast group, at the same height as the
- * other buttons and inset by the toolbar's own right padding.
+ * { order: -1; margin-right: auto }`). Robert wants it in the top-right corner
+ * instead: at its usual distance from the top, and the same distance from the
+ * right -- mirroring the menu button in the top-left corner -- rather than
+ * inside the toolbar's 3.3% side padding next to search/cast.
  *
- * Targeted by the button inside it (aria-controls="app-user-menu", jellyfin-web
- * components/toolbar/UserMenuButton.tsx), not by :last-child, so it cannot flip
- * when something else is added to the toolbar. !important because Abyss's rule
- * has the higher specificity. */
+ * So it leaves the row: absolutely placed in a square as tall as the toolbar,
+ * pinned to its right edge, button centred. Right gap = top gap by
+ * construction, at any toolbar height (12px on the 64px desktop bar). The
+ * search/cast group keeps its own place, which is what sets the two apart.
+ * The toolbar keeps at least 4.5rem of right padding (a 64px square plus a
+ * gap) so on narrow screens the buttons cannot run under the avatar; at 3.3%
+ * of a wide screen it is already more than that.
+ *
+ * Found by the button inside it (aria-controls="app-user-menu", jellyfin-web
+ * components/toolbar/UserMenuButton.tsx), not by :last-child, so nothing added
+ * to the toolbar can flip it. !important because Abyss's rule has the higher
+ * specificity. MUI's Toolbar is position:relative, so it is the anchor. */
 header.MuiAppBar-root > .MuiToolbar-root > .MuiBox-root:has([aria-controls="app-user-menu"]) {
 	order: initial !important;
-	margin-right: 0 !important;
-	margin-left: 1.5em !important;
+	margin: 0 !important;
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: 0;
+	aspect-ratio: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+header.MuiAppBar-root > .MuiToolbar-root:has(> .MuiBox-root [aria-controls="app-user-menu"]) {
+	padding-right: max(3.3%, 4.5rem, env(safe-area-inset-right));
 }
