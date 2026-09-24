@@ -8,10 +8,10 @@ here has been tested on a 12 server yet. Items that need a live test are marked 
 Jellyfin changed its version scheme: after 10.11.x comes **12.0** (2026-09-07), then
 **12.1** (2026-09-14). `/System/Info` reports `"12.1.0"`.
 
-## 0. Status on `master` (the Jellyfin 12 line)
+## 0. Status on `experimental` (the Jellyfin 12 line)
 
-The 10.11 line is kept as branch `legacy-10.11` (formerly `experimental`); `master` was
-branched from it as `jellyfin12`.
+The 10.11 line is kept as branch `legacy-10.11`, frozen at 882d23a. The 12 work was done
+on a `jellyfin12` branch off it and has since become `experimental`.
 
 Every change is written to keep 10.11 behaving as before: each 12 path is chosen by
 feature detection or by server version. None of it has run in a browser yet.
