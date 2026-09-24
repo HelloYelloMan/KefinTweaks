@@ -2499,12 +2499,25 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
      * this one never runs. Editing only this copy therefore changes nothing,
      * which is how a bad rule here survived unnoticed. Change both, or neither.
      */
+    const STALE_CUSTOM_PAGE_RULE = '.skinBody:has(.customPage:not(.hide)) #fallbackPage';
+
     function ensureCustomPageStyles() {
-        if (document.getElementById('kefin-custom-page-styles')) return;
-        const style = document.createElement('style');
-        style.id = 'kefin-custom-page-styles';
+        let style = document.getElementById('kefin-custom-page-styles');
+        // A cached kefinTweaks-plugin.js (it gets no cache token) still injects
+        // the old :has() rules under this id; replace those rather than keep them.
+        if (style && !style.textContent.includes(STALE_CUSTOM_PAGE_RULE)) return;
+        if (!style) {
+            style = document.createElement('style');
+            style.id = 'kefin-custom-page-styles';
+        }
         style.textContent = `
-#reactRoot .skinBody:has(.customPage:not(.hide)) #fallbackPage {
+/* Keyed off html.kefin-custom-page-visible, which utils.js sets while one of
+   KefinTweaks' custom pages is showing (syncCustomPageMarker). These used to be
+   #reactRoot:has(.customPage:not(.hide)): a document-wide :has() whose argument
+   is the .hide class, so every .hide toggle anywhere in the app made Chromium
+   re-check it across the whole tree. Measured scrolling the home screen, which
+   toggles .hide constantly: about 40% of all style-recalc time. */
+html.kefin-custom-page-visible #reactRoot .skinBody #fallbackPage {
 	display: none;
 }
 
@@ -2518,15 +2531,15 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
  * page is visible while something is playing. osdHeader is the class Jellyfin
  * puts on .skinHeader during playback (pauseScreen.js keys on it as well).
  */
-#reactRoot:not(:has(.skinBody .customPage:not(.hide))) .skinHeader:not(.osdHeader) .pageTitle {
+html:not(.kefin-custom-page-visible) #reactRoot .skinHeader:not(.osdHeader) .pageTitle {
     display: none !important;
 }
 
-#reactRoot .skinBody:not(:has(.customPage:not(.hide))) #fallbackPage > * {
+html:not(.kefin-custom-page-visible) #reactRoot .skinBody #fallbackPage > * {
     display: none;
 }
 
-#reactRoot:not(:has(.skinBody .customPage:not(.hide))) #fallbackPage::after {
+html:not(.kefin-custom-page-visible) #reactRoot #fallbackPage::after {
 	content:'';
 	display: inline-block;
 	width: 20px;
@@ -2541,6 +2554,13 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
 	top: 1em;
 }
 
+/* Modern layout only. .MuiAppBar-root, not .MuiBox-root: MUI boxes are
+   inserted constantly (and 12's legacy details page has them too), so as a
+   :has() argument they re-ran this check on every insertion. The app bar only
+   exists in the modern layout and is mounted once. */
+#reactRoot:has(.MuiAppBar-root) .libraryPage:not(.noSecondaryNavPage).customPage {
+  padding-top: 0 !important;
+}
 `;
         (document.head || document.documentElement).appendChild(style);
     }
@@ -2711,6 +2731,25 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
         entry.pageEl = page;
     }
 
+    // Upgrade the stale plugin copy right away, not only when a custom page is
+    // first shown: the old rules cost style time on every page, the home screen
+    // above all. Never creates the styles where the plugin did not.
+    setTimeout(() => {
+        const existing = document.getElementById('kefin-custom-page-styles');
+        if (existing && existing.textContent.includes(STALE_CUSTOM_PAGE_RULE)) {
+            ensureCustomPageStyles();
+        }
+    }, 0);
+
+    // The custom-page stylesheet (here and in kefinTweaks-plugin.js) keys off
+    // this class instead of a document-wide :has(); see the note in that CSS.
+    function syncCustomPageMarker() {
+        document.documentElement.classList.toggle(
+            'kefin-custom-page-visible',
+            !!document.querySelector('.skinBody .customPage:not(.hide)')
+        );
+    }
+
     function syncAllCustomPages() {
         const currentPath = getCustomPagePathFromHash();
         let matched = null;
@@ -2722,6 +2761,7 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
                 hideCustomPageEntry(entry);
             }
         });
+        syncCustomPageMarker();
         if (!matched) {
             stopCustomPageTitleGuard();
         }
@@ -2796,6 +2836,7 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
                 if (!entry) return;
                 hideCustomPageEntry(entry);
                 customPageRegistry.delete(hrefPath);
+                syncCustomPageMarker();
                 if (customPageRegistry.size === 0) {
                     stopCustomPageTitleGuard();
                     if (customPageViewHandlerUnregister) {
@@ -2827,6 +2868,7 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
             if (!current) return;
             hideCustomPageEntry(current);
             customPageRegistry.delete(hrefPath);
+            syncCustomPageMarker();
             if (customPageRegistry.size === 0) {
                 stopCustomPageTitleGuard();
                 if (customPageViewHandlerUnregister) {

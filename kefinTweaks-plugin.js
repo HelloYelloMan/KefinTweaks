@@ -1780,19 +1780,25 @@ window.KefinTweaksConfig = ${JSON.stringify(config, null, 2)};`;
    .skinHeader:not(.osdHeader) on the .pageTitle rule is load-bearing: .pageTitle
    is a single element Jellyfin reuses for every view, including the playback
    OSD, so without it the player loses its series and episode title. */
-#reactRoot .skinBody:has(.customPage:not(.hide)) #fallbackPage {
+/* Keyed off html.kefin-custom-page-visible, which utils.js sets while one of
+   KefinTweaks' custom pages is showing (syncCustomPageMarker). These used to be
+   #reactRoot:has(.customPage:not(.hide)): a document-wide :has() whose argument
+   is the .hide class, so every .hide toggle anywhere in the app made Chromium
+   re-check it across the whole tree. Measured scrolling the home screen, which
+   toggles .hide constantly: about 40% of all style-recalc time. */
+html.kefin-custom-page-visible #reactRoot .skinBody #fallbackPage {
 	display: none;
 }
 
-#reactRoot:not(:has(.skinBody .customPage:not(.hide))) .skinHeader:not(.osdHeader) .pageTitle {
+html:not(.kefin-custom-page-visible) #reactRoot .skinHeader:not(.osdHeader) .pageTitle {
     display: none !important;
 }
 
-#reactRoot .skinBody:not(:has(.customPage:not(.hide))) #fallbackPage > * {
+html:not(.kefin-custom-page-visible) #reactRoot .skinBody #fallbackPage > * {
     display: none;
 }
 
-#reactRoot:not(:has(.skinBody .customPage:not(.hide))) #fallbackPage::after {
+html:not(.kefin-custom-page-visible) #reactRoot #fallbackPage::after {
 	content:'';
 	display: inline-block;
 	width: 20px;
@@ -1807,7 +1813,11 @@ window.KefinTweaksConfig = ${JSON.stringify(config, null, 2)};`;
 	top: 1em;
 }
 
-#reactRoot:has(.MuiBox-root) .libraryPage:not(.noSecondaryNavPage).customPage {
+/* Modern layout only. .MuiAppBar-root, not .MuiBox-root: MUI boxes are
+   inserted constantly (and 12's legacy details page has them too), so as a
+   :has() argument they re-ran this check on every insertion. The app bar only
+   exists in the modern layout and is mounted once. */
+#reactRoot:has(.MuiAppBar-root) .libraryPage:not(.noSecondaryNavPage).customPage {
   padding-top: 0 !important;
 }
 `;
