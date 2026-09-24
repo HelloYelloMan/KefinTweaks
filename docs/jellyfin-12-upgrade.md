@@ -8,6 +8,56 @@ here has been tested on a 12 server yet. Items that need a live test are marked 
 Jellyfin changed its version scheme: after 10.11.x comes **12.0** (2026-09-07), then
 **12.1** (2026-09-14). `/System/Info` reports `"12.1.0"`.
 
+## 0. Status on branch `jellyfin12`
+
+Every change is written to keep 10.11 behaving as before: each 12 path is chosen by
+feature detection or by server version. None of it has run in a browser yet.
+
+**Fixed on the branch** (numbers refer to §2):
+
+| § | Fix | Commit |
+|---|---|---|
+| 1.2, #1 | Legacy auth: osdLogo, pauseScreen fallback, theme-media streams, updoot use `Authorization`/`ApiKey` | 481e176 |
+| 1.3, #2 | websocketHelper, watchlist and homeScreen3 use `ApiClient.subscribe` on 12 (socket hook kept for 10.11). cardBuilder/homeScreen now depend on websocketHelper. | 481e176 |
+| 1.4, #3 | Every auth-header builder decodes before encoding; session lookups by deviceId too | 481e176 |
+| #11, 1.4 | `.split('.')[1]` version checks; URI-encoded `_appName` in version detection (baked stamp → `g3`) | 67cabb7 |
+| #7 | `isModernUI()` follows the saved layout on 12 (exported from utils; used by breadcrumbs, watchlist); hamburgerMenu skips legacy | 67cabb7 |
+| #6, #9 | virtualSpecials BoxSet Studios row on 12's React rows; mediaTags insert against wrapped rows | 8be93b5 |
+| #10, #16, 2.3 | elegant-kefin.css: secondary-section gap/padding, metadata separators and values, padder colour | 8be93b5 |
+| 2.3 | virtualSpecials reads the newest backdrop, not the lingering one | 8be93b5 |
+| #5 | posterAspect: 12.1 File Transformation rules, taken from the official `jellyfin-web_12.1+ubu2404` package, verified to match once and parse | 0d5a0da |
+| 2.4 | infiniteScroll and headerTabs legacy-only; removeContinue hides React cards instead of removing them; `pages:['home']` no longer matches `#/homevideos`; osdLogo uses the modern OSD bar; theme-video controls anchor to the MUI app bar | e53e2f2 |
+| #12 | removeContinue also resets alternate versions that carry progress (12 resumes from the last-played version) | e53e2f2 |
+| #14 | Conflicting `Filters` pairs are reduced to the last one, as 10.11 did, instead of a 400 | 01e3275 |
+
+**Deliberately not done** (needs a browser, or is a later clean-up):
+- Things 12 now does natively (§3) are all left in place, per Robert: castSessionWatchdog (inert on 12), backdropLeakFix, and the rest.
+- #8 versionPreferences' full-page reload on 12. Other details injectors watch the page for a bounded time, which should cover it. Live test.
+- Modern only:
+  - posterAspect's alpha-picker slack (`.alphaPicker-fixed-right`). This is card sizing, so it needs checking in Robert's browser before any change.
+  - themeMediaCastFix toggles on the React display page.
+  - skinManager custom themes in the MUI theme select.
+  - multiUserSession entry points.
+  - `viewshow` not firing on same-route React navigation.
+- The native TanStack cache can still show a removed Continue Watching card for up to 60 s (#12).
+- Episode Show Title and Card Focus After Back live in the JS Injector config, not the repo (§3).
+
+**Deploying:**
+- The files changed against `experimental` are `helpers/websocketHelper.js`, `injector.js`, `kefinTweaks-plugin.js`, `skins/elegant-kefin.css` and, under `scripts/`: `apiHelper`, `breadcrumbs`, `dashboardButtonFix`, `hamburgerMenu`, `headerTabs`, `homeScreen`, `homeScreen3`, `infiniteScroll`, `kefinTweaks-loader`, `mediaTags`, `osdLogo`, `pauseScreen`, `posterAspect`, `removeContinue`, `search`, `subtitleSearch`, `themeMediaCastFix`, `updoot`, `utils`, `virtualSpecials`, `watchlist` (all `.js`).
+- The first admin page load after deploying or upgrading rewrites the baked `KefinTweaks-injector` entry and posterAspect's File Transformation rules. Reload once after that.
+- posterAspect's rules then need one more reload before jellyfin-web is served patched.
+
+**Test checklist on 12.1**, in both Desktop (Legacy) and the default modern layout where it applies:
+1. **Console check.** Run `KefinTweaks._jellyfinMajorVersion` (expect 12), `KefinTweaksUtils.isModernUI()`, `typeof ApiClient.subscribe`. There should be a `[KefinTweaks WebSocketHelper] Subscribed through ApiClient.subscribe` line.
+2. **Live updates.** Mark an item played from a card. The watchlist drops it, and progress on other cards updates. Dashboard → Devices shows no second "Jellyfin Web" device or session for this browser.
+3. **Player.** Play something. The OSD logo appears (both layouts). The pause screen shows its logo and details.
+4. **BoxSet page.** It has a Studios row. Metadata rows have ElegantFin separators. A Tags row appears on an item with tags.
+5. **Poster ratios.** Cards and the item-page cover carry `par-NN` classes (after the reload that follows rule registration).
+6. **Breadcrumbs** render on a legacy details page.
+7. **Remove from Continue Watching** on an item with merged versions; the card should stay gone after a refresh.
+8. **Versions.** On an item with several versions, check that the preferred one is picked without flicker or loop, and that the Tags row survives.
+9. **Theme video** on a details page (modern): the mute/volume controls sit under the app bar.
+
 ---
 
 ## 1. The four changes behind almost everything else
