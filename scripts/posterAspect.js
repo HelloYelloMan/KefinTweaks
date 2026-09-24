@@ -118,7 +118,7 @@
      */
     const COVER_ENTRY_ID = 'b7d4f1a0-3c68-4e92-8a15-6f0b9d2c7e83';
 
-    const ENTRIES = [
+    const ENTRIES_V11 = [
         {
             Id: ENTRY_ID,
             FilenamePattern: String.raw`24468\.[0-9a-f]+\.chunk\.js`,
@@ -133,6 +133,32 @@
         }
     ];
 
+    /* The same two rules against jellyfin-web 12.1 (the official
+     * jellyfin-web_12.1+ubu2404 package), where the minifier renamed the
+     * variables: the card builder is still chunk 24468 with the item in `r`, but
+     * the class string is now `ae`; the cover is still built in the itemDetails
+     * chunk (components/cardbuilder/cardImage.ts, inlined there) with the item
+     * in `t` and the shape in `i`. Each SearchText occurs exactly once in its
+     * file. A later 12.x build can rename them again -- same symptom and same
+     * fix as described above. The ids are shared with the 10.11 rules, so an
+     * upgraded server's rules are replaced in place rather than duplicated. */
+    const ENTRIES_V12 = [
+        {
+            Id: ENTRY_ID,
+            FilenamePattern: String.raw`24468\.[0-9a-f]+\.chunk\.js`,
+            SearchText: `class="'+ae+'"'`,
+            ReplaceText: `class="'+(r.PrimaryImageAspectRatio>0?'par-'+Math.round(r.PrimaryImageAspectRatio*100)+' ':'')+ae+'"'`
+        },
+        {
+            Id: COVER_ENTRY_ID,
+            FilenamePattern: String.raw`itemDetails\.[0-9a-f]+\.chunk\.js`,
+            SearchText: `'<div class="card '.concat(i,'Card">`,
+            ReplaceText: `'<div class="card '.concat(i,'Card ',(t.PrimaryImageAspectRatio>0?'par-'+Math.round(t.PrimaryImageAspectRatio*100):''),'">`
+        }
+    ];
+
+    const ALL_ENTRIES = ENTRIES_V11.concat(ENTRIES_V12);
+
     /* An earlier approach wrote data-ar onto every card through a second rule,
      * under that same all-chunks pattern. It was abandoned -- cardBuilder sets
      * data-ar itself now -- but isOurs() matches on our id or our ReplaceText, so
@@ -142,8 +168,8 @@
 
     const normId = (id) => String(id || '').replace(/-/g, '').toLowerCase();
     const isOurs = (e) => !!e && (
-        ENTRIES.some((x) => normId(e.Id) === normId(x.Id))
-        || ENTRIES.some((x) => e.ReplaceText === x.ReplaceText)
+        ALL_ENTRIES.some((x) => normId(e.Id) === normId(x.Id))
+        || ALL_ENTRIES.some((x) => e.ReplaceText === x.ReplaceText)
     );
     const isStale = (e) => !!e && STALE_IDS.some((id) => normId(e.Id) === normId(id));
 
@@ -151,6 +177,12 @@
     function ensureTransformation() {
         if (registering) return registering;
         registering = (async () => {
+            const major = await window.KefinTweaks?.getJellyfinMajorVersion?.();
+            if (major == null) {
+                WARN('Jellyfin version unknown, so the ratio class rule was left as it is.');
+                return false;
+            }
+            const ENTRIES = major >= 12 ? ENTRIES_V12 : ENTRIES_V11;
             const id = await window.KefinTweaksUtils.resolvePluginId(PLUGIN);
             if (!id) {
                 WARN('File Transformation is not installed, so cards carry no ratio class.');
