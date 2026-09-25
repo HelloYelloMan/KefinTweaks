@@ -892,10 +892,31 @@
         });
     }
 
+    /* Two places mean "hide watched", and discovery sections use the other one.
+     *
+     * An ordinary section hides watched items with IsUnplayed on each query, so
+     * the toggle reads and writes that. A discovery section's queries are only
+     * templates: sectionHelper rebuilds them per render, and for Similar and
+     * SmartSimilar replaces their queryOptions outright, so IsUnplayed there
+     * does nothing. What it honours is section.hideWatched (sectionHelper's
+     * generic hideWatched, with the watch threshold from Discovery Settings).
+     *
+     * The toggle only ever looked at the queries, so on a discovery section it
+     * opened unticked even when hideWatched was on -- every Smart Similar default
+     * ships with it on -- and ticking it wrote IsUnplayed into templates that
+     * are thrown away, so it came back unticked. Both sides now use the flag for
+     * discovery sections. */
     function inferHideWatched(section) {
+        if (isDiscoverySection(section)) return section.hideWatched === true;
         const queries = section?.queries || [];
         if (!queries.length) return false;
         return queries.every(q => q?.queryOptions?.IsUnplayed === true);
+    }
+
+    /* The value to write into each query: never for a discovery section, whose
+     * setting lives on section.hideWatched (see inferHideWatched). */
+    function queryHideWatched(section, hideWatched) {
+        return isDiscoverySection(section) ? false : hideWatched;
     }
 
     function parseFiltersString(filters) {
@@ -1081,7 +1102,7 @@
                 state.queries = Array.from(editors).map(editor => {
                     const queryIndex = parseInt(editor.dataset.queryIndex, 10);
                     const originalQuery = state.section?.queries?.[queryIndex];
-                    return collectQueryFromEditor(editor, queryIndex, hideWatched, root, originalQuery);
+                    return collectQueryFromEditor(editor, queryIndex, queryHideWatched(state.section, hideWatched), root, originalQuery);
                 });
             }
         }
@@ -1838,9 +1859,11 @@
             queries: draft?.queries,
             items: draft?.items,
             externalListUrls: draft?.externalListUrls,
-            hideWatched: Array.isArray(draft?.queries)
-                && draft.queries.length > 0
-                && draft.queries.every(q => q?.queryOptions?.IsUnplayed === true)
+            hideWatched: isDiscoverySection(draft)
+                ? draft.hideWatched === true
+                : (Array.isArray(draft?.queries)
+                    && draft.queries.length > 0
+                    && draft.queries.every(q => q?.queryOptions?.IsUnplayed === true))
         });
     }
 
@@ -2441,7 +2464,12 @@
         const itemSource = isProfileFieldActive(root, itemSourceSection)
             ? (dialog.querySelector('.hsae-source-card.hsae-active[data-item-source]')?.dataset.itemSource || inferItemSource(section))
             : inferItemSource(originalSection || section);
-        const hideWatched = dialog.querySelector('#hsae-hide-watched')?.checked === true;
+        const hideWatchedEl = dialog.querySelector('#hsae-hide-watched');
+        const hideWatched = hideWatchedEl?.checked === true;
+        /* Explicit false, not a deleted key: loading spreads the saved section
+         * over its default, and the Smart Similar defaults are hideWatched: true,
+         * so a missing key would switch it straight back on. */
+        if (hideWatchedEl && isDiscoverySection(section)) section.hideWatched = hideWatched;
 
         if (itemSource === 'custom') {
             const customEditor = getCustomItemsEditor();
@@ -2469,7 +2497,7 @@
                 section.queries = Array.from(queryEditors).map(editor => {
                     const queryIndex = parseInt(editor.dataset.queryIndex, 10);
                     const originalQuery = originalSection?.queries?.[queryIndex];
-                    return collectQueryFromEditor(editor, queryIndex, hideWatched, root, originalQuery);
+                    return collectQueryFromEditor(editor, queryIndex, queryHideWatched(section, hideWatched), root, originalQuery);
                 });
                 if (section.queries.length > 1) {
                     section.useRandomQuery = dialog.querySelector('#hsae-use-random-query')?.checked === true;
