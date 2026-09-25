@@ -897,15 +897,14 @@
      * An ordinary section hides watched items with IsUnplayed on each query, so
      * the toggle reads and writes that. A discovery section's queries are only
      * templates: sectionHelper rebuilds them per render, and for Similar and
-     * SmartSimilar replaces their queryOptions outright, so IsUnplayed there
+     * Watchlist replaces their queryOptions outright, so IsUnplayed there
      * does nothing. What it honours is section.hideWatched (sectionHelper's
      * generic hideWatched, with the watch threshold from Discovery Settings).
      *
      * The toggle only ever looked at the queries, so on a discovery section it
-     * opened unticked even when hideWatched was on -- every Smart Similar default
-     * ships with it on -- and ticking it wrote IsUnplayed into templates that
-     * are thrown away, so it came back unticked. Both sides now use the flag for
-     * discovery sections. */
+     * opened unticked even when hideWatched was on, and ticking it wrote
+     * IsUnplayed into templates that are thrown away, so it came back unticked.
+     * Both sides now use the flag for discovery sections. */
     function inferHideWatched(section) {
         if (isDiscoverySection(section)) return section.hideWatched === true;
         const queries = section?.queries || [];
@@ -2467,8 +2466,8 @@
         const hideWatchedEl = dialog.querySelector('#hsae-hide-watched');
         const hideWatched = hideWatchedEl?.checked === true;
         /* Explicit false, not a deleted key: loading spreads the saved section
-         * over its default, and the Smart Similar defaults are hideWatched: true,
-         * so a missing key would switch it straight back on. */
+         * over its default, so for a section whose default is hideWatched: true
+         * a missing key would switch it straight back on. */
         if (hideWatchedEl && isDiscoverySection(section)) section.hideWatched = hideWatched;
 
         if (itemSource === 'custom') {

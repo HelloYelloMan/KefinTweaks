@@ -516,10 +516,7 @@
                 }
                 // If query path is Items/itemid/Similar then return the details page for the item
                 if (firstQuery.path.includes('Similar')) {
-                    // /Items/{id}/Similar -> [2], but /SmartSimilar/Items/{id}/Similar
-                    // carries an extra leading segment, so the id sits one further in.
-                    const parts = firstQuery.path.split('/');
-                    const itemId = firstQuery.path.includes('/SmartSimilar/') ? parts[3] : parts[2];
+                    const itemId = firstQuery.path.split('/')[2];
                     return `#/details?id=${itemId}&serverId=${serverId}`;
                 }
             }
@@ -604,7 +601,7 @@
                 queryOptions: { ItemType: itemType, Limit: 100 }
             };
         }
-        if (discoveryType === 'Similar' || discoveryType === 'SmartSimilar' || discoveryType === 'Watchlist') {
+        if (discoveryType === 'Similar' || discoveryType === 'Watchlist') {
             if (config.sourceType === 'liked' || discoveryType === 'Watchlist') {
                 return {
                     path: '/Items',
@@ -883,7 +880,7 @@
             };
         }
 
-        if (discoveryType === 'Similar' || discoveryType === 'SmartSimilar' || discoveryType === 'Watchlist') {
+        if (discoveryType === 'Similar' || discoveryType === 'Watchlist') {
             const dedupe = discoveryState.renderedDiscoveryIds.similar;
             const eligible = shuffleArray(pool).filter((item) => {
                 const sourceId = resolveSimilarSourceId(item);
@@ -1063,34 +1060,14 @@
         }
         if (!queryOptions.Limit) queryOptions.Limit = instanceConfig.itemLimit || 20;
 
-        if (discoveryKind === 'SmartSimilar') {
-            // The SmartSimilar plugin, not Jellyfin's native endpoint. Same request
-            // and response contract, but it scores candidates by IDF-weighted cosine
-            // similarity over tags, genres, people and studios, and discards features
-            // that appear in more than a quarter of the library. The native endpoint
-            // weights every shared tag equally, so one common tag is enough to surface
-            // something unrelated. Compared on a mecha series here, native returned
-            // five mostly unrelated shows and this returned five mecha ones.
-            //
-            // Degrades to an empty row rather than an error if the plugin is absent:
-            // the request 404s, the section yields nothing, and nothing else breaks.
-            const similarId = dynamicResult.similarSourceId || resolvedSource;
-            const smartThreshold = getDiscoverySettings().smartWatchThreshold ?? 0;
-            const smartLimit = instanceConfig.itemLimit || 20;
-            instanceConfig.queries = [{
-                ...(hasTemplateQueries ? instanceConfig.queries[0] : {}),
-                path: `/SmartSimilar/Items/${similarId}/Similar`,
-                queryOptions: {
-                    // Over-request: the server pre-filters on the same threshold, but
-                    // the client filter still prunes anything watched since the
-                    // response was cached.
-                    Limit: smartLimit * 2,
-                    Fields: queryOptions.Fields || 'PrimaryImageAspectRatio,DateCreated,Overview,Taglines,ProductionYear,RecursiveItemCount,ChildCount,UserData',
-                    ...(smartThreshold >= 0 ? { filterWatched: true, watchedThreshold: smartThreshold } : {})
-                }
-            }];
-            instanceConfig.refreshUserData = true;
-        } else if (discoveryKind === 'Similar' || discoveryKind === 'Watchlist') {
+        /* Similar goes through Jellyfin's own /Items/{id}/Similar. On Jellyfin 12
+         * that endpoint hands the item to the library's similar-items providers
+         * (LibraryController.GetSimilarItems -> ISimilarItemsManager, with the
+         * library's provider list and order), so the SmartSimilar plugin now
+         * serves these rows as one of those providers wherever a library selects
+         * it. The separate SmartSimilar sections and their direct
+         * /SmartSimilar/Items/{id}/Similar client were removed on 2026-09-25. */
+        if (discoveryKind === 'Similar' || discoveryKind === 'Watchlist') {
             const similarId = dynamicResult.similarSourceId || resolvedSource;
             instanceConfig.queries = [{
                 ...(hasTemplateQueries ? instanceConfig.queries[0] : {}),
@@ -1168,10 +1145,8 @@
             const finalLimit = instanceConfig.itemLimit || 20;
 
             // Over-request, because filtering removes items after the query and a
-            // short row is worse than a slightly larger fetch. SmartSimilar already
-            // doubles its own limit, so it is left alone.
-            // (type is always 'discovery' here; the kind is what says SmartSimilar)
-            if (discoveryKind !== 'SmartSimilar' && instanceConfig.queries) {
+            // short row is worse than a slightly larger fetch.
+            if (instanceConfig.queries) {
                 for (const q of instanceConfig.queries) {
                     if (q.queryOptions && q.queryOptions.Limit) {
                         q.queryOptions.Limit = q.queryOptions.Limit * 2;
