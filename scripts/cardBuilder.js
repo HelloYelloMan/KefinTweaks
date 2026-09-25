@@ -817,7 +817,9 @@
             processed = mergeNextUpAndContinueWatching(episodes, movies);
         }
 
-        return processed;
+        // Each query above was post-processed with its own config, which carries
+        // no minimum; the section's minimum applies to the merged row.
+        return enforceMinimumItems(sectionConfig, processed);
     }
 
     function postProcessItems(sectionConfig, itemsData) {
@@ -978,7 +980,34 @@
             processed = deduplicateItems(processed);
         }
 
-        return processed;
+        return enforceMinimumItems(sectionConfig, processed);
+    }
+
+    /* A section's Minimum Items, applied where its items are final.
+     *
+     * The setting was only ever read by two legacy renderers the home page no
+     * longer calls, and by the Collection discovery source (as a child count).
+     * Every live path -- the first paint from cache, progressive enhancement,
+     * a manual refresh -- removes a section only when it has NO items, so a
+     * "Shows from {Studio}" row for a studio with two series rendered two cards
+     * whatever the minimum said. Emptying the list here lets each of those paths
+     * drop the row the way it already drops an empty one.
+     *
+     * Runs after the filters above, so a row that played-status or image-type
+     * filtering thins out is judged by what is left, and after dedupe for the
+     * same reason. The watched filter (sectionHelper's hideWatched) runs later
+     * still and applies the same minimum itself. Unset, 0 or 1 means no minimum
+     * beyond "not empty". */
+    function getMinimumItems(sectionConfig) {
+        const n = parseInt(sectionConfig?.minimumItems, 10);
+        return Number.isFinite(n) && n > 1 ? n : 0;
+    }
+
+    function enforceMinimumItems(sectionConfig, items) {
+        const min = getMinimumItems(sectionConfig);
+        if (!min || !Array.isArray(items) || items.length === 0 || items.length >= min) return items;
+        console.log(`[KefinTweaks CardBuilder] Section ${sectionConfig.id}: ${items.length} item(s), below its minimum of ${min}; hiding it`);
+        return [];
     }
 
     function getQueryDisplayName(query, index) {

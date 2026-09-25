@@ -852,7 +852,20 @@
 
         if (discoveryType === 'Studio') {
             const dedupe = getStudioDedupeSet(config);
-            const eligible = pool.filter((s) => s?.Id && !dedupe.has(s.Id));
+            /* Pick only a studio that can fill the row. /Studios reports how many
+             * series and movies each studio has, and most of this library's 246
+             * studios have one to three -- so a random pick usually landed on one
+             * too small for the section's Minimum Items, which then hid the row
+             * and spent the discovery slot. Counts are the studio's whole
+             * catalogue, watched included, so this is a floor, not a guarantee;
+             * the rendered row is checked again (enforceMinimumItems). */
+            const minimum = parseInt(config.minimumItems, 10) > 1 ? parseInt(config.minimumItems, 10) : 0;
+            const countKey = itemType === 'Series' ? 'SeriesCount' : itemType === 'Movie' ? 'MovieCount' : null;
+            const eligible = pool.filter((s) => {
+                if (!s?.Id || dedupe.has(s.Id)) return false;
+                if (!minimum || !countKey || typeof s[countKey] !== 'number') return true;
+                return s[countKey] >= minimum;
+            });
             if (!eligible.length) return null;
             const selected = eligible[Math.floor(Math.random() * eligible.length)];
             dedupe.add(selected.Id);
@@ -1173,8 +1186,12 @@
                         }
                         return true;
                     });
-                    // Too few left to be worth a row; skip the section.
-                    if (filtered.length < 3) return null;
+                    // Too few left to be worth a row; skip the section. The
+                    // section's own Minimum Items when it has one, else 3.
+                    const minimum = parseInt(instanceConfig.minimumItems, 10) > 0
+                        ? parseInt(instanceConfig.minimumItems, 10)
+                        : 3;
+                    if (filtered.length < minimum) return null;
                     return filtered.slice(0, finalLimit);
                 };
             }
