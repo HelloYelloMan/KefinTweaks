@@ -1760,21 +1760,37 @@
 
             const savedConfig = window.KefinTweaksConfig;
             const savedHomeScreenConfig = savedConfig.homeScreenConfig || {};
-            
+
+            /* Prune the saved copy exactly as loadConfig does, before merging.
+             *
+             * mergeHomeScreenGroupConfig keeps every saved group the incoming
+             * config does not mention, and appends it to the END of the list --
+             * which is right for a partial save, and wrong for a default group
+             * that no longer exists. loadConfig pruned such a group from the
+             * editor's view, the next save wrote the saved copy straight back,
+             * and the editor then showed the saved result: the removed Genre
+             * Shows group reappearing at the bottom of the discovery list after
+             * every save, however many times it was "removed". Pruning on load
+             * alone can never fix that; the save has to drop it too. */
+            const defaults = window.KefinHomeConfig2 || {};
+            const savedGroupsFor = (key) => defaults[key]
+                ? pruneStaleDefaultGroups(defaults[key], savedHomeScreenConfig[key])
+                : (savedHomeScreenConfig[key] || []);
+
             // Create merged config
             const mergedHomeScreenConfig = {
                 // Merge default groups (HOME, SEASONAL, DISCOVERY) using deep merge
                 HOME_SECTION_GROUPS: mergeHomeScreenGroupConfig(
                     config.HOME_SECTION_GROUPS || [],
-                    savedHomeScreenConfig.HOME_SECTION_GROUPS || []
+                    savedGroupsFor('HOME_SECTION_GROUPS')
                 ),
                 SEASONAL_SECTION_GROUPS: mergeHomeScreenGroupConfig(
                     config.SEASONAL_SECTION_GROUPS || [],
-                    savedHomeScreenConfig.SEASONAL_SECTION_GROUPS || []
+                    savedGroupsFor('SEASONAL_SECTION_GROUPS')
                 ),
                 DISCOVERY_SECTION_GROUPS: mergeHomeScreenGroupConfig(
                     config.DISCOVERY_SECTION_GROUPS || [],
-                    savedHomeScreenConfig.DISCOVERY_SECTION_GROUPS || []
+                    savedGroupsFor('DISCOVERY_SECTION_GROUPS')
                 ),
                 // Custom groups are replaced entirely (UI is source of truth)
                 CUSTOM_SECTION_GROUPS: config.CUSTOM_SECTION_GROUPS || [],
