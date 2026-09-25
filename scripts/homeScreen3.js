@@ -67,6 +67,9 @@
         discoverySectionsRemain: true,
         ensuringDiscoveryBuffer: false,
         discoveryNeedsMoreScroll: false,
+        discoveryLastInputAt: 0,     // last wheel/touch/key/scrollbar input (performance.now)
+        discoveryLoadEndedAt: 0,     // when the last discovery group finished rendering
+        discoveryInputHandler: null,
         discoveryMode: null, // 'infinite' | 'chevron'
         infiniteScrollHandler: null,
         discoveryWheelHandler: null,
@@ -200,6 +203,8 @@
         return true;
     }
 
+    const DISCOVERY_INPUT_EVENTS = ['wheel', 'touchmove', 'keydown', 'mousedown'];
+
     function removeDiscoveryScrollListeners() {
         if (state.discoveryScrollDebounceTimer) {
             clearTimeout(state.discoveryScrollDebounceTimer);
@@ -208,6 +213,12 @@
         if (state.infiniteScrollHandler) {
             window.removeEventListener('scroll', state.infiniteScrollHandler);
             state.infiniteScrollHandler = null;
+        }
+        if (state.discoveryInputHandler) {
+            for (const type of DISCOVERY_INPUT_EVENTS) {
+                window.removeEventListener(type, state.discoveryInputHandler, true);
+            }
+            state.discoveryInputHandler = null;
         }
         if (state.discoveryWheelHandler) {
             window.removeEventListener('wheel', state.discoveryWheelHandler);
@@ -1528,6 +1539,7 @@
             state.discoveryBuffer = null;
         } finally {
             state.isRenderingDiscovery = false;
+            state.discoveryLoadEndedAt = performance.now();
             if (state.discoverySectionsRemain !== false) {
                 hideDiscoveryLoadingIndicator();
                 container.dataset.loadingDiscovery = 'false';
@@ -1730,9 +1742,21 @@
             const delta = Math.abs(scrollTop - lastScrollTop);
             lastScrollTop = scrollTop;
 
-            // After a group loads, ignore threshold until the user scrolls again
+            /* After a group loads, wait until the USER scrolls again.
+             *
+             * This used to re-arm on any scroll of 2px or more, and most scroll
+             * events after a load are not the user's. A group's sections resolve
+             * after the loader returns: a third or so are dropped for want of a
+             * source, the rest swap skeletons for rows of a different height, and
+             * each change above the viewport makes the browser adjust the scroll
+             * position -- firing a scroll event. That re-armed the trigger, the
+             * dropped sections had left the group short so the viewport was still
+             * near the bottom, and the next group loaded on its own: the view
+             * "pushed down into the next trigger" over and over until the user
+             * scrolled away. Only real input since the load now re-arms it. */
             if (state.discoveryNeedsMoreScroll) {
                 if (delta < 2) return;
+                if (!(state.discoveryLastInputAt > state.discoveryLoadEndedAt)) return;
                 state.discoveryNeedsMoreScroll = false;
             }
 
@@ -1760,6 +1784,17 @@
 
         state.infiniteScrollHandler = handleScroll;
         window.addEventListener('scroll', handleScroll, { passive: true });
+
+        // Anything a person does to move the page: wheel/trackpad, touch, the
+        // scroll keys, or pressing on the scrollbar (a mousedown on the root).
+        const SCROLL_KEYS = new Set(['PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', 'End', 'Home', ' ']);
+        state.discoveryInputHandler = (e) => {
+            if (e.type === 'keydown' && !SCROLL_KEYS.has(e.key)) return;
+            state.discoveryLastInputAt = performance.now();
+        };
+        for (const type of DISCOVERY_INPUT_EVENTS) {
+            window.addEventListener(type, state.discoveryInputHandler, { passive: true, capture: true });
+        }
         LOG('Infinite scroll enabled for discovery (debounced + scroll-gated re-arm).');
     }
 
