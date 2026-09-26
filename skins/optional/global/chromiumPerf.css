@@ -47,6 +47,19 @@ html.kefin-blink .homeSectionsContainer > .verticalSection.emby-scroller-contain
     contain-intrinsic-height: auto var(--kefin-home-row-height, 420px);
 }
 
+/* A row whose Configure Section menu is open paints outside its own box.
+ *
+ * content-visibility: auto implies paint containment, so nothing a row draws
+ * can show outside it -- and the configure menu opens UPWARD, over the row
+ * above. All but the strip still inside its own row was clipped, and a click
+ * on the missing part landed on the row behind. The overflow: visible that
+ * homeScreenSectionConfigure.js sets on the open row cannot lift containment;
+ * only turning it off can. The menu adds this class while it is open, and one
+ * row is briefly rendered without skipping, which costs nothing noticeable. */
+html.kefin-blink .homeSectionsContainer > .verticalSection.emby-scroller-container.kefin-section-configure-popover-open {
+    content-visibility: visible;
+}
+
 /* The spotlight is full-bleed, is normally on screen anyway, and runs its own
  * animations — skipping it buys nothing and risks a flash on load. */
 html.kefin-blink .homeSectionsContainer > .spotlight-section {
