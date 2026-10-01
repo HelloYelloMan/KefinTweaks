@@ -4,6 +4,7 @@
 // collection's children. Written for the generated per-work specials
 // collections, but every one of them is just as right on a hand-curated
 // collection, and none of them look at where the collection came from.
+// A fourth, on a special's own episode page, is described in its section.
 //
 //   1. ARTWORK FALLBACK. A generated collection has a poster and nothing else:
 //      of 300 here, 253 have no backdrop and 254 no logo. The page still lays
@@ -628,6 +629,89 @@
     }
 
     // ======================================================================
+    // 4. A special's episode page
+    // ======================================================================
+    //
+    // The breadcrumb runs Shows > series > virtual special > episode instead of
+    // through the Specials season, since the virtual special is where the
+    // episode is grouped. A virtual special is recognised by the
+    // AnimePipelineSeries id the pipeline gives every one it generates, not by
+    // its name. An episode is not assumed to be in only one: with several the
+    // crumb keeps the season's name and opens a list of them, and with none the
+    // trail is left as breadcrumbs.js built it.
+    //
+    // The same lookup sizes the title of jellyfin-web's collections row, which
+    // is plural however many cards it holds.
+
+    let lastCollections = { id: null, promise: null };
+
+    // Both consumers ask for the same item in the same navigation, so the last
+    // answer is all that is worth keeping.
+    function collectionsOf(itemId) {
+        if (lastCollections.id !== itemId) {
+            const url = ApiClient.getUrl(`Items/${itemId}/Collections`, {
+                userId: ApiClient.getCurrentUserId(),
+                fields: 'ProviderIds'
+            });
+            lastCollections = {
+                id: itemId,
+                promise: ApiClient.getJSON(url)
+                    .then(r => (r && r.Items) || [])
+                    .catch(error => { WARN('Could not read the episode\'s collections:', error); return []; })
+            };
+        }
+        return lastCollections.promise;
+    }
+
+    function isSpecialEpisode(item) {
+        return !!item && item.Type === 'Episode' && item.ParentIndexNumber === 0;
+    }
+
+    function isVirtualSpecial(collection) {
+        return collection.Type === 'BoxSet'
+            && !!(collection.ProviderIds && collection.ProviderIds.AnimePipelineSeries);
+    }
+
+    async function specialsBreadcrumbs(item, elements) {
+        if (!isSpecialEpisode(item)) return null;
+        const specials = (await collectionsOf(item.Id)).filter(isVirtualSpecial);
+        if (!specials.length) return null;
+
+        // The season crumb is the episode trail's only popover.
+        const at = elements.findIndex(e => e.popover);
+        if (at < 0) return null;
+
+        const crumb = specials.length === 1
+            ? {
+                text: specials[0].Name,
+                url: `${ApiClient._serverAddress}/web/#/details?id=${specials[0].Id}&serverId=${ApiClient.serverId()}`,
+                clickable: true
+            }
+            : { text: elements[at].text, url: null, clickable: true, popover: true, popoverItems: specials };
+        return elements.map((e, i) => (i === at ? crumb : e));
+    }
+
+    (window.KefinTweaksBreadcrumbOverrides = window.KefinTweaksBreadcrumbOverrides || [])
+        .push(specialsBreadcrumbs);
+
+    const TITLE_ATTR = 'data-kefin-original-title';
+
+    // null puts back what jellyfin-web wrote, for a page element being reused.
+    function setCollectionsTitle(page, text) {
+        const title = page.querySelector('#collectionsCollapsible .sectionTitle');
+        if (!title) return;
+        if (text == null) {
+            if (title.hasAttribute(TITLE_ATTR)) {
+                title.textContent = title.getAttribute(TITLE_ATTR);
+                title.removeAttribute(TITLE_ATTR);
+            }
+            return;
+        }
+        if (!title.hasAttribute(TITLE_ATTR)) title.setAttribute(TITLE_ATTR, title.textContent);
+        title.textContent = text;
+    }
+
+    // ======================================================================
     // Observers
     // ======================================================================
     //
@@ -729,6 +813,17 @@
                 if (page.classList.contains('hide')) return;
 
                 stopAll();
+                setCollectionsTitle(page, null);
+
+                if (isSpecialEpisode(item)) {
+                    const token = viewToken;
+                    collectionsOf(item.Id).then(collections => {
+                        if (token !== viewToken || page.classList.contains('hide')) return;
+                        if (collections.length === 1) setCollectionsTitle(page, 'Collection');
+                    });
+                    return;
+                }
+
                 if (!item || item.Type !== 'BoxSet' || !item.Id) return;
 
                 const token = viewToken;

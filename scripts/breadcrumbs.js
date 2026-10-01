@@ -169,7 +169,22 @@
                 { text: item.Name, url: null, clickable: false }
             ];
         }
-        
+
+        // Other features can rewrite the trail. Each override gets the item and
+        // the structure built so far, and returns a replacement element list or
+        // null to leave it. The array is shared through window so it does not
+        // matter which script loads first. A throwing override is skipped, not
+        // allowed to take the breadcrumbs down.
+        const overrides = window.KefinTweaksBreadcrumbOverrides || [];
+        for (const override of overrides) {
+            try {
+                const elements = await override(item, structure.elements);
+                if (Array.isArray(elements)) structure.elements = elements;
+            } catch (err) {
+                error('Breadcrumb override failed:', err);
+            }
+        }
+
         return structure;
     }
     
@@ -211,7 +226,12 @@
                     targetElement.text === 'All Songs'
                 );
                 
-                if (existingText !== targetElement.text || existingClickable !== targetClickable || needsPopoverUpdate) {
+                // Same text can lead somewhere else, e.g. a crumb an override
+                // rewrote. Its popover list is rebuilt every time, like the "All" ones.
+                const urlChanged = (existingElement.dataset.url || '') !== (targetElement.url || '');
+                const hasSuppliedPopover = Array.isArray(targetElement.popoverItems);
+
+                if (existingText !== targetElement.text || existingClickable !== targetClickable || needsPopoverUpdate || urlChanged || hasSuppliedPopover) {
                     differences.push({ action: 'update', index: i, element: targetElement });
                 }
             }
@@ -314,6 +334,7 @@
         const element = document.createElement('span');
         element.className = 'kefinTweaks-breadcrumb-element';
         element.textContent = elementDef.text;
+        element.dataset.url = elementDef.url || '';
         if (isModernBreadcrumbs()) {
             styleAsNavButton(element);
         }
@@ -341,6 +362,7 @@
     async function updateBreadcrumbElement(element, elementDef, item) {
         // Update text content
         element.textContent = elementDef.text;
+        element.dataset.url = elementDef.url || '';
         
         // Remove old event listeners by cloning
         const newElement = element.cloneNode(true);
@@ -366,7 +388,16 @@
     
     // Setup popover functionality for an element
     async function setupPopoverForElement(element, elementDef, item) {
-        if (elementDef.text === 'All Seasons') {
+        if (Array.isArray(elementDef.popoverItems)) {
+            // Supplied by an override: a list of items to navigate to
+            element.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const popover = createPopover(elementDef.popoverItems, null, (selected) => {
+                    window.location.href = `${ApiClient._serverAddress}/web/#/details?id=${selected.Id}&serverId=${ApiClient.serverId()}`;
+                });
+                showPopover(element, popover);
+            });
+        } else if (elementDef.text === 'All Seasons') {
             // Series page - always show popover
             const seasons = await getSeasonsIfNeeded(item.Id);
             element.addEventListener('click', (e) => {
