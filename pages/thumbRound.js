@@ -3,8 +3,9 @@
 // A season the player has watched some of, drawn at random by the AnimePipeline
 // plugin, one watched episode at a time: its title in the middle over the
 // picture it has now, the providers' stills on two arcs either side. A pick is
-// staged; after the last episode every pick is shown on its episode, and Write
-// sends them back together.
+// staged; after the last episode every pick is shown on its episode, and Submit
+// sends the picks and the keeps back together. The pipeline remembers every
+// episode decided on, here or in its viewer, and those are not drawn again.
 //
 // The writes go to the plugin, which files each still with the pipeline and
 // places it from there. A picture saved straight onto an episode would be put
@@ -36,7 +37,8 @@
         hover: null,
         picks: {},      // itemId -> still
         kept: {},       // itemId -> true
-        written: {},    // itemId -> true
+        written: {},    // itemId -> true: a pick, filed and placed
+        recorded: {},   // itemId -> true: a keep, recorded as reviewed
         errors: {},     // itemId -> message
         stills: {},     // itemId -> Promise<{stills, note}>
         resolved: {},   // itemId -> {stills, note}
@@ -109,7 +111,7 @@
     async function newRound() {
         Object.assign(S, {
             round: null, i: 0, reviewing: false, hover: null, picks: {}, kept: {},
-            written: {}, errors: {}, stills: {}, resolved: {}, armed: null,
+            written: {}, recorded: {}, errors: {}, stills: {}, resolved: {}, armed: null,
         });
         setStatus('Loading…');
         render();
@@ -185,8 +187,10 @@
 
     // --- Writing ---
 
+    // Everything decided and not yet sent: the picks, and the keeps -- a keep
+    // is a review too, and is what stops the episode coming up again.
     function pending() {
-        return (S.round?.episodes || []).filter((e) => S.picks[e.id]);
+        return (S.round?.episodes || []).filter((e) => S.picks[e.id] || (S.kept[e.id] && !S.recorded[e.id]));
     }
 
     // First press arms, second acts, and the arming lapses on its own.
@@ -210,15 +214,22 @@
         if (!arm('write')) return;
         S.writing = true;
         render();
+        const picked = todo.filter((e) => S.picks[e.id]);
+        const kept = todo.filter((e) => !S.picks[e.id]);
         try {
             const results = await api('AnimePipeline/Game/Answers', null, {
                 method: 'POST',
-                body: JSON.stringify({ answers: todo.map((e) => ({ itemId: e.id, url: S.picks[e.id].url })) }),
+                body: JSON.stringify({
+                    answers: picked.map((e) => ({ itemId: e.id, url: S.picks[e.id].url })),
+                    kept: kept.map((e) => e.id),
+                }),
             });
             for (const r of results || []) {
-                if (r.ok) {
+                if (r.ok && S.picks[r.itemId]) {
                     S.written[r.itemId] = true;
                     delete S.picks[r.itemId];
+                } else if (r.ok) {
+                    S.recorded[r.itemId] = true;
                 } else {
                     S.errors[r.itemId] = r.error || 'Not written';
                 }
@@ -255,7 +266,7 @@
 
     function stateOf(e) {
         if (S.errors[e.id]) return 'error';
-        if (S.written[e.id]) return 'written';
+        if (S.written[e.id] || S.recorded[e.id]) return 'written';
         if (S.picks[e.id]) return 'picked';
         if (S.kept[e.id]) return 'kept';
         return '';
@@ -356,6 +367,7 @@
             if (st) sub.dataset.state = st;
             sub.textContent = S.errors[e.id] ? S.errors[e.id]
                 : S.written[e.id] ? 'Written'
+                : S.recorded[e.id] ? 'Kept'
                 : still ? stillLabel(still)
                 : 'Current';
             card.addEventListener('click', () => go(k));
@@ -400,12 +412,12 @@
         const w = $('tro-write');
         w.hidden = !r || !S.reviewing;
         w.disabled = !n || S.writing;
-        w.textContent = S.writing ? 'Writing…' : S.armed === 'write' ? `Write ${n}?` : `Write ${n}`;
+        w.textContent = S.writing ? 'Submitting…' : S.armed === 'write' ? `Submit ${n}?` : `Submit ${n}`;
         if (S.armed === 'write') w.dataset.armed = '';
         else delete w.dataset.armed;
         const a = $('tro-again');
         a.hidden = !r || !S.reviewing || S.writing;
-        a.textContent = S.armed === 'again' ? `Drop ${n} picks?` : 'Next season';
+        a.textContent = S.armed === 'again' ? `Drop ${n} unsubmitted?` : 'Next season';
         if (S.armed === 'again') a.dataset.armed = '';
         else delete a.dataset.armed;
     }
