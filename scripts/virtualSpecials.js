@@ -99,10 +99,27 @@
         return ApiClient.getItem(ApiClient.getCurrentUserId(), itemId).catch(() => null);
     }
 
+    // The page and its breadcrumb ask for the same item within a moment of each
+    // other, so one answer serves both. It is kept for seconds, not for the
+    // session, so a revisit still sees the collection as it is now.
+    const SHARED_FETCH_MS = 10000;
+
+    function sharedFetch(slot, id, fetch) {
+        if (slot.id !== id || Date.now() - slot.at > SHARED_FETCH_MS) {
+            slot.id = id;
+            slot.at = Date.now();
+            slot.promise = fetch();
+        }
+        return slot.promise;
+    }
+
+    const lastChildren = {};
+
     function fetchChildren(collectionId) {
-        return ApiClient.getItems(ApiClient.getCurrentUserId(), { ParentId: collectionId })
-            .then(r => r.Items || [])
-            .catch(error => { WARN('Could not read collection children:', error); return []; });
+        return sharedFetch(lastChildren, collectionId, () =>
+            ApiClient.getItems(ApiClient.getCurrentUserId(), { ParentId: collectionId })
+                .then(r => r.Items || [])
+                .catch(error => { WARN('Could not read collection children:', error); return []; }));
     }
 
     // ======================================================================
@@ -629,38 +646,76 @@
     }
 
     // ======================================================================
-    // 4. A special's episode page
+    // 4. Breadcrumbs, and a special's episode page
     // ======================================================================
     //
-    // The breadcrumb runs Shows > series > virtual special > episode instead of
-    // through the Specials season, since the virtual special is where the
-    // episode is grouped. A virtual special is recognised by the
+    // A virtual special sits between a series and its specials, and the
+    // breadcrumbs say so: Shows > series > virtual special on the collection's
+    // own page, which breadcrumbs.js gives no trail at all, and Shows > series >
+    // virtual special > episode on a special, instead of going through the
+    // Specials season. A virtual special is recognised by the
     // AnimePipelineSeries id the pipeline gives every one it generates, not by
-    // its name. An episode is not assumed to be in only one: with several the
-    // crumb keeps the season's name and opens a list of them, and with none the
-    // trail is left as breadcrumbs.js built it.
+    // its name.
     //
-    // The same lookup sizes the title of jellyfin-web's collections row, which
-    // is plural however many cards it holds.
+    // Neither side is assumed to be single. An episode in several virtual
+    // specials keeps the season's name on its crumb and opens a list of them;
+    // a virtual special whose episodes come from several series opens a list
+    // of those. With none, the trail is left as breadcrumbs.js built it.
+    //
+    // The episode's collections also size the title of jellyfin-web's
+    // collections row, which is plural however many cards it holds.
 
-    let lastCollections = { id: null, promise: null };
+    const lastCollections = {};
 
-    // Both consumers ask for the same item in the same navigation, so the last
-    // answer is all that is worth keeping.
     function collectionsOf(itemId) {
-        if (lastCollections.id !== itemId) {
-            const url = ApiClient.getUrl(`Items/${itemId}/Collections`, {
+        return sharedFetch(lastCollections, itemId, () =>
+            ApiClient.getJSON(ApiClient.getUrl(`Items/${itemId}/Collections`, {
                 userId: ApiClient.getCurrentUserId(),
                 fields: 'ProviderIds'
-            });
-            lastCollections = {
-                id: itemId,
-                promise: ApiClient.getJSON(url)
-                    .then(r => (r && r.Items) || [])
-                    .catch(error => { WARN('Could not read the episode\'s collections:', error); return []; })
-            };
-        }
-        return lastCollections.promise;
+            }))
+                .then(r => (r && r.Items) || [])
+                .catch(error => { WARN('Could not read the episode\'s collections:', error); return []; }));
+    }
+
+    function detailsUrl(itemId) {
+        return `${ApiClient._serverAddress}/web/#/details?id=${itemId}&serverId=${ApiClient.serverId()}`;
+    }
+
+    // The Shows crumb opens the library the episode is in, as breadcrumbs.js
+    // does for a series.
+    async function showsCrumb(episode) {
+        let library = null;
+        try {
+            const ancestors = await ApiClient.getJSON(ApiClient.getUrl(`Items/${episode.Id}/Ancestors`, {
+                userId: ApiClient.getCurrentUserId()
+            }));
+            library = (ancestors || []).find(a => a.Type === 'CollectionFolder') || null;
+        } catch (e) { /* the library is optional */ }
+        const query = library
+            ? `?topParentId=${library.Id}&serverId=${ApiClient.serverId()}`
+            : `?serverId=${ApiClient.serverId()}`;
+        return { text: 'Shows', url: `#/tv${query}&tab=0`, clickable: true };
+    }
+
+    async function virtualSpecialBreadcrumbs(item) {
+        if (!item || item.Type !== 'BoxSet' || !isVirtualSpecial(item)) return null;
+        const episodes = (await fetchChildren(item.Id)).filter(c => c.SeriesId);
+        if (!episodes.length) return null;
+
+        const series = new Map();
+        episodes.forEach(e => {
+            if (!series.has(e.SeriesId)) series.set(e.SeriesId, { Id: e.SeriesId, Name: e.SeriesName });
+        });
+        const list = [...series.values()];
+        const seriesCrumb = list.length === 1
+            ? { text: list[0].Name, url: detailsUrl(list[0].Id), clickable: true }
+            : { text: 'Series', url: null, clickable: true, popover: true, popoverItems: list };
+
+        return [
+            await showsCrumb(episodes[0]),
+            seriesCrumb,
+            { text: item.Name, url: null, clickable: false }
+        ];
     }
 
     function isSpecialEpisode(item) {
@@ -682,17 +737,13 @@
         if (at < 0) return null;
 
         const crumb = specials.length === 1
-            ? {
-                text: specials[0].Name,
-                url: `${ApiClient._serverAddress}/web/#/details?id=${specials[0].Id}&serverId=${ApiClient.serverId()}`,
-                clickable: true
-            }
+            ? { text: specials[0].Name, url: detailsUrl(specials[0].Id), clickable: true }
             : { text: elements[at].text, url: null, clickable: true, popover: true, popoverItems: specials };
         return elements.map((e, i) => (i === at ? crumb : e));
     }
 
     (window.KefinTweaksBreadcrumbOverrides = window.KefinTweaksBreadcrumbOverrides || [])
-        .push(specialsBreadcrumbs);
+        .push(virtualSpecialBreadcrumbs, specialsBreadcrumbs);
 
     const TITLE_ATTR = 'data-kefin-original-title';
 

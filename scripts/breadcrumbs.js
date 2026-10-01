@@ -170,22 +170,28 @@
             ];
         }
 
-        // Other features can rewrite the trail. Each override gets the item and
-        // the structure built so far, and returns a replacement element list or
-        // null to leave it. The array is shared through window so it does not
-        // matter which script loads first. A throwing override is skipped, not
-        // allowed to take the breadcrumbs down.
+        structure.elements = await applyOverrides(item, structure.elements);
+
+        return structure;
+    }
+
+    // Other features can rewrite the trail, or give one to a type this file has
+    // none for. Each override gets the item and the elements built so far (empty
+    // for an unsupported type), and returns a replacement list or null to leave
+    // it. The array is shared through window so it does not matter which script
+    // loads first. A throwing override is skipped, not allowed to take the
+    // breadcrumbs down.
+    async function applyOverrides(item, elements) {
         const overrides = window.KefinTweaksBreadcrumbOverrides || [];
         for (const override of overrides) {
             try {
-                const elements = await override(item, structure.elements);
-                if (Array.isArray(elements)) structure.elements = elements;
+                const replaced = await override(item, elements);
+                if (Array.isArray(replaced)) elements = replaced;
             } catch (err) {
                 error('Breadcrumb override failed:', err);
             }
         }
-
-        return structure;
+        return elements;
     }
     
     // Compare existing breadcrumbs with target structure
@@ -960,15 +966,15 @@
                 return;
             }
             
-            // Check if item type is supported
-            if (!CONFIG.supportedTypes.includes(item.Type)) {
+            // An unsupported type only gets a trail if an override gives it one
+            const targetStructure = CONFIG.supportedTypes.includes(item.Type)
+                ? await getTargetBreadcrumbStructure(item)
+                : { elements: await applyOverrides(item, []), item: item };
+            if (!targetStructure.elements.length) {
                 clearBreadcrumbs();
                 hideBreadcrumbs();
                 return;
             }
-            
-            // Determine target breadcrumb structure
-            const targetStructure = await getTargetBreadcrumbStructure(item);
             log('Target breadcrumb structure:', targetStructure.elements.map(e => e.text));
             
             // Check if we need to create breadcrumbs from scratch
