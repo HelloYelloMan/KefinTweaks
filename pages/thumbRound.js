@@ -17,11 +17,13 @@
 
     const LOG = (...args) => console.log('[KefinTweaks ThumbRound]', ...args);
 
-    // The stills' arcs, as fractions of the stage measured from its centre.
-    const ARC_RX = 0.37;
-    const ARC_RY = 0.30;
-    // Each side arc spans this many degrees either side of the horizontal.
-    const SIDE_ARC = 40;
+    // The stills sit in two columns either side of the middle, bowed outward
+    // so they wrap around it. Their size is worked out from the space and the
+    // count: as large as fits without overlapping each other or the middle.
+    const CENTRE_SHARE = 0.34;      // the middle's width, as a share of the stage (matches the CSS)
+    const SIDE_MARGIN = 24;         // px between the middle, the tiles and the edges
+    const TILE_GAP = 14;            // px between tiles in a column
+    const TILE_MAX_HEIGHT = 0.32;   // a lone still is at most this share of the stage's height
     // How long a pick stays on screen before the round moves on.
     const ADVANCE_MS = 260;
     // How long an armed button waits for its second press.
@@ -77,9 +79,31 @@
         return client().getUrl(`Items/${ep.id}/Images/Primary`, { maxWidth: 960, quality: 90, v: S.stamp });
     }
 
-    function stillUrl(still) {
-        // A plain <img>, so the token rides the query string.
-        return client().getUrl('AnimePipeline/Game/Still', { url: still.url, ApiKey: client().accessToken() });
+    // A plain <img>, so the token rides the query string. The preview unless
+    // asked for the original: TheMovieDB's original can be 4K, and a round of
+    // those held the browser's few connections to the server long enough that
+    // the episode's own picture, queued behind them, never arrived.
+    function stillUrl(still, full) {
+        const url = full ? still.url : (still.preview_url || still.url);
+        return client().getUrl('AnimePipeline/Game/Still', { url, ApiKey: client().accessToken() });
+    }
+
+    // The middle picture: the preview at once, the original once it is in --
+    // and only if the middle is still showing that still by then.
+    function showInMiddle(still) {
+        const img = $('tro-shown-img');
+        if (!still) {
+            img.src = currentUrl(ep());
+            return;
+        }
+        img.src = stillUrl(still);
+        const full = stillUrl(still, true);
+        if (full === img.src) return;
+        const loader = new Image();
+        loader.onload = () => {
+            if ((S.hover || S.picks[ep()?.id]) === still) img.src = full;
+        };
+        loader.src = full;
     }
 
     // The plot as Jellyfin holds it: HTML, with <details> spoilers that stay
@@ -103,9 +127,39 @@
         return (still.provider || 'Still') + size;
     }
 
-    function place(deg) {
-        const a = deg * Math.PI / 180;
-        return { left: `${50 + ARC_RX * 100 * Math.cos(a)}%`, top: `${50 + ARC_RY * 100 * Math.sin(a)}%` };
+    // Positions and size for every tile, from the stage as it is now. Right
+    // takes the odd numbers and left the even, top to bottom, so 1 is nearest
+    // the top right. A phone lays the tiles out in CSS instead.
+    function layoutTiles() {
+        const stage = $('tro-stage');
+        const tiles = [...$('tro-tiles').children];
+        if (!tiles.length || stage.hidden || window.matchMedia('(max-width: 700px)').matches) {
+            tiles.forEach((t) => { t.style.left = t.style.top = t.style.width = ''; });
+            return;
+        }
+        const W = stage.clientWidth;
+        const H = stage.clientHeight;
+        const side = (W - W * CENTRE_SHARE) / 2 - SIDE_MARGIN * 2;
+        const counts = [Math.ceil(tiles.length / 2), Math.floor(tiles.length / 2)];
+        const most = counts[0];
+        const fitHeight = Math.min(H * TILE_MAX_HEIGHT, (H * 0.96 - TILE_GAP * (most - 1)) / most);
+        const w = Math.max(80, Math.min(side, fitHeight * 16 / 9));
+        const h = w * 9 / 16;
+        tiles.forEach((t, k) => {
+            const right = k % 2 === 0;
+            const n = counts[right ? 0 : 1];
+            const at = Math.floor(k / 2);
+            const total = n * h + (n - 1) * TILE_GAP;
+            const y = (H - total) / 2 + at * (h + TILE_GAP) + h / 2;
+            // The bow: the middle of a column sits furthest out, its ends come
+            // back in, never past the column's own half of the side space.
+            const u = n === 1 ? 0 : (at / (n - 1)) * 2 - 1;
+            const bow = ((side - w) / 2) * (1 - u * u);
+            const fromCentre = (W * CENTRE_SHARE) / 2 + SIDE_MARGIN + side / 2 + bow;
+            t.style.width = `${w}px`;
+            t.style.left = `${W / 2 + (right ? fromCentre : -fromCentre)}px`;
+            t.style.top = `${y}px`;
+        });
     }
 
     function ep() {
@@ -314,7 +368,7 @@
         }
 
         const shown = S.hover || S.picks[e.id];
-        $('tro-shown-img').src = shown ? stillUrl(shown) : currentUrl(e);
+        showInMiddle(shown);
         $('tro-shown-label').textContent = shown ? stillLabel(shown) : 'Current';
         if (S.picks[e.id]) $('tro-shown').dataset.picked = '';
         else delete $('tro-shown').dataset.picked;
@@ -326,23 +380,11 @@
         const tiles = $('tro-tiles');
         tiles.textContent = '';
         const list = got?.stills || [];
-        // Alternate right and left, each side spread over its own arc, so the
-        // first still is nearest the middle-right and they fan out from there.
-        const sides = [Math.ceil(list.length / 2), Math.floor(list.length / 2)];
         list.forEach((still, k) => {
-            const right = k % 2 === 0;
-            const n = sides[right ? 0 : 1];
-            const at = Math.floor(k / 2);
-            const t = n === 1 ? 0 : (at / (n - 1)) * 2 - 1;
-            const deg = t * SIDE_ARC;
-            const pos = place(right ? deg : 180 - deg);
-
             const b = document.createElement('button');
             b.type = 'button';
             b.className = 'tro-tile';
             b.title = stillLabel(still);
-            b.style.left = pos.left;
-            b.style.top = pos.top;
             if (S.picks[e.id] === still) b.dataset.picked = '';
             b.innerHTML = '<img alt="" loading="lazy"><span class="tro-tile-num"></span><span class="tro-tile-provider"></span>';
             b.querySelector('img').src = stillUrl(still);
@@ -358,6 +400,7 @@
             b.addEventListener('click', () => pick(still));
             tiles.appendChild(b);
         });
+        layoutTiles();
     }
 
     // Just the middle picture, on hover, without rebuilding the tiles.
@@ -365,7 +408,7 @@
         const e = ep();
         if (!e || S.reviewing) return;
         const shown = S.hover || S.picks[e.id];
-        $('tro-shown-img').src = shown ? stillUrl(shown) : currentUrl(e);
+        showInMiddle(shown);
         $('tro-shown-label').textContent = shown ? stillLabel(shown) : 'Current';
     }
 
@@ -479,6 +522,7 @@
         $('tro-start').addEventListener('click', start);
         $('tro-rules').addEventListener('click', showRules);
         document.addEventListener('keydown', onKey);
+        window.addEventListener('resize', () => { if (visible()) layoutTiles(); });
         LOG('Ready');
         render();
     }
