@@ -77,3 +77,10 @@
 .card .cardBox:not(.visualCardBox) .cardPadder {
     background-color: var(--lighterGradientPoint);
 }
+
+/* ElegantFin pads the phone layout's detail-button row 1.25em a side, which
+   wraps one button onto a line of its own and pushes the title up. The spotlight
+   on the home screen reuses .mainDetailButtons, hence the page scope. */
+.layout-mobile [dir=ltr] .itemDetailPage .mainDetailButtons {
+    padding: 0 0.25em;
+}
