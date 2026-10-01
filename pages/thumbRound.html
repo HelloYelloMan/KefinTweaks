@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Thumbnail Round</title>
+		<!-- FORK-ONLY. Needs the AnimePipeline plugin: the rounds, the stills and
+		     the writes are all its AnimePipeline/Game endpoints. -->
+		<script>
+			(function () {
+				var raw = (window.KefinTweaksConfig && window.KefinTweaksConfig.kefinTweaksRoot) || "";
+				window.__troRoot = raw ? (raw.endsWith("/") ? raw : raw + "/") : "";
+				if (window.__troRoot && !document.getElementById("tro-css")) {
+					var link = document.createElement("link");
+					link.id = "tro-css";
+					link.rel = "stylesheet";
+					link.href = window.__troRoot + "pages/thumbRound.css";
+					document.head.appendChild(link);
+				}
+			})();
+		</script>
+	</head>
+	<body class="tro-body">
+		<div class="tro-app">
+			<header class="tro-header">
+				<div class="tro-title">
+					<div id="tro-series" class="tro-series"></div>
+					<div id="tro-season" class="tro-season"></div>
+				</div>
+				<div id="tro-dots" class="tro-dots"></div>
+				<div id="tro-count" class="tro-count"></div>
+			</header>
+
+			<p id="tro-status" class="tro-status">Loading…</p>
+
+			<div id="tro-stage" class="tro-stage" hidden>
+				<div id="tro-centre" class="tro-centre">
+					<div id="tro-code" class="tro-code"></div>
+					<div id="tro-name" class="tro-name"></div>
+					<div id="tro-shown" class="tro-shown">
+						<img id="tro-shown-img" alt="" />
+						<span id="tro-shown-label" class="tro-label"></span>
+					</div>
+					<div id="tro-note" class="tro-note"></div>
+				</div>
+				<div id="tro-tiles" class="tro-tiles"></div>
+			</div>
+
+			<div id="tro-review" class="tro-review" hidden>
+				<div id="tro-review-grid" class="tro-review-grid"></div>
+			</div>
+
+			<footer id="tro-footer" class="tro-footer">
+				<button type="button" id="tro-prev" class="tro-btn">Previous</button>
+				<button type="button" id="tro-clear" class="tro-btn" hidden>Clear pick</button>
+				<button type="button" id="tro-keep" class="tro-btn">Keep current</button>
+				<button type="button" id="tro-next" class="tro-btn">Next</button>
+				<button type="button" id="tro-write" class="tro-btn tro-btn-primary" hidden></button>
+				<button type="button" id="tro-again" class="tro-btn tro-btn-primary" hidden>Next season</button>
+			</footer>
+		</div>
+		<script>
+			(function () {
+				var root = window.__troRoot || "";
+				var statusEl = document.getElementById("tro-status");
+				if (!root) {
+					statusEl.textContent = "kefinTweaksRoot is not configured.";
+					return;
+				}
+				if (document.getElementById("kefin-thumbRound-js")) return;
+				var s = document.createElement("script");
+				s.id = "kefin-thumbRound-js";
+				s.src = root + "pages/thumbRound.js";
+				s.onerror = function () {
+					statusEl.textContent = "Failed to load thumbRound.js from " + root;
+				};
+				document.body.appendChild(s);
+			})();
+		</script>
+	</body>
+</html>

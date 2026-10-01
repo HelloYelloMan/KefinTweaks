@@ -1,0 +1,306 @@
+/* Thumbnail Round. Everything is scoped under .tro-app: the page shares the
+   document with Jellyfin and the active skin. */
+
+.tro-app {
+    --tro-card: rgba(255, 255, 255, 0.04);
+    --tro-border: rgba(255, 255, 255, 0.12);
+    --tro-muted: rgba(255, 255, 255, 0.55);
+    --tro-pick: #38bdf8;
+    --tro-ok: #22c55e;
+    --tro-bad: #ef4444;
+    box-sizing: border-box;
+    max-width: 110rem;
+    margin: 0 auto;
+    padding: 1rem 1.25rem 1.5rem;
+    color: inherit;
+}
+
+.tro-app *,
+.tro-app *::before,
+.tro-app *::after {
+    box-sizing: inherit;
+}
+
+.tro-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.tro-title {
+    min-width: 0;
+    max-width: 35%;
+}
+
+.tro-series {
+    font-size: 1.15rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tro-season,
+.tro-count,
+.tro-note,
+.tro-status {
+    color: var(--tro-muted);
+    font-size: 0.85rem;
+}
+
+.tro-dots {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 5px;
+}
+
+.tro-dot {
+    width: 10px;
+    height: 10px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.18);
+    cursor: pointer;
+}
+
+.tro-dot[data-state="picked"] { background: var(--tro-pick); }
+.tro-dot[data-state="kept"] { background: rgba(255, 255, 255, 0.5); }
+.tro-dot[data-state="written"] { background: var(--tro-ok); }
+.tro-dot[data-state="error"] { background: var(--tro-bad); }
+.tro-dot[data-current] { box-shadow: 0 0 0 2px #fff; }
+
+.tro-status {
+    text-align: center;
+    margin: 3rem 0;
+}
+
+/* The stage: the episode in the middle, its stills on two arcs either side.
+   Tile positions are percentages of this box, set by the script. */
+.tro-stage {
+    position: relative;
+    height: max(26rem, calc(100vh - 15rem));
+}
+
+.tro-centre {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 34%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.tro-centre[data-leaving] {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.94);
+}
+
+.tro-code {
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    color: var(--tro-muted);
+}
+
+.tro-name {
+    font-size: 1.6rem;
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.tro-shown {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 0 2px var(--tro-border), 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.tro-shown[data-picked] {
+    box-shadow: 0 0 0 2px var(--tro-pick), 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.tro-shown img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.tro-label {
+    position: absolute;
+    left: 0.5rem;
+    bottom: 0.5rem;
+    font-size: 0.75rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.65);
+}
+
+.tro-note {
+    min-height: 1.2em;
+}
+
+.tro-tile {
+    position: absolute;
+    width: 13%;
+    aspect-ratio: 16 / 9;
+    transform: translate(-50%, -50%);
+    padding: 0;
+    border: 2px solid var(--tro-border);
+    border-radius: 7px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.tro-tile:hover {
+    transform: translate(-50%, -50%) scale(1.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    z-index: 2;
+}
+
+.tro-tile[data-picked] {
+    border-color: var(--tro-pick);
+}
+
+.tro-tile img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.tro-tile-num,
+.tro-tile-provider {
+    position: absolute;
+    font-size: 0.65rem;
+    padding: 0 0.3rem;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+}
+
+.tro-tile-num { left: 0.25rem; top: 0.2rem; font-family: ui-monospace, monospace; }
+.tro-tile-provider { right: 0.25rem; bottom: 0.2rem; }
+
+/* The review: every episode of the round with the picture it will get. */
+.tro-review-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 0.9rem;
+}
+
+.tro-card {
+    background: var(--tro-card);
+    border: 1px solid var(--tro-border);
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    text-align: left;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+}
+
+.tro-card[data-state="picked"] { border-color: var(--tro-pick); }
+.tro-card[data-state="written"] { border-color: var(--tro-ok); }
+.tro-card[data-state="error"] { border-color: var(--tro-bad); }
+
+.tro-card-img {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.tro-card-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.tro-card-body {
+    padding: 0.5rem 0.65rem 0.6rem;
+}
+
+.tro-card-title {
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tro-card-sub {
+    font-size: 0.75rem;
+    color: var(--tro-muted);
+}
+
+.tro-card-sub[data-state="error"] { color: var(--tro-bad); }
+.tro-card-sub[data-state="written"] { color: var(--tro-ok); }
+
+.tro-footer {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.tro-btn {
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.45rem 0.9rem;
+    border-radius: 6px;
+    border: 1px solid var(--tro-border);
+    background: rgba(255, 255, 255, 0.06);
+    color: inherit;
+    cursor: pointer;
+}
+
+.tro-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); }
+.tro-btn:disabled { opacity: 0.4; cursor: default; }
+.tro-btn-primary { background: #0369a1; border-color: #0369a1; color: #fff; }
+.tro-btn-primary:hover:not(:disabled) { background: #0284c7; }
+.tro-btn[data-armed] { background: #b91c1c; border-color: #b91c1c; }
+
+/* A phone has no room for the arcs: the picture on top, the stills under it. */
+@media (max-width: 700px) {
+    .tro-title { max-width: 60%; }
+    .tro-stage { height: auto; }
+    .tro-centre {
+        position: static;
+        width: 100%;
+        transform: none;
+    }
+    .tro-centre[data-leaving] { transform: none; }
+    .tro-tiles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+    }
+    .tro-tile {
+        position: relative;
+        left: auto !important;
+        top: auto !important;
+        width: calc(50% - 0.25rem);
+        transform: none;
+    }
+    .tro-tile:hover { transform: none; }
+    .tro-footer { flex-wrap: wrap; }
+}

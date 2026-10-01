@@ -73,10 +73,12 @@
         }
 
         try {
-            const [gamesRaw, movieLutRaw, threeRaw] = await Promise.all([
+            const [gamesRaw, movieLutRaw, threeRaw, thumbRoundRaw] = await Promise.all([
                 fetchPageHtml(root, 'pages/games.html'),
                 fetchPageHtml(root, 'pages/movieLut.html'),
                 fetchPageHtml(root, 'pages/3x3.html'),
+                // FORK-ONLY: the AnimePipeline plugin's thumbnail game.
+                fetchPageHtml(root, 'pages/thumbRound.html'),
             ]);
 
             const gamesHtml = buildContentHtmlFromDocument(gamesRaw, 'kefin-custom-page-games');
@@ -86,6 +88,8 @@
             utils.addCustomPage('#/games', 'Games', gamesHtml);
             utils.addCustomPage('#/movieLut', 'Movie LUT', movieLutHtml);
             utils.addCustomPage('#/3x3', '3x3', threeByThreeHtml);
+            utils.addCustomPage('#/thumbRound', 'Thumbnail Round',
+                buildContentHtmlFromDocument(thumbRoundRaw, 'kefin-custom-page-thumbround'));
 
             const ok = await utils.addCustomMenuLink('Games', 'sports_esports', '#/games', false);
             if (ok) LOG('Games menu link + custom pages registered');
