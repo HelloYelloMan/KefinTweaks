@@ -29,6 +29,7 @@
     const $ = (id) => document.getElementById(id);
 
     const S = {
+        intro: true,    // the start screen is up
         round: null,
         i: 0,
         reviewing: false,
@@ -232,6 +233,20 @@
 
     // --- Drawing ---
 
+    function start() {
+        S.intro = false;
+        if (S.round) render();
+        else newRound();
+    }
+
+    function showRules() {
+        S.intro = true;
+        S.hover = null;
+        setStatus('');
+        render();
+        window.scrollTo(0, 0);
+    }
+
     function setStatus(text) {
         const el = $('tro-status');
         el.textContent = text;
@@ -349,6 +364,20 @@
     }
 
     function render() {
+        $('tro-intro').hidden = !S.intro;
+        $('tro-rules').hidden = S.intro;
+        $('tro-start').textContent = S.round ? 'Back to the round' : 'Start';
+        if (S.intro) {
+            $('tro-stage').hidden = true;
+            $('tro-review').hidden = true;
+            $('tro-footer').hidden = true;
+            $('tro-dots').hidden = true;
+            $('tro-count').hidden = true;
+            return;
+        }
+        $('tro-dots').hidden = false;
+        $('tro-count').hidden = false;
+
         const r = S.round;
         $('tro-series').textContent = r?.seriesName || '';
         $('tro-season').textContent = r?.seasonName || '';
@@ -389,7 +418,7 @@
     }
 
     function onKey(e) {
-        if (!S.round || !visible() || e.ctrlKey || e.metaKey || e.altKey) return;
+        if (S.intro || !S.round || !visible() || e.ctrlKey || e.metaKey || e.altKey) return;
         const t = e.target;
         if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
         const k = e.key;
@@ -415,9 +444,11 @@
         $('tro-clear').addEventListener('click', clearPick);
         $('tro-write').addEventListener('click', write);
         $('tro-again').addEventListener('click', again);
+        $('tro-start').addEventListener('click', start);
+        $('tro-rules').addEventListener('click', showRules);
         document.addEventListener('keydown', onKey);
         LOG('Ready');
-        newRound();
+        render();
     }
 
     init();

@@ -278,6 +278,72 @@
 .tro-btn-primary:hover:not(:disabled) { background: #0284c7; }
 .tro-btn[data-armed] { background: #b91c1c; border-color: #b91c1c; }
 
+/* The start screen: the rules, the kinds of thumbnail, the controls. */
+.tro-intro {
+    max-width: 52rem;
+    margin: 0 auto;
+    line-height: 1.5;
+}
+
+.tro-intro h1 {
+    font-size: 1.8rem;
+    margin: 0.5rem 0 0.75rem;
+}
+
+.tro-intro h2 {
+    font-size: 1.1rem;
+    margin: 1.6rem 0 0.5rem;
+}
+
+.tro-intro p,
+.tro-intro li {
+    color: rgba(255, 255, 255, 0.82);
+}
+
+.tro-intro p { margin: 0 0 0.6rem; }
+.tro-intro ul { margin: 0; padding-left: 1.2rem; }
+.tro-intro li { margin-bottom: 0.3rem; }
+
+.tro-kinds {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 0.6rem;
+    margin: 0.5rem 0 0;
+}
+
+.tro-kinds > div {
+    background: var(--tro-card);
+    border: 1px solid var(--tro-border);
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+}
+
+.tro-kinds dt {
+    font-weight: 600;
+    margin-bottom: 0.15rem;
+}
+
+.tro-kinds dd {
+    margin: 0;
+    font-size: 0.88rem;
+    color: var(--tro-muted);
+}
+
+.tro-intro kbd {
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    padding: 0.05rem 0.35rem;
+    border: 1px solid var(--tro-border);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.tro-intro #tro-start {
+    margin: 1.6rem 0 1rem;
+    padding: 0.6rem 1.6rem;
+    font-size: 1rem;
+}
+
 /* A phone has no room for the arcs: the picture on top, the stills under it. */
 @media (max-width: 700px) {
     .tro-title { max-width: 60%; }

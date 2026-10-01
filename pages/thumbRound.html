@@ -29,9 +29,60 @@
 				</div>
 				<div id="tro-dots" class="tro-dots"></div>
 				<div id="tro-count" class="tro-count"></div>
+				<button type="button" id="tro-rules" class="tro-btn" hidden>Rules</button>
 			</header>
 
-			<p id="tro-status" class="tro-status">Loading…</p>
+			<section id="tro-intro" class="tro-intro">
+				<h1>Thumbnail Round</h1>
+				<p>
+					Each round is a random season you have watched some of. For every episode of it you have
+					watched, pick the thumbnail that suits it best from its stills, or keep the one it has.
+				</p>
+
+				<h2>No spoilers within the season</h2>
+				<p>
+					A thumbnail must not spoil the season's story at face value: someone who has not reached the
+					episode should learn nothing from it. If it shows a story element, what it means should only
+					become clear once you have watched up to that episode.
+				</p>
+				<p>
+					The rule covers the episode's own season. Later seasons can show anything from earlier ones:
+					a character revealed by surprise in season 1 is just a character in season 2.
+				</p>
+
+				<h2>What makes a good thumbnail</h2>
+				<p>It depends on the episode, and there is no hard rule. These are the common kinds:</p>
+				<dl class="tro-kinds">
+					<div><dt>Character</dt><dd>One of the episode's main characters. The safe choice.</dd></div>
+					<div><dt>Context</dt><dd>Interesting at a glance, but only makes full sense once you have watched the episodes before it.</dd></div>
+					<div><dt>Setting</dt><dd>Where the episode takes place: a new town, the festival, the beach.</dd></div>
+					<div><dt>Premise</dt><dd>The situation the episode opens with, never how it turns out.</dd></div>
+					<div><dt>Pairing</dt><dd>The two or three characters the episode is about.</dd></div>
+					<div><dt>Mood</dt><dd>A frame chosen for its atmosphere: rain on a window, a sunset, an empty room.</dd></div>
+					<div><dt>Gag</dt><dd>An exaggerated reaction or a comic frame.</dd></div>
+					<div><dt>Object</dt><dd>A prop that matters in the episode: a letter, a ticket, a strange device.</dd></div>
+				</dl>
+
+				<h2>Avoid</h2>
+				<ul>
+					<li>Reveals: an identity, a transformation, a power-up, a death, a confession and its answer.</li>
+					<li>A character whose first appearance is a twist.</li>
+					<li>The episode's ending or cliffhanger.</li>
+					<li>Credits and on-screen text, fades, motion blur, mid-blink faces, heavy letterboxing.</li>
+				</ul>
+
+				<h2>Controls</h2>
+				<ul>
+					<li>Click a still to pick it and move on. Hover to see it large.</li>
+					<li><kbd>←</kbd> <kbd>→</kbd> move between episodes. <kbd>Space</kbd> keeps the current thumbnail.</li>
+					<li><kbd>1</kbd>–<kbd>9</kbd> pick that still. <kbd>Backspace</kbd> clears the pick.</li>
+					<li>After the last episode every pick is shown on its episode. Write sends them; nothing is changed before that.</li>
+				</ul>
+
+				<button type="button" id="tro-start" class="tro-btn tro-btn-primary">Start</button>
+			</section>
+
+			<p id="tro-status" class="tro-status" hidden></p>
 
 			<div id="tro-stage" class="tro-stage" hidden>
 				<div id="tro-centre" class="tro-centre">
