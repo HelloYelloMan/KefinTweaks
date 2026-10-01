@@ -82,6 +82,22 @@
         return client().getUrl('AnimePipeline/Game/Still', { url: still.url, ApiKey: client().accessToken() });
     }
 
+    // The plot as Jellyfin holds it: HTML, with <details> spoilers that stay
+    // closed until clicked, as they do on the episode page. Anything that could
+    // run is taken out first.
+    function setPlot(el, html) {
+        const t = document.createElement('template');
+        t.innerHTML = html || '';
+        t.content.querySelectorAll('script, style, iframe, object, embed, link').forEach((n) => n.remove());
+        t.content.querySelectorAll('*').forEach((n) => {
+            for (const a of [...n.attributes]) {
+                if (/^on/i.test(a.name) || /^\s*javascript:/i.test(a.value)) n.removeAttribute(a.name);
+            }
+        });
+        el.replaceChildren(t.content);
+        el.scrollTop = 0;
+    }
+
     function stillLabel(still) {
         const size = still.width && still.height ? ` · ${still.width}×${still.height}` : '';
         return (still.provider || 'Still') + size;
@@ -292,6 +308,10 @@
         const e = ep();
         $('tro-code').textContent = code(e);
         $('tro-name').textContent = e.name || '';
+        if ($('tro-plot').dataset.for !== e.id) {
+            setPlot($('tro-plot'), e.overview);
+            $('tro-plot').dataset.for = e.id;
+        }
 
         const shown = S.hover || S.picks[e.id];
         $('tro-shown-img').src = shown ? stillUrl(shown) : currentUrl(e);
