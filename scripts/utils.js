@@ -702,9 +702,23 @@
         return a;
     }
 
+    /* The divider separates the bar's own buttons from what is added after
+     * them. Jellyfin's More is one of its own -- with Libraries in More it holds
+     * every library -- but it is a <button>, which the <a> scan below never
+     * counts, so the divider used to land before it. When More is there the
+     * divider goes after it instead. React renders More once the libraries
+     * load, which can be after the divider exists, so the divider is moved when
+     * it is not right after More; moving only when misplaced keeps this from
+     * feeding the observer that calls it. */
     function ensureTopNavDivider(stack) {
         let divider = stack.querySelector('[data-kefin-custom-menu-top-divider]');
-        if (divider) return divider;
+        if (divider) {
+            const nativeMore = findNativeTopNavMoreButton(stack);
+            if (nativeMore && nativeMore.nextElementSibling !== divider) {
+                nativeMore.insertAdjacentElement('afterend', divider);
+            }
+            return divider;
+        }
 
         divider = document.createElement('div');
         divider.className = 'kefin-custom-menu-top-divider';
@@ -716,7 +730,7 @@
             a => !a.hasAttribute('data-kefin-custom-menu-top-link')
                 && !a.hasAttribute('data-kefin-custom-menu-more')
         );
-        const lastNative = anchors[anchors.length - 1];
+        const lastNative = findNativeTopNavMoreButton(stack) || anchors[anchors.length - 1];
         if (lastNative) {
             lastNative.insertAdjacentElement('afterend', divider);
         } else {
@@ -1074,7 +1088,9 @@
             return true;
         }
 
-        const moreBtn = findTopNavMoreButton(stack);
+        // Our own More stays last. Jellyfin's More sits before the divider, so
+        // a link goes after the divider like any other.
+        const moreBtn = stack.querySelector('[data-kefin-custom-menu-more]');
         if (moreBtn) {
             moreBtn.insertAdjacentElement('beforebegin', btn);
         } else {
