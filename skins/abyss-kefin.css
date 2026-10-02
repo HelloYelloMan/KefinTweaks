@@ -470,3 +470,46 @@ html[data-theme="dark"].layout-mobile header.MuiAppBar-root > .MuiToolbar-root >
 html[data-theme="dark"].layout-mobile .MuiToolbar-root .MuiButton-root {
 	padding: 0.4rem 0.75rem;
 }
+
+/* Phone: one size for every header button, and for the Media Bar's buttons.
+ *
+ * Header, measured at 411px: the menu and the app's back arrow were 33x33,
+ * but SyncPlay, Cast, Appearance and Search 33x48 -- their box stretches its
+ * children to its own 48px height -- and Jellyfin Enhanced's dice
+ * (.headerButton, fixed 48x48, no padding) 48x48. Abyss draws a glass
+ * background on each, so the shapes showed. Here the box centres its children
+ * instead of stretching them, and the dice gets the IconButtons' box: a 22px
+ * icon with 0.4rem a side (the padding set above).
+ *
+ * Media Bar: info 50x50, play 47x50, watchlist 50x50, trailer 49x50,
+ * favourite 50x50 (abyss-mbe.css pads some 8px, Media Bar others 12.6px, ours
+ * 1px 6px). Each keeps its own shape and fill -- see the watchlist rule near the
+ * top -- in one 48px box. Play and Trailer are icon-only on a phone already
+ * (abyss-mbe.css hides their text below 40em). #slides-container out-ranks
+ * abyss-mbe.css, which loads after this file. */
+html[data-theme="dark"].layout-mobile header.MuiAppBar-root > .MuiToolbar-root > .MuiBox-root {
+	align-items: center;
+}
+html[data-theme="dark"].layout-mobile header.MuiAppBar-root .headerButton.headerButtonRight {
+	width: calc(22px + 0.8rem) !important;
+	height: calc(22px + 0.8rem) !important;
+	min-width: 0 !important;
+	padding: 0 !important;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+html[data-theme="dark"].layout-mobile header.MuiAppBar-root .headerButton.headerButtonRight :is(.je-dice-spin, .je-dice-face, svg) {
+	width: 22px;
+	height: 22px;
+}
+.layout-mobile #slides-container .button-container > * {
+	width: 48px !important;
+	height: 48px !important;
+	min-width: 0 !important;
+	padding: 0 !important;
+	box-sizing: border-box;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
