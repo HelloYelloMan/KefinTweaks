@@ -9,9 +9,7 @@
     --tro-ok: #22c55e;
     --tro-bad: #ef4444;
     box-sizing: border-box;
-    max-width: 110rem;
-    margin: 0 auto;
-    padding: 1rem 1.25rem 1.5rem;
+    padding: 1rem clamp(1.25rem, 2vw, 4rem) 1rem;
     color: inherit;
 }
 
@@ -19,6 +17,12 @@
 .tro-app *::before,
 .tro-app *::after {
     box-sizing: inherit;
+}
+
+/* `hidden` has to win over the display a rule below gives the same element --
+   the footer is a flex row, and without this its buttons showed on the rules. */
+.tro-app [hidden] {
+    display: none !important;
 }
 
 .tro-header {
@@ -34,7 +38,7 @@
 }
 
 .tro-series {
-    font-size: 1.15rem;
+    font-size: clamp(1.15rem, 1vw, 2rem);
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
@@ -46,7 +50,7 @@
 .tro-note,
 .tro-status {
     color: var(--tro-muted);
-    font-size: 0.85rem;
+    font-size: clamp(0.85rem, 0.65vw, 1.3rem);
 }
 
 .tro-dots {
@@ -59,8 +63,8 @@
 }
 
 .tro-dot {
-    width: 10px;
-    height: 10px;
+    width: clamp(10px, 0.55vw, 18px);
+    height: clamp(10px, 0.55vw, 18px);
     padding: 0;
     border: 0;
     border-radius: 50%;
@@ -83,7 +87,7 @@
    Tile positions are percentages of this box, set by the script. */
 .tro-stage {
     position: relative;
-    height: max(26rem, calc(100vh - 15rem));
+    height: max(26rem, calc(100vh - 13rem));
 }
 
 .tro-centre {
@@ -107,12 +111,12 @@
 
 .tro-code {
     font-family: ui-monospace, monospace;
-    font-size: 0.8rem;
+    font-size: clamp(0.8rem, 0.6vw, 1.2rem);
     color: var(--tro-muted);
 }
 
 .tro-name {
-    font-size: 1.6rem;
+    font-size: clamp(1.6rem, 1.5vw, 3.2rem);
     font-weight: 600;
     text-align: center;
     line-height: 1.2;
@@ -122,7 +126,7 @@
     width: 100%;
     max-height: 6.6em;
     overflow-y: auto;
-    font-size: 0.88rem;
+    font-size: clamp(0.88rem, 0.75vw, 1.45rem);
     line-height: 1.5;
     color: rgba(255, 255, 255, 0.72);
     pointer-events: auto;
@@ -156,7 +160,7 @@
     position: absolute;
     left: 0.5rem;
     bottom: 0.5rem;
-    font-size: 0.75rem;
+    font-size: clamp(0.75rem, 0.6vw, 1.15rem);
     padding: 0.1rem 0.45rem;
     border-radius: 4px;
     background: rgba(0, 0, 0, 0.65);
@@ -201,7 +205,7 @@
 .tro-tile-num,
 .tro-tile-provider {
     position: absolute;
-    font-size: 0.65rem;
+    font-size: clamp(0.65rem, 0.55vw, 1.05rem);
     padding: 0 0.3rem;
     border-radius: 3px;
     background: rgba(0, 0, 0, 0.65);
@@ -214,8 +218,9 @@
 /* The review: every episode of the round with the picture it will get. */
 .tro-review-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-    gap: 0.9rem;
+    justify-content: center;
+    grid-template-columns: repeat(auto-fill, minmax(clamp(15rem, 17vw, 38rem), 1fr));
+    gap: clamp(0.9rem, 0.8vw, 1.6rem);
 }
 
 .tro-card {
@@ -252,14 +257,14 @@
 }
 
 .tro-card-title {
-    font-size: 0.9rem;
+    font-size: clamp(0.9rem, 0.75vw, 1.45rem);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .tro-card-sub {
-    font-size: 0.75rem;
+    font-size: clamp(0.75rem, 0.6vw, 1.15rem);
     color: var(--tro-muted);
 }
 
@@ -275,9 +280,9 @@
 
 .tro-btn {
     font: inherit;
-    font-size: 0.85rem;
+    font-size: clamp(0.85rem, 0.65vw, 1.3rem);
     font-weight: 600;
-    padding: 0.45rem 0.9rem;
+    padding: 0.45em 0.9em;
     border-radius: 6px;
     border: 1px solid var(--tro-border);
     background: rgba(255, 255, 255, 0.06);
@@ -293,19 +298,20 @@
 
 /* The start screen: the rules, the kinds of thumbnail, the controls. */
 .tro-intro {
-    max-width: 52rem;
+    max-width: min(68em, 100%);
     margin: 0 auto;
     line-height: 1.5;
+    font-size: clamp(1rem, 0.8vw, 1.6rem);
 }
 
 .tro-intro h1 {
-    font-size: 1.8rem;
-    margin: 0.5rem 0 0.75rem;
+    font-size: 1.8em;
+    margin: 0.5em 0 0.75em;
 }
 
 .tro-intro h2 {
-    font-size: 1.1rem;
-    margin: 1.6rem 0 0.5rem;
+    font-size: 1.1em;
+    margin: 1.6em 0 0.5em;
 }
 
 .tro-intro p,
@@ -319,7 +325,7 @@
 
 .tro-kinds {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(15em, 1fr));
     gap: 0.6rem;
     margin: 0.5rem 0 0;
 }
@@ -338,13 +344,13 @@
 
 .tro-kinds dd {
     margin: 0;
-    font-size: 0.88rem;
+    font-size: 0.88em;
     color: var(--tro-muted);
 }
 
 .tro-intro kbd {
     font-family: ui-monospace, monospace;
-    font-size: 0.8rem;
+    font-size: 0.8em;
     padding: 0.05rem 0.35rem;
     border: 1px solid var(--tro-border);
     border-radius: 4px;
@@ -352,9 +358,9 @@
 }
 
 .tro-intro #tro-start {
-    margin: 1.6rem 0 1rem;
-    padding: 0.6rem 1.6rem;
-    font-size: 1rem;
+    margin: 1.6em 0 1em;
+    padding: 0.6em 1.6em;
+    font-size: 1em;
 }
 
 /* A phone has no room for the arcs: the picture on top, the stills under it. */

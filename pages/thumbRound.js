@@ -17,13 +17,21 @@
 
     const LOG = (...args) => console.log('[KefinTweaks ThumbRound]', ...args);
 
-    // The stills sit in two columns either side of the middle, bowed outward
-    // so they wrap around it. Their size is worked out from the space and the
-    // count: as large as fits without overlapping each other or the middle.
-    const CENTRE_SHARE = 0.34;      // the middle's width, as a share of the stage (matches the CSS)
+    // The middle and the stills are sized from the stage, not fixed: the
+    // middle as large as the height allows up to a share of the width, and
+    // the stills either side as large as fits. A side with many stills splits
+    // into two or three columns when that gives bigger tiles than one tall
+    // one; a single column is bowed outward so it wraps around the middle.
+    const CENTRE_MAX_SHARE = 0.46;  // the middle's width at most, as a share of the stage
+    const CENTRE_ALONE_SHARE = 0.6; // the same, for an episode with no stills
+    const PICTURE_MAX_HEIGHT = 0.6; // its picture at most this share of the stage's height
     const SIDE_MARGIN = 24;         // px between the middle, the tiles and the edges
-    const TILE_GAP = 14;            // px between tiles in a column
+    const TILE_GAP = 14;            // px between tiles
     const TILE_MAX_HEIGHT = 0.32;   // a lone still is at most this share of the stage's height
+    const MAX_SIDE_COLUMNS = 3;
+    const STAGE_MIN_HEIGHT = 416;   // px
+    const STAGE_BOTTOM_ROOM = 28;   // px under the footer
+    const CARD_MAX_SHARE = 0.4;     // a review card at most this share of the width
     // How long a pick stays on screen before the round moves on.
     const ADVANCE_MS = 260;
     // How long an armed button waits for its second press.
@@ -127,38 +135,68 @@
         return (still.provider || 'Still') + size;
     }
 
-    // Positions and size for every tile, from the stage as it is now. Right
-    // takes the odd numbers and left the even, top to bottom, so 1 is nearest
-    // the top right. A phone lays the tiles out in CSS instead.
+    // The middle's width, and every tile's position and size, from the stage
+    // as it is now. Right takes the odd numbers and left the even, row by row
+    // from the top, so 1 is nearest the top right. A phone lays it all out in
+    // CSS instead.
     function layoutTiles() {
         const stage = $('tro-stage');
+        const centre = $('tro-centre');
         const tiles = [...$('tro-tiles').children];
-        if (!tiles.length || stage.hidden || window.matchMedia('(max-width: 700px)').matches) {
+        if (stage.hidden || window.matchMedia('(max-width: 700px)').matches) {
+            stage.style.height = '';
+            centre.style.width = '';
             tiles.forEach((t) => { t.style.left = t.style.top = t.style.width = ''; });
             return;
         }
+        // The stage takes what is left of the window under the header and
+        // above the footer, which both scale with the window's text.
+        const top = stage.getBoundingClientRect().top + window.scrollY;
+        const below = $('tro-footer').offsetHeight + STAGE_BOTTOM_ROOM;
+        stage.style.height = `${Math.max(STAGE_MIN_HEIGHT, window.innerHeight - top - below)}px`;
         const W = stage.clientWidth;
         const H = stage.clientHeight;
-        const side = (W - W * CENTRE_SHARE) / 2 - SIDE_MARGIN * 2;
+        const share = tiles.length ? CENTRE_MAX_SHARE : CENTRE_ALONE_SHARE;
+        const centreW = Math.min(W * share, H * PICTURE_MAX_HEIGHT * 16 / 9);
+        centre.style.width = `${centreW}px`;
+        if (!tiles.length) return;
+
+        const side = (W - centreW) / 2 - SIDE_MARGIN * 2;
         const counts = [Math.ceil(tiles.length / 2), Math.floor(tiles.length / 2)];
-        const most = counts[0];
-        const fitHeight = Math.min(H * TILE_MAX_HEIGHT, (H * 0.96 - TILE_GAP * (most - 1)) / most);
-        const w = Math.max(80, Math.min(side, fitHeight * 16 / 9));
+        // The column count that gives the larger side its biggest tiles; the
+        // other side uses the same size so the two match.
+        let w = 0;
+        let cols = 1;
+        for (let c = 1; c <= MAX_SIDE_COLUMNS; c++) {
+            const rows = Math.ceil(counts[0] / c);
+            const byHeight = ((H * 0.96 - TILE_GAP * (rows - 1)) / rows) * 16 / 9;
+            const byWidth = (side - TILE_GAP * (c - 1)) / c;
+            const fit = Math.min(byHeight, byWidth, H * TILE_MAX_HEIGHT * 16 / 9);
+            if (fit > w + 1) { w = fit; cols = c; }
+        }
+        w = Math.max(80, w);
         const h = w * 9 / 16;
+        const sideCentre = centreW / 2 + SIDE_MARGIN + side / 2;     // from the stage's middle
         tiles.forEach((t, k) => {
             const right = k % 2 === 0;
             const n = counts[right ? 0 : 1];
             const at = Math.floor(k / 2);
-            const total = n * h + (n - 1) * TILE_GAP;
-            const y = (H - total) / 2 + at * (h + TILE_GAP) + h / 2;
-            // The bow: the middle of a column sits furthest out, its ends come
-            // back in, never past the column's own half of the side space.
-            const u = n === 1 ? 0 : (at / (n - 1)) * 2 - 1;
-            const bow = ((side - w) / 2) * (1 - u * u);
-            const fromCentre = (W * CENTRE_SHARE) / 2 + SIDE_MARGIN + side / 2 + bow;
+            const c = Math.min(cols, n);
+            const rows = Math.ceil(n / c);
+            const row = Math.floor(at / c);
+            const col = at % c;
+            const gridW = c * w + (c - 1) * TILE_GAP;
+            const gridH = rows * h + (rows - 1) * TILE_GAP;
+            let dx = sideCentre - gridW / 2 + col * (w + TILE_GAP) + w / 2;
+            // A single column bows: its middle sits furthest out and its ends
+            // come back in, never past the column's own share of the side.
+            if (c === 1 && n > 1) {
+                const u = (at / (n - 1)) * 2 - 1;
+                dx += ((side - w) / 2) * (1 - u * u);
+            }
             t.style.width = `${w}px`;
-            t.style.left = `${W / 2 + (right ? fromCentre : -fromCentre)}px`;
-            t.style.top = `${y}px`;
+            t.style.left = `${W / 2 + (right ? dx : -dx)}px`;
+            t.style.top = `${(H - gridH) / 2 + row * (h + TILE_GAP) + h / 2}px`;
         });
     }
 
@@ -412,6 +450,33 @@
         $('tro-shown-label').textContent = shown ? stillLabel(shown) : 'Current';
     }
 
+    // The review's cards: the column count that makes them largest while the
+    // whole season fits above the footer.
+    function layoutReview() {
+        const grid = $('tro-review-grid');
+        const cards = [...grid.children];
+        if (!cards.length || $('tro-review').hidden || window.matchMedia('(max-width: 700px)').matches) {
+            grid.style.gridTemplateColumns = '';
+            return;
+        }
+        const gap = parseFloat(getComputedStyle(grid).columnGap) || 16;
+        const body = cards[0].querySelector('.tro-card-body').offsetHeight;
+        const W = grid.clientWidth;
+        const H = window.innerHeight - (grid.getBoundingClientRect().top + window.scrollY)
+            - $('tro-footer').offsetHeight - STAGE_BOTTOM_ROOM - 12;
+        const n = cards.length;
+        let best = 0;
+        let cols = 1;
+        for (let c = 1; c <= n; c++) {
+            const rows = Math.ceil(n / c);
+            const byWidth = (W - gap * (c - 1)) / c;
+            const byHeight = ((H - gap * (rows - 1)) / rows - body) * 16 / 9;
+            const w = Math.min(byWidth, byHeight, W * CARD_MAX_SHARE);
+            if (w > best + 1) { best = w; cols = c; }
+        }
+        grid.style.gridTemplateColumns = `repeat(${cols}, ${Math.max(160, best)}px)`;
+    }
+
     function renderReview() {
         const grid = $('tro-review-grid');
         grid.textContent = '';
@@ -436,6 +501,7 @@
             card.addEventListener('click', () => go(k));
             grid.appendChild(card);
         });
+        layoutReview();
     }
 
     function render() {
@@ -522,7 +588,7 @@
         $('tro-start').addEventListener('click', start);
         $('tro-rules').addEventListener('click', showRules);
         document.addEventListener('keydown', onKey);
-        window.addEventListener('resize', () => { if (visible()) layoutTiles(); });
+        window.addEventListener('resize', () => { if (visible()) { layoutTiles(); layoutReview(); } });
         LOG('Ready');
         render();
     }
