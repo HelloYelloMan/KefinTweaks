@@ -436,7 +436,7 @@
             if (animation) {
                 const animationScript = document.querySelector(`script[src*="${animation}.js"]`);
                 if (!animationScript) {
-                    const animationScriptSrc = (window.KefinTweaksConfig.kefinTweaksRoot || '') + `scripts/seasonal/${animation}.js`;
+                    const animationScriptSrc = (window.KefinTweaksAssetUrl || ((u) => u))((window.KefinTweaksConfig.kefinTweaksRoot || '') + `scripts/seasonal/${animation}.js`);
                     const script = document.createElement('script');
                     script.src = animationScriptSrc;
                     document.head.appendChild(script);

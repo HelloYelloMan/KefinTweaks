@@ -845,9 +845,11 @@
         }
     ];
 
-    // Use this for development
-    const urlSuffix = '';
-    //const urlSuffix = `?v=${new Date().getTime()}`;
+    // Our files carry ?v=<config.assetVersion> (see assetVersionSuffix in
+    // scripts/kefinTweaks-loader.js); tools/deploy.py sets it on every deploy.
+    const urlSuffix = window.KefinTweaksConfig?.assetVersion
+        ? '?v=' + encodeURIComponent(String(window.KefinTweaksConfig.assetVersion))
+        : '';
 
     // Inject dashboard drawer version badge CSS using dynamic version number
     async function injectVersionBadgeCSS() {

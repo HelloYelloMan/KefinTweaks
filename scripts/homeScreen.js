@@ -173,7 +173,7 @@
                     
                     if (!snowverlayScript) {
                         // Use the snowverlay.js script to add snowflakes to the background
-                        const snowverlayScriptSrc = (window.KefinTweaksConfig.kefinTweaksRoot || '') + 'scripts/snowverlay.js';
+                        const snowverlayScriptSrc = (window.KefinTweaksAssetUrl || ((u) => u))((window.KefinTweaksConfig.kefinTweaksRoot || '') + 'scripts/snowverlay.js');
                         const snowverlayScript = document.createElement('script');
                         snowverlayScript.src = snowverlayScriptSrc;
                         document.head.appendChild(snowverlayScript);

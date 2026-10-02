@@ -5303,7 +5303,7 @@
                 return;
             }
 
-            const scriptUrl = `${root}configuration/homeScreen-user-configuration.js`;
+            const scriptUrl = (window.KefinTweaksAssetUrl || ((u) => u))(`${root}configuration/homeScreen-user-configuration.js`);
             const script = document.createElement('script');
             script.src = scriptUrl;
             script.async = true;

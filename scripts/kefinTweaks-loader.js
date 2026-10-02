@@ -768,6 +768,31 @@
         return normalizeRoot(cfg.kefinTweaksRootResolved || cfg.kefinTweaksRoot || '');
     }
 
+    /* Version token for our own files: ?v=<config.assetVersion>.
+     *
+     * The web root serves our scripts and sheets with an ETag but no
+     * Cache-Control, so a browser may reuse a copy for as long as its
+     * heuristics allow -- days, for a file that has not changed in weeks --
+     * and a deploy reached people only when their copies happened to expire.
+     * tools/deploy.py sets assetVersion in KefinTweaks-Config on every deploy.
+     * That entry arrives in JS Injector's public.js, which is never cached, so a
+     * new token is in every browser on its next load, and with it new URLs that
+     * no stale copy answers. With no assetVersion set, nothing is appended. */
+    function assetVersionSuffix(config) {
+        const v = config && config.assetVersion;
+        return v ? '?v=' + encodeURIComponent(String(v)) : '';
+    }
+
+    /* For code that loads one of our files by hand rather than through the
+       load plan. Defined here and in the baked KefinTweaks-injector, whichever
+       runs first. Leaves a URL that already has a query alone. */
+    if (typeof window !== 'undefined' && typeof window.KefinTweaksAssetUrl !== 'function') {
+        window.KefinTweaksAssetUrl = function (url) {
+            const suffix = assetVersionSuffix(window.KefinTweaksConfig);
+            return (url && suffix && url.indexOf('?') === -1) ? url + suffix : url;
+        };
+    }
+
     function resolveAssetUrl(root, relativePath) {
         if (!relativePath) return null;
         if (/^https?:\/\//i.test(relativePath)) return relativePath;
@@ -878,7 +903,7 @@
             || ''
         );
         if (!root) throw new Error('kefinTweaksRoot is required to build load plan');
-        const urlSuffix = options.urlSuffix || '';
+        const urlSuffix = options.urlSuffix || assetVersionSuffix(config);
         const byName = definitionsByName();
         const enabled = mergeEnabledScripts(config);
         const featuresDisabled = (config && config.enabled === false) || options.configOnly === true;
@@ -931,7 +956,8 @@
             // rewritten, so bump this whenever buildInjectorScript's output changes
             // or existing installs keep running the old script. g2: console gate.
             // g3: Jellyfin 12's URI-encoded app name in version detection.
-            'g3',
+            // g4: our files carry ?v=<config.assetVersion>.
+            'g4',
             root,
             String(majorVersion == null ? 'unknown' : majorVersion),
             featuresDisabled ? 'config-only' : 'full',
@@ -991,18 +1017,40 @@
         return window.KefinTweaks;
     }
 
+    /* Is this file already on the page, under any token?
+     *
+     * Matched on the resolved address without its query. The baked
+     * KefinTweaks-injector and this live plan normally name a file identically,
+     * but not while the stored entry predates the token (it is rebuilt on the
+     * next admin page load): an exact-attribute match then misses, and every
+     * script would run twice. */
+    function bareUrl(url) {
+        try { return new URL(url, document.baseURI).href.split('?')[0]; } catch (e) { return String(url).split('?')[0]; }
+    }
+
+    function assetOnPage(kind, url) {
+        const want = bareUrl(url);
+        const nodes = kind === 'css'
+            ? document.querySelectorAll('link[rel="stylesheet"][href]')
+            : document.querySelectorAll('script[src]');
+        for (const n of nodes) {
+            if (bareUrl(kind === 'css' ? n.href : n.src) === want) return true;
+        }
+        return false;
+    }
+
     function applyAssetsToDocument(assets) {
         (assets || []).forEach((a) => {
             if (!a || !a.url) return;
             if (a.kind === 'css') {
-                if (document.querySelector('link[href="' + a.url + '"]')) return;
+                if (assetOnPage('css', a.url)) return;
                 const l = document.createElement('link');
                 l.rel = 'stylesheet';
                 l.type = 'text/css';
                 l.href = a.url;
                 document.head.appendChild(l);
             } else {
-                if (document.querySelector('script[src="' + a.url + '"]')) return;
+                if (assetOnPage('js', a.url)) return;
                 const s = document.createElement('script');
                 s.src = a.url;
                 s.async = false;
@@ -1099,11 +1147,16 @@
             '  var resolvedRoot = String(cfg.kefinTweaksRootResolved || cfg.kefinTweaksRoot || \'\').trim();',
             '  if (!resolvedRoot) return;',
             '  if (resolvedRoot.charAt(resolvedRoot.length - 1) !== \'/\') resolvedRoot += \'/\';',
+            // Read from the config at run time, not baked: a deploy changes the
+            // token without rebuilding this entry, and the live plan reads the
+            // same value, so both name each file identically.
+            '  var assetSuffix = cfg.assetVersion ? \'?v=\' + encodeURIComponent(String(cfg.assetVersion)) : \'\';',
+            '  window.KefinTweaksAssetUrl = function (url) { return (url && assetSuffix && url.indexOf(\'?\') === -1) ? url + assetSuffix : url; };',
             '  function joinAssetUrl(relativePath) {',
             '    if (!relativePath) return null;',
             '    if (/^https?:\\/\\//i.test(relativePath)) return relativePath;',
             '    var base = resolvedRoot + \'scripts/\';',
-            '    try { return new URL(relativePath, base).href; } catch (e) { return base + relativePath; }',
+            '    try { return new URL(relativePath, base).href + assetSuffix; } catch (e) { return base + relativePath + assetSuffix; }',
             '  }',
             '  window.KefinTweaksScriptsPreloaded = true;',
             '  window.KefinTweaksInjectorStamp = ' + stampJson + ';',

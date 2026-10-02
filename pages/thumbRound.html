@@ -14,7 +14,7 @@
 					var link = document.createElement("link");
 					link.id = "tro-css";
 					link.rel = "stylesheet";
-					link.href = window.__troRoot + "pages/thumbRound.css";
+					link.href = (window.KefinTweaksAssetUrl || function (u) { return u; })(window.__troRoot + "pages/thumbRound.css");
 					document.head.appendChild(link);
 				}
 			})();
@@ -125,7 +125,7 @@
 				if (document.getElementById("kefin-thumbRound-js")) return;
 				var s = document.createElement("script");
 				s.id = "kefin-thumbRound-js";
-				s.src = root + "pages/thumbRound.js";
+				s.src = (window.KefinTweaksAssetUrl || function (u) { return u; })(root + "pages/thumbRound.js");
 				s.onerror = function () {
 					statusEl.textContent = "Failed to load thumbRound.js from " + root;
 				};
