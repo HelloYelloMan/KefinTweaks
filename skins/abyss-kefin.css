@@ -483,8 +483,9 @@ html[data-theme="dark"].layout-mobile .MuiToolbar-root .MuiButton-root {
  *
  * Media Bar: info 50x50, play 47x50, watchlist 50x50, trailer 49x50,
  * favourite 50x50 (abyss-mbe.css pads some 8px, Media Bar others 12.6px, ours
- * 1px 6px). Each keeps its own shape and fill -- see the watchlist rule near the
- * top -- in one 48px box. Play and Trailer are icon-only on a phone already
+ * 1px 6px), around a 24px icon. Each keeps its own shape and fill -- see the
+ * watchlist rule near the top -- in one 40px box: the same size as the item
+ * page's action buttons, with 8px round the icon instead of about 12. Play and Trailer are icon-only on a phone already
  * (abyss-mbe.css hides their text below 40em). #slides-container out-ranks
  * abyss-mbe.css, which loads after this file. */
 html[data-theme="dark"].layout-mobile header.MuiAppBar-root > .MuiToolbar-root > .MuiBox-root {
@@ -504,8 +505,8 @@ html[data-theme="dark"].layout-mobile header.MuiAppBar-root .headerButton.header
 	height: 22px;
 }
 .layout-mobile #slides-container .button-container > * {
-	width: 48px !important;
-	height: 48px !important;
+	width: 40px !important;
+	height: 40px !important;
 	min-width: 0 !important;
 	padding: 0 !important;
 	box-sizing: border-box;
