@@ -412,3 +412,29 @@ html.layout-desktop[dir="ltr"] .itemsContainer > .card > .cardBox {
 	margin-left: 0 !important;
 	margin-right: 0 !important;
 }
+
+/* Phone header: room for the Jellyfin app's back arrow.
+ *
+ * In the Android app, jellyfin-web adds a back arrow beside the menu button on
+ * any page you can go back from (AppToolbar: window.NativeShell), so a library
+ * page has one more icon than Home. On a phone the toolbar wraps
+ * (flex-wrap: wrap below lg), and its last box, the profile button, is what
+ * wraps -- onto a second line, at the left. Abyss spaces the header widely and
+ * in rem (menu margins 0 8px, icon padding 0.6rem, gaps 0.48rem): measured at
+ * 360px with the arrow, its row needs 384px against ElegantFin's 356. On a
+ * real 411px phone in the app it wrapped too -- the app's row comes out a few
+ * pixels wider than this measurement, for a reason not pinned down (not the
+ * Android font size).
+ *
+ * Tighter spacing on the mobile layout saves about 65px at 360px, enough
+ * headroom for that difference. The profile avatar keeps Abyss's own
+ * `padding: 0 !important`, which out-ranks this. */
+html[data-theme="dark"].layout-mobile header.MuiAppBar-root button[aria-label="Open Menu"].MuiButtonBase-root {
+	margin: 0 !important;
+}
+html[data-theme="dark"].layout-mobile header.MuiAppBar-root > .MuiToolbar-root .MuiIconButton-root {
+	padding: 0.4rem;
+}
+html[data-theme="dark"].layout-mobile header.MuiAppBar-root > .MuiToolbar-root > .MuiBox-root {
+	gap: 0.25rem;
+}
