@@ -3228,9 +3228,18 @@
             }
         }
         
+        // Jellyfin's mobile layout gives its cards no hover menu, only a
+        // visible play button bottom-right, and no card-hoverable
+        // (cardbuilder/cardBuilder.js and Card/CardBox.tsx, useCard.ts). Ours
+        // match it there: the hover menu was invisible on a phone but its
+        // buttons still took taps, so the middle of a card played it and the
+        // corners marked it played or favourite. Keyed on Jellyfin's layout,
+        // not isMobileLayout(), which also counts any window under 900px.
+        const mobileLayout = document.documentElement.classList.contains('layout-mobile');
+
         // Create the main card container
         const card = document.createElement('div');
-        card.className = `card ${cardClass} card-hoverable card-withuserdata`;
+        card.className = `card ${cardClass}${mobileLayout ? '' : ' card-hoverable'} card-withuserdata`;
         card.setAttribute('data-index', '0');
         card.setAttribute('data-isfolder', itemType === 'MusicAlbum' || itemType === 'Artist' || item.IsFolder ? 'true' : 'false');
         card.setAttribute('data-serverid', serverId);
@@ -3639,7 +3648,24 @@
         overlayLink.className = 'cardImageContainer';
         cardOverlayContainer.appendChild(overlayLink);
 
-        if (!isCustomCard) {
+        // The mobile play button, on the same terms as jellyfin-web's: none on
+        // a placeholder, a missing episode or a person.
+        let mobilePlayButton = null;
+        if (mobileLayout && !isCustomCard
+            && !['CollectionFolder', 'Folder', 'UserView', 'Person'].includes(item.Type)
+            && !item.IsPlaceHolder && item.LocationType !== 'Virtual') {
+            mobilePlayButton = document.createElement('button');
+            mobilePlayButton.setAttribute('is', 'paper-icon-button-light');
+            mobilePlayButton.className = 'cardOverlayButton cardOverlayButton-br itemAction';
+            mobilePlayButton.setAttribute('data-action', 'play');
+            mobilePlayButton.title = 'Play';
+            const mobilePlayIcon = document.createElement('span');
+            mobilePlayIcon.className = 'material-icons cardOverlayButtonIcon play_arrow';
+            mobilePlayIcon.setAttribute('aria-hidden', 'true');
+            mobilePlayButton.appendChild(mobilePlayIcon);
+        }
+
+        if (!isCustomCard && !mobileLayout) {
             // Play button
             const playButton = document.createElement('button');
             playButton.setAttribute('is', 'paper-icon-button-light');
@@ -3857,7 +3883,11 @@
         cardScalable.appendChild(cardPadder);
         cardScalable.appendChild(blurhashCanvas);
         cardScalable.appendChild(cardImageContainer);
-        cardScalable.appendChild(cardOverlayContainer);
+        if (mobileLayout) {
+            if (mobilePlayButton) cardScalable.appendChild(mobilePlayButton);
+        } else {
+            cardScalable.appendChild(cardOverlayContainer);
+        }
         cardScalable.appendChild(createCardBorderHost());
 
         cardBox.appendChild(cardScalable);
