@@ -438,3 +438,35 @@ html[data-theme="dark"].layout-mobile header.MuiAppBar-root > .MuiToolbar-root .
 html[data-theme="dark"].layout-mobile header.MuiAppBar-root > .MuiToolbar-root > .MuiBox-root {
 	gap: 0.25rem;
 }
+
+/* Phone: tighter buttons.
+ *
+ * Abyss is laid out for desktop and sizes several buttons for it everywhere
+ * below 100em, phones included. Measured at 411px against Default:
+ *   - the item page's action row: .mainDetailButtons { font-size: 155% } and
+ *     #itemDetailPage .detailButton { padding: 8px; margin-right: 8px }, 52px
+ *     buttons against Default's 43 -- a series page's row ran off the screen,
+ *     More cut off at the edge;
+ *   - section title links ("Season 1 >"): padding 4px 12px 6px 6px, the room for
+ *     a hover pill a touch screen does not show;
+ *   - the library toolbar's Play/Shuffle pills: padding 0.56rem 1rem.
+ * The action row is also centred rather than left-aligned.
+ * The header's icon buttons are tightened above. Mobile layout only; each
+ * rule out-ranks Abyss's own. */
+.layout-mobile #itemDetailPage .mainDetailButtons {
+	font-size: 120%;
+	/* Abyss left-aligns this row on a phone (.layout-mobile #itemDetailPage
+	   .mainDetailButtons { justify-content: left }); centred, under the
+	   centred title. Same selector, later sheet, so this wins. */
+	justify-content: center;
+}
+.layout-mobile #itemDetailPage .detailButton {
+	padding: 6px !important;
+	margin-right: 2px !important;
+}
+.layout-mobile .sectionTitleTextButton:not(.padded-left) {
+	padding: 2px 6px 2px 0 !important;
+}
+html[data-theme="dark"].layout-mobile .MuiToolbar-root .MuiButton-root {
+	padding: 0.4rem 0.75rem;
+}
