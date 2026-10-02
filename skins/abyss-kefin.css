@@ -309,3 +309,24 @@ header.MuiAppBar-root > .MuiToolbar-root > .MuiBox-root:has([aria-controls="app-
 	border-radius: var(--abyss-radius, 12px) 0 0 var(--abyss-radius, 12px);
 	pointer-events: none;
 }
+
+/* Closed drawer: keep the paper fully off-screen.
+ *
+ * Abyss floats the nav drawer's paper 24px in from the left (left: 24px in
+ * abyss.css). MUI closes a drawer by translating the paper left by its own
+ * width, so a closed Abyss paper still ends 24px into the screen, hidden only
+ * by visibility. Jellyfin Enhanced's closeMobileDrawerIfOpen (helpers.js),
+ * which runs before every header icon's click on a phone, reads "right edge
+ * past 0" as open and clicks the backdrop -- and since the drawer's open and
+ * close both just flip one boolean, that click opened it: every tap on
+ * Shuffle, SyncPlay, Cast, Appearance or Search also opened the drawer.
+ *
+ * Anchoring the closed paper by its right edge to the screen's left edge puts
+ * it wholly off-screen whatever its width, with no rounding left over for
+ * that check to trip on. MuiModal-hidden is only set once the close has
+ * finished, so the move happens out of sight; opening removes it first and
+ * the paper slides in to Abyss's 24px as before. */
+.MuiDrawer-root.MuiModal-hidden > .MuiDrawer-paper {
+	left: auto;
+	right: 100%;
+}
