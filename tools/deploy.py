@@ -69,12 +69,13 @@ def sync_files(dry_run):
     out = subprocess.run(cmd, input="\0".join(files), check=True, capture_output=True, text=True).stdout
     changed, new = [], []
     for line in out.splitlines():
-        # ">f.st......" updated file, ">f+++++++++" new file; directories are "cd..."
-        if not line.startswith(">f"):
+        # Pushing, rsync itemizes a sent file as "<f.st......", a new one as
+        # "<f+++++++++"; directories are "cd...".
+        if not line.startswith("<f"):
             continue
         path = line.split(" ", 1)[1]
         changed.append(path)
-        if line.startswith(">f+++"):
+        if line.startswith("<f+++"):
             new.append(path)
     if new and not dry_run:
         quoted = " ".join("'" + f"{WEB_DIR}/{p}".replace("'", "'\\''") + "'" for p in new)
