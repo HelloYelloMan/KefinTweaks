@@ -1216,6 +1216,7 @@
             { key: 'pauseScreen', label: 'Pause Screen', desc: 'Shows a rich overlay with the media\'s logo, plot, details, disc/clear art and playback progress when playback stays paused for a few seconds. Works with the HTML5 web player and external players (mpv-shim etc.).' },
             { key: 'themeMediaCastFix', label: 'Theme Media', desc: 'Plays theme songs and videos in the web client, including while casting to an mpv-shim or other remote player. Replaces the native Play Theme Music/Videos toggles and adds subtle on-video controls.' },
             { key: 'posterAspect', label: 'Poster Aspect Cards', desc: 'Sizes each poster card to its own image rather than cropping everything to one shape. The aspect ratio is written into the card markup as a class by the File Transformation plugin, so CSS sizes every card as the browser parses it - no JavaScript per card and nothing to correct afterwards. The row height is the skin\'s own, measured once per container before its cards exist.' },
+            { key: 'librariesInMore', label: 'Libraries in More', desc: 'Puts every library in the top bar\'s More menu instead of giving each one a button. Applies to the Jellyfin 12 layout through the File Transformation plugin, from the next page load after saving.' },
             { key: 'specialEpisodePrefix', label: 'No "Special - " Prefix', desc: 'Removes the "Special - " that Jellyfin prepends to the title of every episode in season zero, everywhere it appears - cards, season pages and episode pages. The prefix is localized, so the exact wording is learned once from your server rather than assumed, then cached.' },
             { key: 'virtualSpecials', label: 'Virtual Specials Tweaks', desc: 'Three fixes to collection pages. Borrows a backdrop and logo for collections that have neither, preferring the series that shares the collection\'s AniDB id over the show whose Specials folder it sits in. Fills in the Studios row, which Jellyfin builds but never populates for a collection. Removes the "Special - " that Jellyfin prepends to the title of every episode in a Specials season, on collection pages only. Gives a virtual special a breadcrumb back to its series. On a special\'s episode page, the breadcrumb goes through its virtual special instead of the Specials season, and a Collections row holding one collection is titled Collection.' }
         ];
@@ -1243,7 +1244,7 @@
 
         return visibleScripts.map(script => {
             // Match injector defaults: most scripts on unless set false; opt-in scripts require true
-            const defaultDisabled = ['thumbnailScrubber', 'watchTogether', 'userManager', 'updoot', 'posterAspect'].includes(script.key);
+            const defaultDisabled = ['thumbnailScrubber', 'watchTogether', 'userManager', 'updoot', 'posterAspect', 'librariesInMore'].includes(script.key);
             const isEnabled = defaultDisabled
                 ? scripts[script.key] === true
                 : scripts[script.key] !== false;

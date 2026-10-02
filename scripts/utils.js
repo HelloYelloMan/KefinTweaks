@@ -2224,6 +2224,59 @@ button[data-kefin-custom-menu-more] .MuiSvgIcon-root {
         return response.json();
     }
 
+    /* Libraries in More: the modern top bar shows no library buttons, and every
+     * library is in its More menu.
+     *
+     * jellyfin-web 12.1's UserViewNav (chunk 78701) picks how many libraries get
+     * a button with `return v?8:y?5:3` -- 8 from the xl breakpoint, 5 from lg, 3
+     * below -- and lists the rest under More. It counts only libraries, while
+     * Favourites, our Watchlist and Custom Tabs' home tabs share the row, so at
+     * 1024-1536px the row outgrows the bar under every skin. Zero sends every
+     * library to More; the menu, its icons and the current-library highlight
+     * are Jellyfin's own. The search string occurs once in that chunk.
+     *
+     * It is a File Transformation rule, which lives in that plugin's config, so
+     * it is set here, where every save of our config passes (Save, Import,
+     * Reset), and switching the setting off takes the rule out again. Nothing
+     * runs on page load. The pattern names one chunk -- see posterAspect.js for
+     * why a pattern matching every chunk breaks other plugins. A jellyfin-web
+     * upgrade that renumbers the chunk or renames v/y stops the rule matching,
+     * and the bar quietly goes back to Jellyfin's counts. */
+    const LIBRARIES_IN_MORE_RULE = {
+        Id: '3f9b6c2e-71a4-4d58-b0e3-9c5a2d8f1e47',
+        FilenamePattern: String.raw`78701\.[0-9a-f]+\.chunk\.js`,
+        SearchText: 'return v?8:y?5:3',
+        ReplaceText: 'return 0'
+    };
+
+    async function applyLibrariesInMore(on) {
+        try {
+            const id = await resolvePluginId(['File Transformation', '5e87cc92-571a-4d8d-8d98-d2d4147f9f90']);
+            if (!id) {
+                if (on) WARN('File Transformation is not installed, so libraries keep their top bar buttons.');
+                return;
+            }
+            const cfg = await getPluginConfiguration(id);
+            const list = Array.isArray(cfg?.Transformations) ? cfg.Transformations : [];
+            const norm = (x) => String(x || '').replace(/-/g, '').toLowerCase();
+            const isOurs = (t) => t && norm(t.Id) === norm(LIBRARIES_IN_MORE_RULE.Id);
+            const current = list.filter(isOurs);
+            const inPlace = current.length === 1
+                && current[0].FilenamePattern === LIBRARIES_IN_MORE_RULE.FilenamePattern
+                && current[0].SearchText === LIBRARIES_IN_MORE_RULE.SearchText
+                && current[0].ReplaceText === LIBRARIES_IN_MORE_RULE.ReplaceText;
+            if (on ? inPlace : current.length === 0) return;
+            const rest = list.filter((t) => !isOurs(t));
+            await ApiClient.updatePluginConfiguration(id, {
+                ...cfg,
+                Transformations: on ? rest.concat({ ...LIBRARIES_IN_MORE_RULE }) : rest
+            });
+            LOG(on ? 'Libraries in More rule registered.' : 'Libraries in More rule removed.');
+        } catch (err) {
+            ERR('Could not update the Libraries in More rule:', err);
+        }
+    }
+
     /**
      * Saves the current KefinTweaksConfig back to JS Injector plugin
      * @param {Object} config - Optional config object to save. If not provided, uses window.KefinTweaksConfig
@@ -2377,6 +2430,7 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
             }
             
             LOG('Successfully saved config (+ injector preload) to JS Injector plugin');
+            await applyLibrariesInMore(configToSave.scripts?.librariesInMore === true);
             return true;
         } catch (err) {
             ERR('Error saving config to JS Injector:', err);
