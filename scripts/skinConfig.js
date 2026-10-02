@@ -223,7 +223,14 @@
             {
                 name: 'Default',
                 author: 'Jellyfin',
-                url: null,  // null means no additional CSS (default Jellyfin theme)
+                // Jellyfin's own theme plus our companion sheet, which carries
+                // the rules that must apply before Poster Aspect measures.
+                url: [
+                    {
+                        majorServerVersions: [10, 11, 12],
+                        urls: [`${getKefinTweaksRoot()}skins/default-kefin.css`]
+                    }
+                ],
                 colorSchemes: []
             },
             {

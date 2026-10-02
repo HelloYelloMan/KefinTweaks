@@ -298,9 +298,11 @@
                appear. Measuring then reads Jellyfin's default CSS and the row
                has to be measured again when the skin lands -- the double sizing.
                If a skin is selected, wait for it; the deadline stops that
-               becoming a hang when skinManager is off or the key is stale. */
+               becoming a hang when skinManager is off or the key is stale.
+               Default included: it has a sheet of its own now
+               (skins/default-kefin.css), and its library grid sizing is in it. */
             const selected = selectedSkinName();
-            if (!selected || selected === 'Default') return true;
+            if (!selected) return true;
             return Date.now() > SKIN_DEADLINE;
         }
         for (const l of links) {

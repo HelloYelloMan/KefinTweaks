@@ -1,0 +1,74 @@
+/* KefinTweaks companion sheet for the Default skin.
+ *
+ * Same role as skins/abyss-kefin.css and skins/elegant-kefin.css: it loads
+ * only with Default, from the skin's own urls list in scripts/skinConfig.js.
+ * Default used to load no CSS of its own, so Default-only rules went in
+ * scripts/defaultSkin.css, which loads for every skin and must scope each rule
+ * to html[data-kefin-skin="Default"]. That marker arrives with skinManager,
+ * after Poster Aspect may already have measured; a skin sheet is something
+ * Poster Aspect waits for (skinReady), so sizing rules belong here.
+ */
+
+/* Library grid: ElegantFin's sizing.
+ *
+ * Default's own grid is jellyfin-web's: a percentage width per breakpoint
+ * (9 to a row at 1920px) and a 1.2em right margin on each cardBox, which left
+ * its covers about 8% shorter than ElegantFin's at 1920px.
+ * These rules give the wrapping library grid the same geometry as ElegantFin
+ * (ElegantFin-jellyfin-theme-build-latest-minified.css), so a library looks the
+ * same size under every skin:
+ *   - columns by window width: 3 up to 30em, then 4/5/6/7/8/9/10 at 48.125/
+ *     62/80/100/120/140/170em, and on up to 16;
+ *   - card width (100vw - padding*2 - side padding*2) / columns - gap, as
+ *     a border box: the padding is inside that width. ElegantFin's .card rule
+ *     says content-box, but a later rule of its own makes it border-box, and
+ *     border-box is what it renders -- measured at 1920px, a 208.9px card with
+ *     a 197.8px cover, which Poster Aspect turns into a 296px row;
+ *   - spacing 0.375em of card padding and a 1em gap on desktop, 1px and 0.4em
+ *     on a phone; no cardBox margins, so the gap is all there is.
+ * Poster Aspect measures its row height from a probe card in this grid, so it
+ * picks these sizes up as it does ElegantFin's.
+ *
+ * On a phone the third column would run under the A-Z strip (Jellyfin 12 no
+ * longer reserves room for it), so the grid gives up 1.25em there while the
+ * strip is on the page. */
+.itemsContainer.vertical-wrap {
+	--kgrid-cols: 3;
+	--kgrid-gap: 1em;
+	--kgrid-pad: 0.375em;
+	--kgrid-side: 3.3%;
+	--kgrid-reserve: 0px;
+	column-gap: var(--kgrid-gap);
+}
+.layout-mobile .itemsContainer.vertical-wrap {
+	--kgrid-gap: 0.4em;
+	--kgrid-pad: 1px;
+}
+@media (min-width: 30.001em) { .itemsContainer.vertical-wrap { --kgrid-cols: 4; } }
+@media (min-width: 48.126em) { .itemsContainer.vertical-wrap { --kgrid-cols: 5; } }
+@media (min-width: 62.001em) { .itemsContainer.vertical-wrap { --kgrid-cols: 6; } }
+@media (min-width: 80.001em) { .itemsContainer.vertical-wrap { --kgrid-cols: 7; } }
+@media (min-width: 100.001em) { .itemsContainer.vertical-wrap { --kgrid-cols: 8; } }
+@media (min-width: 120.001em) { .itemsContainer.vertical-wrap { --kgrid-cols: 9; } }
+@media (min-width: 140.001em) { .itemsContainer.vertical-wrap { --kgrid-cols: 10; } }
+@media (min-width: 170.001em) { .itemsContainer.vertical-wrap { --kgrid-cols: 11; } }
+@media (min-width: 200.001em) { .itemsContainer.vertical-wrap { --kgrid-cols: 12; } }
+@media (min-width: 220.001em) { .itemsContainer.vertical-wrap { --kgrid-cols: 13; } }
+@media (min-width: 240.001em) { .itemsContainer.vertical-wrap { --kgrid-cols: 14; } }
+@media (min-width: 270.001em) { .itemsContainer.vertical-wrap { --kgrid-cols: 15; } }
+@media (min-width: 300.001em) { .itemsContainer.vertical-wrap { --kgrid-cols: 16; } }
+@media not all and (orientation: landscape) and (max-height: 40em) {
+	.layout-mobile .padded-bottom-page:has(> .alphaPicker-fixed-right) > .itemsContainer.vertical-wrap {
+		--kgrid-reserve: 1.25em;
+		padding-right: calc(var(--kgrid-side) + var(--kgrid-reserve)) !important;
+	}
+}
+.itemsContainer.vertical-wrap > .card.portraitCard {
+	box-sizing: border-box;
+	padding: var(--kgrid-pad);
+	width: calc((100vw - var(--kgrid-pad)*2 - var(--kgrid-side)*2 - var(--kgrid-reserve)) / var(--kgrid-cols) - var(--kgrid-gap)) !important;
+}
+.itemsContainer.vertical-wrap > .card.portraitCard > .cardBox {
+	margin-left: 0 !important;
+	margin-right: 0 !important;
+}

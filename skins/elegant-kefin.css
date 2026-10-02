@@ -84,3 +84,34 @@
 .layout-mobile [dir=ltr] .itemDetailPage .mainDetailButtons {
     padding: 0 0.25em;
 }
+
+/* Phone library grid: leave room for the A-Z strip.
+ *
+ * Jellyfin 12's library grid no longer carries 10.11's
+ * padded-right-withalphapicker (7.5% right padding where the strip sits), so
+ * on a phone the third column ran under the strip: measured at 412px, covers
+ * ended at x=399 against a strip starting at x=388. Other skins clear it only
+ * through their card margins; ElegantFin's cards have a 1px padding.
+ *
+ * Both ways a card can be sized here give up the same 1.25em, the room the
+ * strip needs beyond the side padding (its letters are em-sized, so a vw
+ * share left a 360px phone only 2px clear):
+ *   - the grid's right padding, which Poster Aspect's phone rule divides in
+ *     thirds (posterAspect.css, "PHONES: the column count wins");
+ *   - ElegantFin's own --effectiveWidth, which it divides by --cardCount from
+ *     the window width when Poster Aspect is off.
+ * Either way the row loses 1.25em and its three cards still fit. Poster
+ * Aspect has a picker reservation of its own, but it looks for .alphaPicker,
+ * a class Jellyfin 12's strip (.alphaPicker-fixed-right) does not carry.
+ *
+ * The strip and the grid are siblings, so this applies only while the strip
+ * is on the page. ElegantFin's landscape-phone width (65vw) is left alone. */
+@media not all and (orientation: landscape) and (max-height: 40em) {
+	.layout-mobile .padded-bottom-page:has(> .alphaPicker-fixed-right) > .itemsContainer.vertical-wrap {
+		padding-right: calc(var(--sidePadding) + 1.25em) !important;
+	}
+
+	.layout-mobile .padded-bottom-page:has(> .alphaPicker-fixed-right) > .itemsContainer.vertical-wrap > .card {
+		--effectiveWidth: calc(100vw - var(--padding)*2 - var(--sidePadding)*2 - 1.25em);
+	}
+}
