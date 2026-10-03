@@ -8,10 +8,6 @@
 // section controls, and every skin that styles the season row (about ten carry
 // a .series-episodes-section rule) styles these the same way.
 //
-// One of two alternative layouts for these sections; the other is
-// collectionSectionList.js. With both features on, the list wins and this one
-// stands down.
-//
 // Episodes use the season row's Thumb cards; albums and tracks Square; the rest
 // Poster.
 //
@@ -36,10 +32,6 @@
         viewToken++;
         teardown.forEach((fn) => { try { fn(); } catch (e) { /* already gone */ } });
         teardown = [];
-    }
-
-    function listFeatureOn() {
-        return window.KefinTweaksConfig?.scripts?.collectionSectionList === true;
     }
 
     function injectStyle() {
@@ -114,7 +106,7 @@
     let applying = false;
 
     async function apply(page, item, token) {
-        if (applying || listFeatureOn()) return;
+        if (applying) return;
         if (!window.cardBuilder?.renderProgressiveSections) {
             WARN('cardBuilder.renderProgressiveSections unavailable');
             return;

@@ -55,7 +55,6 @@
         themeMediaCastFix: true,  // Theme media playback while a remote/cast target is connected
         virtualSpecials: true,    // Collection pages: Studios row, no "Special - " prefix, breadcrumbs
         collectionSectionRows: true, // Collection pages: sections as rows, like the flat season row
-        collectionSectionList: false, // Collection pages: sections as season-page lists (wins over rows)
     };
 
     const THIRD_PARTY_SCRIPTS = {
@@ -648,14 +647,7 @@
             script: 'collectionSectionRows.js',
             css: null,
             dependencies: ['utils', 'cardBuilder'],
-            description: "Collection pages: each section (Episodes, Movies...) as a horizontal row of cards, built the way the flat season row on a series page is. The original grid stays in the page, hidden, so collection sorting still applies. Stands down when Collection Sections As Season Lists is on."
-        },
-        {
-            name: 'collectionSectionList',
-            script: 'collectionSectionList.js',
-            css: null,
-            dependencies: ['utils'],
-            description: "Collection pages: each section drawn as the season page's episode list, with jellyfin-web's own list markup so skins style it as they style a season page. The original grid stays in the page, hidden, so collection sorting still applies. Takes precedence over Collection Sections As Rows."
+            description: "Collection pages: each section (Episodes, Movies...) as a horizontal row of cards, built the way the flat season row on a series page is. The original grid stays in the page, hidden, so collection sorting still applies."
         },
         {
             name: 'virtualSpecials',
