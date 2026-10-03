@@ -255,6 +255,7 @@
         pauseScreen: true,        // Rich pause screen overlay (logo, plot, artwork, progress)
         themeMediaCastFix: true,  // Theme media playback while a remote/cast target is connected
         virtualSpecials: true,    // Collection pages: borrowed artwork, Studios row, no "Special - " prefix
+        collectionEpisodeList: true, // Collection pages: Episodes as a season-page list instead of a card grid
 
         // Note: Core functionality scripts (utils, cardBuilder, localStorageCache, modal) 
         // are automatically enabled when needed by other scripts
@@ -771,6 +772,13 @@
             css: null,
             dependencies: [],
             description: "Memoises Jellyfin Enhanced's getSidebarContainer(), which reads offsetParent (a forced full-document style flush) on every body mutation. Measured at 3.2s of style recalc across 104 calls when navigating into a series page. No-ops if Jellyfin Enhanced is absent."
+        },
+        {
+            name: 'collectionEpisodeList',
+            script: 'collectionEpisodeList.js',
+            css: null,
+            dependencies: ['utils'],
+            description: "Draws the Episodes group on a collection (BoxSet) page the way a season page draws its episodes: a list of large-image rows with the overview, runtime and played/favourite buttons, built with jellyfin-web's own list markup so every skin styles it as it styles a season page. The card grid stays in the page, hidden, so collection sorting keeps working and the list follows it."
         },
         {
             name: 'virtualSpecials',
