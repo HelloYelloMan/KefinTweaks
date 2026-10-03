@@ -176,10 +176,19 @@
                 enabled: true
             },
             {
-                // Hides the contents row of a one-item collection on its own
-                // (a :has() on .collectionItems); the count and Shuffle need
-                // body.kefin-collection-single from the Virtual Specials
-                // feature. See the header of the stylesheet for why.
+                // CSS alone: a :has() on .collectionItems, one section holding
+                // one card. Split out of Virtual Specials Tweaks so it does not
+                // depend on that feature's script. On by default, as it was
+                // part of an option that was on.
+                name: 'Hide Contents Row On One-Item Collections',
+                url: `${getKefinTweaksRoot()}skins/optional/global/hideOneItemCollectionRow.css`,
+                enabled: true
+            },
+            {
+                // Hides a one-item collection's count and Shuffle button.
+                // Needs body.kefin-collection-single from the Virtual
+                // Specials feature; inert without it, hence the name. See the
+                // header of the stylesheet for why it is not a :has().
                 name: 'Virtual Specials Tweaks',
                 url: `${getKefinTweaksRoot()}skins/optional/global/collectionSingleItem.css`,
                 enabled: false

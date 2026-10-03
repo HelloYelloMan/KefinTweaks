@@ -1,0 +1,31 @@
+/* Hide Contents Row On One-Item Collections (KefinTweaks global option)
+ *
+ * A collection holding a single item still draws its contents as a list: a
+ * heading, and a row with one lonely card under it. That tells the viewer
+ * nothing the page does not already say, so this hides both, and the page reads
+ * as being about the work rather than about a collection that happens to hold
+ * it. Play is untouched, and with the row gone it is how playback starts here.
+ *
+ * CSS ALONE. Whether a collection holds one item is visible inside
+ * .collectionItems itself: jellyfin-web gives it one .verticalSection per item
+ * type, so a one-item collection has exactly one section holding exactly one
+ * card. A :has() on that one element decides it as the row is inserted, before
+ * it is drawn, with no script and no request. A collection of one film and one
+ * episode has two sections, so it does not match.
+ *
+ * The :has() is cheap because its subject is .collectionItems, a small subtree
+ * that changes only when the row is built -- not the page-level subject that
+ * elegantfin-haspatch.js exists to remove.
+ *
+ * This used to be part of Virtual Specials Tweaks (collectionSingleItem.css),
+ * keyed on body.kefin-collection-single from virtualSpecials.js, which arrived
+ * late or not at all on some navigations. The count and Shuffle button hiding
+ * stayed there, since doing those in CSS would take a page-level :has().
+ *
+ * Scoped to the visible detail page: jellyfin-web keeps the outgoing view in the
+ * DOM during a navigation.
+ */
+
+.itemDetailPage:not(.hide) .collectionItems:has(> .verticalSection:only-child > .itemsContainer > .card:only-child) > .verticalSection {
+    display: none;
+}
