@@ -74,14 +74,6 @@
  * expensive.
  */
 
-/* Published so scripts/virtualSpecials.js knows this option is on and stops
- * withholding a borrowed logo. On every layout, not just desktop: with the
- * header restored below, the theme's own logo positions are correct again in
- * all three, so there is nothing left to withhold anywhere. */
-html {
-    --kefin-collection-poster-layout: 1;
-}
-
 /* 1. No poster on a collection page, whatever shape it was classified as. */
 .detailImageContainer > .card:has(.cardImageIcon.video_library) {
     display: none;

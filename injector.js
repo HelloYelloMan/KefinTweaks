@@ -254,7 +254,7 @@
         osdLogo: true,            // Media logo/ClearArt on the video OSD
         pauseScreen: true,        // Rich pause screen overlay (logo, plot, artwork, progress)
         themeMediaCastFix: true,  // Theme media playback while a remote/cast target is connected
-        virtualSpecials: true,    // Collection pages: borrowed artwork, Studios row, no "Special - " prefix
+        virtualSpecials: true,    // Collection pages: Studios row, no "Special - " prefix, breadcrumbs
 
         // Note: Core functionality scripts (utils, cardBuilder, localStorageCache, modal) 
         // are automatically enabled when needed by other scripts
@@ -776,8 +776,8 @@
             name: 'virtualSpecials',
             script: 'virtualSpecials.js',
             css: null,
-            dependencies: ['utils', 'localStorageCache'],
-            description: "Three fixes to the collection (BoxSet) detail page. Borrows a backdrop and logo for collections that have neither, walking the collection, its first child, the series sharing its AniDB id, the child's season and finally the child's series. Fills in the Studios row, which renderStudio refuses to render for a BoxSet. Removes the \"Special - \" prefix jellyfin-web prepends to every season-0 episode title, on collection pages only."
+            dependencies: ['utils'],
+            description: "Fixes to the collection (BoxSet) detail page. Fills in the Studios row, which renderStudio refuses to render for a BoxSet. Removes the \"Special - \" prefix jellyfin-web prepends to every season-0 episode title, on collection pages only. Gives a virtual special breadcrumbs back to its series, and sets the single-item marker collectionSingleItem.css reads."
         },
         {
             name: 'jeSpoilerGuardScope',

@@ -1,79 +1,29 @@
 // KefinTweaks Virtual Specials Tweaks
 //
-// Three fixes to the collection (BoxSet) detail page, sharing one fetch of the
+// Fixes to the collection (BoxSet) detail page, sharing one fetch of the
 // collection's children. Written for the generated per-work specials
-// collections, but every one of them is just as right on a hand-curated
-// collection, and none of them look at where the collection came from.
-// A fourth, on a special's own episode page, is described in its section.
+// collections, but each is just as right on a hand-curated collection, and none
+// of them look at where the collection came from. A third, on a special's own
+// episode page, is described in its section.
 //
-//   1. ARTWORK FALLBACK. A generated collection has a poster and nothing else:
-//      of 300 here, 253 have no backdrop and 254 no logo. The page still lays
-//      out .itemBackdrop at full size, so it renders as a large empty box, and
-//      .detailLogo stays hidden so the title is plain text. This walks a chain
-//      of increasingly distant sources and borrows the first artwork it finds.
-//
-//   2. STUDIOS. jellyfin-web's renderStudio opens with an unconditional early
+//   1. STUDIOS. jellyfin-web's renderStudio opens with an unconditional early
 //      return for BoxSet and Playlist -- "the list of studios can be massive
 //      for collections of items" -- so the row is built, left empty, and
 //      hidden however few studios the collection has.
 //
-//   3. THE "Special - " PREFIX. getDisplayName prepends
+//   2. THE "Special - " PREFIX. getDisplayName prepends
 //      ValueSpecialEpisodeName to every episode with ParentIndexNumber === 0,
 //      everywhere, with no option. On a collection built to group a series'
 //      specials it is on every card and distinguishes nothing.
 //
-// THE FALLBACK CHAIN, and why it is shaped this way
-// -------------------------------------------------
-// In order, stopping per image type at the first source that has one:
+// It also sets the single-item marker that collectionSingleItem.css reads to
+// hide a one-item collection's count and Shuffle button.
 //
-//   1. the collection itself          -- nothing to do if it already has one
-//   2. the first child                -- a movie collection's child carries a
-//                                        full set; an episode has only a still
-//   3. the series sharing the collection's AniDB id
-//   4. the child's season             -- the Specials folder
-//   5. the child's series             -- the show the Specials folder is in
-//
-// Step 3 is the interesting one. These collections carry TWO ids: ProviderIds
-// .AniDB is the anime the release actually IS, and .AnimePipelineSeries is the
-// show whose Specials folder holds it. They differ when a special is itself a
-// separate work that the library also has as a series -- the collection named
-// "Steins;Gate" sits in Steins;Gate 0's specials and carries AniDB 7729, the
-// ORIGINAL Steins;Gate, whose artwork is the right artwork for it. Step 5
-// would give it Steins;Gate 0's instead, which is a different show.
-//
-// Step 3 needs an AniDB id to resolve to a Jellyfin item, and there is no
-// server-side way to ask: the AnyProviderIdEquals filter is accepted and then
-// ignored on this endpoint (measured -- a real id, a nonsense id and no filter
-// at all each returned all 488 series). So the map is built client side, from
-// one Series query with ProviderIds and images and user data switched off, and
-// cached for a day. It is only ever fetched when a collection's own AniDB id
-// differs from its parent's AND the artwork is actually missing, which today
-// is a single collection out of 300.
-//
-// Step 3 is CONDITIONAL, and that is not an optimisation. It runs only when the
-// two ids differ. pauseScreen.js carries the lesson in its own logo chain: it
-// used to try the series before the season, and since a series almost always
-// has a logo, a season-specific one could never win. Step 3 resolves to the
-// containing series in 83 of the 84 collections where it resolves at all, so
-// running it unguarded would put the series ahead of the season and shadow it
-// exactly the same way. Guarded, it fires only where it points somewhere step 5
-// would not have reached.
-//
-// Step 4 almost never contributes -- a Specials folder had a backdrop in 0 of
-// 60 sampled and a logo in 4 -- but the child fetch already returns its id, so
-// checking it costs nothing.
-//
-// WHY THIS CHECKS METADATA WHERE pauseScreen.js DOES NOT
-// ------------------------------------------------------
-// The pause screen builds "blind" candidate URLs with no tag and no existence
-// check, then walks them with an <img>'s onerror handler until one loads --
-// zero metadata requests, because the image request IS the test. That is not
-// available here: .itemBackdrop and .detailLogo are divs carrying a
-// background-image, and a background that 404s reports nothing. So each
-// candidate is checked through its ImageTags instead, at a cost of up to two
-// small requests, on a page that is already making several. The upside is that
-// the URLs written are tagged, so they cache and invalidate correctly, which
-// the blind ones do not.
+// There used to be an artwork fallback here, borrowing a backdrop and logo from
+// the first child, the matching AniDB series, the Specials season or the series
+// for collections that had neither. The pipeline now symlinks artwork into every
+// virtual special -- 325 of 325 had both on 2026-10-03 -- and the fallback only
+// ever filled a blank, so it could no longer fire and was removed.
 
 (function () {
     'use strict';
@@ -86,18 +36,9 @@
     const SETTLE_MS = 220;
     const OBSERVE_MS = 15000;
 
-    const ANIDB_CACHE_NAME = 'virtualSpecials_anidbSeries';
-    const ART_FLAG = 'kefinFallbackArt';
-    const ART_FLAG_ATTR = 'kefin-fallback-art';
-
     // ======================================================================
     // Shared data
     // ======================================================================
-
-    function getItem(itemId) {
-        if (!itemId) return Promise.resolve(null);
-        return ApiClient.getItem(ApiClient.getCurrentUserId(), itemId).catch(() => null);
-    }
 
     // The page and its breadcrumb ask for the same item within a moment of each
     // other, so one answer serves both. It is kept for seconds, not for the
@@ -123,210 +64,8 @@
     }
 
     // ======================================================================
-    // 1. Artwork fallback
+    // The single-item marker
     // ======================================================================
-
-    // WHAT WAS BORROWED LAST TIME, per collection.
-    //
-    // The chain cannot run until the item, its children and a source have all
-    // come back, so on a first visit the page is necessarily painted before the
-    // artwork is known -- that is inherent to resolving this on the client, and
-    // no amount of reordering removes it. What it does remove is the SECOND
-    // visit onwards: the answer from last time is known the moment the item is,
-    // so the backdrop goes in while the page is still assembling instead of
-    // arriving a quarter of a second late.
-    //
-    // Only ever used to fill something the item still lacks, checked against the
-    // item on every visit, so a collection that gains its own artwork stops
-    // using the cached borrow immediately. The fresh chain still runs behind it
-    // and rewrites the entry; a changed answer is deliberately NOT swapped in
-    // mid-view, because replacing a backdrop the viewer is already looking at is
-    // a worse flicker than the one being fixed. It takes effect next visit.
-    const ART_CACHE_NAME = 'virtualSpecials_borrowedArt';
-    let artCache = null;
-
-    function cacheHandle() {
-        try { return window.LocalStorageCache ? new window.LocalStorageCache() : null; }
-        catch (e) { return null; }
-    }
-
-    function readArtCache() {
-        if (artCache) return artCache;
-        try {
-            const c = cacheHandle();
-            artCache = (c && c.get(ART_CACHE_NAME)) || {};
-        } catch (e) {
-            artCache = {};
-        }
-        return artCache;
-    }
-
-    function writeArtCache(collectionId, art) {
-        const cache = readArtCache();
-        const next = art ? { backdrop: art.backdrop || null, logo: art.logo || null } : null;
-        if (JSON.stringify(cache[collectionId] || null) === JSON.stringify(next)) return;
-        if (next) cache[collectionId] = next; else delete cache[collectionId];
-        try {
-            const c = cacheHandle();
-            if (c) c.set(ART_CACHE_NAME, cache);
-        } catch (e) { /* quota; the chain still works, just without the head start */ }
-    }
-
-    let aniDbSeriesMap = null;
-
-    async function getAniDbSeriesMap() {
-        if (aniDbSeriesMap) return aniDbSeriesMap;
-
-        let cache = null;
-        try {
-            if (window.LocalStorageCache) cache = new window.LocalStorageCache();
-            const cached = cache && cache.get(ANIDB_CACHE_NAME);
-            if (cached) { aniDbSeriesMap = cached; return aniDbSeriesMap; }
-        } catch (e) { /* cache unavailable; fall through and fetch */ }
-
-        try {
-            const res = await ApiClient.getItems(ApiClient.getCurrentUserId(), {
-                IncludeItemTypes: 'Series',
-                Recursive: true,
-                Fields: 'ProviderIds',
-                EnableImages: false,
-                EnableUserData: false,
-                Limit: 5000
-            });
-            const map = {};
-            (res.Items || []).forEach(s => {
-                const anidb = (s.ProviderIds || {}).AniDB;
-                if (anidb && !map[anidb]) map[anidb] = s.Id;
-            });
-            aniDbSeriesMap = map;
-            try { if (cache) cache.set(ANIDB_CACHE_NAME, map); } catch (e) { /* quota */ }
-            LOG('Indexed', Object.keys(map).length, 'series by AniDB id');
-            return map;
-        } catch (error) {
-            WARN('Could not index series by AniDB id:', error);
-            aniDbSeriesMap = {};
-            return aniDbSeriesMap;
-        }
-    }
-
-    const hasBackdrop = item => !!(item && item.BackdropImageTags && item.BackdropImageTags.length);
-    const hasLogo = item => !!(item && item.ImageTags && item.ImageTags.Logo);
-
-    function backdropUrlOf(item) {
-        return ApiClient.getImageUrl(item.Id, {
-            type: 'Backdrop', index: 0, tag: item.BackdropImageTags[0], maxWidth: 1920
-        });
-    }
-
-    function logoUrlOf(item) {
-        return ApiClient.getImageUrl(item.Id, {
-            type: 'Logo', tag: item.ImageTags.Logo, maxWidth: 600
-        });
-    }
-
-    // THE CHAIN'S LOOKUPS ALL START AT ONCE, and are then read in order.
-    //
-    // They were thunks, evaluated one at a time so that a later source was never
-    // fetched if an earlier one answered. That is the right instinct for saving
-    // requests and the wrong one here: they are independent, small, and every
-    // one of them sits on the critical path between the page appearing and the
-    // artwork appearing on it. Measured cold, the sequential version spent
-    // 64ms on the children, then 95ms on the AniDB map, then a season fetch,
-    // then a series fetch, and only reached the image at 232ms.
-    //
-    // Starting them together costs at most three extra requests on a page that
-    // has already made half a dozen, and collapses that stretch to the slowest
-    // single one. Priority is unaffected: order is decided when the results are
-    // READ, below, not when they are asked for.
-    function startChainLookups(item, children) {
-        const child = children[0];
-        const pids = item.ProviderIds || {};
-
-        const sharedSeries = (pids.AniDB && pids.AniDB !== pids.AnimePipelineSeries)
-            ? getAniDbSeriesMap().then(map => {
-                const id = map[pids.AniDB];
-                if (!id) return null;
-                LOG('AniDB', pids.AniDB, 'resolves to a series distinct from the parent show');
-                return getItem(id);
-            }).catch(() => null)
-            : Promise.resolve(null);
-
-        return [
-            Promise.resolve(child || null),                                        // 2. first child
-            sharedSeries,                                                          // 3. shared AniDB id
-            child && child.SeasonId ? getItem(child.SeasonId) : Promise.resolve(null),  // 4. season
-            child && child.SeriesId ? getItem(child.SeriesId) : Promise.resolve(null)   // 5. series
-        ];
-    }
-
-    async function resolveArtwork(item, children) {
-        let needBackdrop = !hasBackdrop(item);
-        let needLogo = !hasLogo(item);
-        if (!needBackdrop && !needLogo) return null;
-
-        const result = { backdrop: null, logo: null };
-        const pending = startChainLookups(item, children);
-
-        for (let i = 0; i < pending.length; i++) {
-            if (!needBackdrop && !needLogo) break;
-            let source;
-            try { source = await pending[i]; } catch (e) { source = null; }
-            if (!source) continue;
-            if (needBackdrop && hasBackdrop(source)) {
-                result.backdrop = backdropUrlOf(source);
-                needBackdrop = false;
-            }
-            if (needLogo && hasLogo(source)) {
-                result.logo = logoUrlOf(source);
-                needLogo = false;
-            }
-        }
-        return (result.backdrop || result.logo) ? result : null;
-    }
-
-    // Both images are preloaded before anything is revealed (see scheduleArtwork),
-    // so by the time these run the bytes are in cache and the insert is instant.
-    function applyBackdrop(url) {
-        const container = document.querySelector('.backdropContainer');
-        if (!container) return;
-
-        // The newest one: Jellyfin 12 leaves the previous image in place for
-        // 1.6s after a change, and the first match would be that stale one.
-        const displaying = container.querySelectorAll('.displayingBackdropImage');
-        const existing = displaying[displaying.length - 1];
-        if (existing) {
-            // Already showing the right thing, or showing the item's OWN
-            // backdrop -- which outranks anything borrowed. Leave both alone.
-            if (existing.getAttribute('data-url') === url) return;
-            if (!existing.dataset[ART_FLAG]) return;
-            existing.remove();
-        }
-
-        const el = document.createElement('div');
-        el.className = 'backdropImage displayingBackdropImage backdropImageFadeIn';
-        el.style.backgroundImage = "url('" + url + "')";
-        el.setAttribute('data-url', url);
-        el.dataset[ART_FLAG] = '1';
-        container.appendChild(el);
-
-        const background = document.querySelector('.backgroundContainer');
-        if (background) background.classList.add('withBackdrop');
-    }
-
-    function removeBorrowedBackdrop() {
-        const container = document.querySelector('.backdropContainer');
-        if (!container) return;
-        container.querySelectorAll('.backdropImage[data-' + ART_FLAG_ATTR + ']')
-            .forEach(el => el.remove());
-
-        // Jellyfin only clears `withBackdrop` when IT changes the backdrop, so
-        // taking ours away can leave the class behind and style the next page as
-        // though it had a backdrop it does not have.
-        if (!container.querySelector('.backdropImage')) {
-            const background = document.querySelector('.backgroundContainer');
-            if (background) background.classList.remove('withBackdrop');
-        }
-    }
 
     // THE SINGLE-ITEM MARKER, read by skins/optional/global/collectionSingleItem.css.
     //
@@ -342,138 +81,8 @@
         document.body.classList.toggle(SINGLE_CLASS, !!isSingle);
     }
 
-    function removeBorrowedLogo() {
-        document.querySelectorAll('.detailLogo[data-' + ART_FLAG_ATTR + ']').forEach(logo => {
-            logo.style.backgroundImage = '';
-            delete logo.dataset[ART_FLAG];
-            logo.classList.add('hide');
-        });
-    }
-
-    // WHEN A BORROWED LOGO IS SAFE TO SHOW.
-    //
-    // ElegantFin positions .detailLogo for one layout: the standard
-    // portrait-poster page, with `top: calc(100vh - ...)` and
-    // `transform: translateY(-100%)` so it sits at the foot of a full-height
-    // header. When the detail image is NOT a portrait card it shrinks that
-    // header to 73vh, and then only handles the logo for some of those cases --
-    // hidden for .album and .backdropCard, moved for .person. .squareCard is
-    // not among them, so a logo shown there keeps its 100vh position, lands
-    // below the shortened header and sits on top of the description.
-    //
-    // That combination never arose before this feature: a collection with a
-    // non-portrait poster had no logo to place. It arises now because 19 of the
-    // 300 collections here have a non-portrait Primary -- AniDB hands back a
-    // landscape picture for some releases, 400x331 for the Sagacious Wisdom
-    // one -- and jellyfin-web renders any Primary wider than about 0.85 as a
-    // squareCard.
-    //
-    // So a logo is only borrowed where the page is in the layout the skin
-    // positions logos for. Declining is not a degradation: ElegantFin restores
-    // the text title through
-    // `.detailLogo.hide ~ .detailPageWrapperContainer .nameContainer h1`,
-    // so the page reads exactly as it did before, just with a backdrop.
-    // The "Ignore Poster Shape on Collection Pages" stylesheet publishes
-    // --kefin-collection-poster-layout when it is loaded AND the layout it
-    // corrects is the active one. With it on, a collection page keeps the
-    // primary-page header whatever its poster's shape, so the logo is
-    // positioned correctly and there is nothing to withhold. Read once per
-    // view rather than per tick: getComputedStyle forces a style flush.
-    function posterLayoutOptionActive() {
-        try {
-            return getComputedStyle(document.documentElement)
-                .getPropertyValue('--kefin-collection-poster-layout').trim() === '1';
-        } catch (e) {
-            return false;
-        }
-    }
-
-    function logoLayoutIsSafe(page, optionActive) {
-        if (optionActive) return true;
-        const card = page.querySelector('.detailImageContainer .card');
-        return !!card && card.classList.contains('portraitCard');
-    }
-
-    // renderLogo does exactly this: drop `hide`, set the image. Only ever fills
-    // a blank -- an element already carrying an image belongs to the item.
-    function applyLogo(page, url, optionActive) {
-        const logo = page.querySelector('.detailLogo');
-        if (!logo) return;
-        if (logo.style.backgroundImage && !logo.dataset[ART_FLAG]) return;
-
-        if (!logoLayoutIsSafe(page, optionActive)) {
-            // Undo an earlier tick that ran before the poster card existed.
-            if (logo.dataset[ART_FLAG]) {
-                logo.style.backgroundImage = '';
-                delete logo.dataset[ART_FLAG];
-                logo.classList.add('hide');
-            }
-            return;
-        }
-
-        logo.style.backgroundImage = "url('" + url + "')";
-        logo.dataset[ART_FLAG] = '1';
-        logo.classList.remove('hide');
-    }
-
-    function preload(url) {
-        return new Promise(resolve => {
-            const img = new Image();
-            img.onload = () => resolve(true);
-            img.onerror = () => resolve(false);
-            img.src = url;
-        });
-    }
-
-    // The detail view finishes rendering in passes and can re-hide the logo
-    // after we write it, so re-apply on a few bounded ticks rather than
-    // observing. Both apply functions are idempotent, so repeating is cheap.
-    const ART_RETRIES_MS = [0, 250, 800, 2000, 3500];
-    let artTimers = [];
-
-    function stopArtRetries() {
-        artTimers.forEach(clearTimeout);
-        artTimers = [];
-    }
-
-    // NOTHING IS REVEALED UNTIL IT HAS LOADED, and for the logo that is not a
-    // nicety. ElegantFin swaps the text title for the logo the moment
-    // .detailLogo loses `hide`
-    // (`.detailLogo:not(.hide) ~ ... .nameContainer h1 { display: var(--itemTitleVisibility) }`,
-    // and the rule beside it puts the title back for `.detailLogo.hide`). So a
-    // borrowed logo whose URL 404s would hide the title and show nothing in its
-    // place, leaving the page with no title at all. Verifying the load first is
-    // also the only check available: a background-image that fails reports
-    // nothing to the page.
-    async function scheduleDetailFixes(page, art, alive) {
-        stopArtRetries();
-        if (!art) return;
-
-        const [backdropOk, logoOk] = await Promise.all([
-            art.backdrop ? preload(art.backdrop) : Promise.resolve(false),
-            art.logo ? preload(art.logo) : Promise.resolve(false)
-        ]);
-        if (!alive()) return;
-
-        const backdrop = backdropOk ? art.backdrop : null;
-        const logo = logoOk ? art.logo : null;
-        if (!backdrop && !logo) return;
-
-        const optionActive = posterLayoutOptionActive();
-
-        artTimers = ART_RETRIES_MS.map(delay => setTimeout(() => {
-            if (!alive()) return;
-            if (backdrop) applyBackdrop(backdrop);
-            if (logo) applyLogo(page, logo, optionActive);
-        }, delay));
-
-        LOG('Borrowed artwork:', [backdrop && 'backdrop', logo && 'logo']
-            .filter(Boolean).join(' + '));
-    }
-
-
     // ======================================================================
-    // 2. Studios row
+    // 1. Studios row
     // ======================================================================
 
     const STUDIOS_ATTR = 'data-kefin-studios';
@@ -605,7 +214,7 @@
     }
 
     // ======================================================================
-    // 3. The "Special - " prefix
+    // 2. The "Special - " prefix
     // ======================================================================
     //
     // Not stripped as a string: the prefix is localized ("Extra – {0}" in de,
@@ -646,7 +255,7 @@
     }
 
     // ======================================================================
-    // 4. Breadcrumbs, and a special's episode page
+    // 3. Breadcrumbs, and a special's episode page
     // ======================================================================
     //
     // A virtual special sits between a series and its specials, and the
@@ -812,13 +421,6 @@
     let teardown = [];
     function stopAll() {
         viewToken++;
-        stopArtRetries();
-        // These live outside the view, so a borrowed backdrop or logo would
-        // otherwise follow the user to the next item. Jellyfin clears the
-        // backdrop container itself on navigation, but only ours is ours to
-        // remove, and this runs before we know what the next page needs.
-        removeBorrowedBackdrop();
-        removeBorrowedLogo();
         setSingleItemMarker(false);
         teardown.forEach(fn => { try { fn(); } catch (e) { /* already stopped */ } });
         teardown = [];
@@ -899,40 +501,15 @@
 
                 const token = viewToken;
                 // stopAll() only runs when another details page opens, so leaving
-                // for Home or a library must also count, or the art retries would
-                // repaint the borrowed backdrop there.
+                // for Home or a library must also count.
                 const alive = () => token === viewToken
                     && page.isConnected && !page.classList.contains('hide');
 
-                // --- artwork, from last visit's answer, before anything else -
-                // This runs before the children fetch on purpose: it needs only
-                // the item, which has already resolved, so the borrow can be in
-                // place before the page has finished assembling.
-                const remembered = readArtCache()[item.Id];
-                let appliedFromCache = false;
-                if (remembered) {
-                    const art = {
-                        backdrop: hasBackdrop(item) ? null : remembered.backdrop,
-                        logo: hasLogo(item) ? null : remembered.logo
-                    };
-                    if (art.backdrop || art.logo) {
-                        scheduleDetailFixes(page, art, alive);
-                        appliedFromCache = true;
-                    }
-                }
-
-                // One fetch, three consumers.
+                // One fetch, two consumers.
                 const children = await fetchChildren(item.Id);
                 if (!alive()) return;
 
                 if (children.length) setSingleItemMarker(children.length === 1);
-
-                // --- artwork, resolved fresh ---------------------------------
-                resolveArtwork(item, children).then(art => {
-                    if (!alive()) return;
-                    writeArtCache(item.Id, art);
-                    if (!appliedFromCache) scheduleDetailFixes(page, art, alive);
-                });
 
                 // --- studios -------------------------------------------------
                 waitFor(page, '.itemDetailsGroup', Date.now()).then(group => {

@@ -126,10 +126,6 @@ current bar.
 - **Refresh paths skip the smart filter**: the section refresh button returns
   watched items at double the count.
 - **Liked (Shows) is nearly always empty**: its pool is favourite *Episodes*.
-- **virtualSpecials borrowed backdrop vs Jellyfin's**: on a 1920px window Jellyfin
-  can adopt our backdrop element when returning to the series, and our teardown
-  then removes it (no backdrop). It also ignores Jellyfin's mobile and
-  backdrops-off rules.
 - **specialEpisodePrefix**: the learned wording is never re-validated. A wrong one
   derived from a card whose series name ends with the special's name would strip
   that series name everywhere.
