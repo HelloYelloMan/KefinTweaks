@@ -853,15 +853,26 @@
             async (view, element, hash, itemPromise) => {
                 if (ApiClient._loggedIn === false) return;
 
-                const page = document.querySelector('.itemDetailPage:not(.hide)')
-                    || document.querySelector('.libraryPage:not(.hide)');
-                if (!page) return;
-
                 let item;
                 try { item = await itemPromise; } catch (e) { return; }
                 // A slow item fetch can resolve after the next page's handler has
-                // started; stopAll() here would cancel that page's work.
-                if (page.classList.contains('hide')) return;
+                // started; stopAll() here would cancel that page's work. Judged by
+                // the URL, which names the item this call is for.
+                if (!item || !item.Id || !window.location.hash.includes(item.Id)) return;
+
+                // The page is looked up only now, not before the await. Going from
+                // one item page to another, this handler is called from the
+                // History API as the URL changes -- before jellyfin-web has
+                // swapped the views -- so the visible page at that moment is the
+                // OUTGOING one, hidden by the time the item arrives. Checking that
+                // page made the handler give up, and the second notification, from
+                // the view show, is suppressed (triggerOnSameHash: false) because
+                // the hash has not changed since. Seen in the app opening a
+                // collection from a series page's Collections row: no marker, so
+                // the count and Shuffle of a one-item collection stayed visible.
+                const page = document.querySelector('.itemDetailPage:not(.hide)')
+                    || document.querySelector('.libraryPage:not(.hide)');
+                if (!page) return;
 
                 stopAll();
                 setCollectionsTitle(page, null);
