@@ -6,32 +6,6 @@
 	gap: 1rem;
 }
 
-/* Was: body[data-seasonal-background]:has(.homePage:not(.hide)) #reactRoot:has(...)
-   Two nested :has() with `.hide` / `.is-active` arguments on <body> and #reactRoot.
-   Jellyfin flips those classes on every route change, so this made each navigation
-   invalidate style document-wide in Chromium. `.kefin-home-active` is maintained by
-   elegantfin-haspatch.js; the inner :has() is kept because #reactRoot is a single
-   element (a narrow subject), not a document-scope one. */
-body[data-seasonal-background="true"].kefin-home-active #reactRoot:has(.libraryPage:not(.hide) .pageTabContent.is-active[data-index="0"])>.backgroundContainer::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0%;
-    background: linear-gradient(rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.85)), var(--seasonal-background-image);
-    background-position: center;
-    background-size: cover;
-}
-
-.snowverlay {
-	display: none;
-}
-
-body[data-seasonal-animations="true"].kefin-home-active .snowverlay {
-    display: block;
-}
-
 /* Scoped by ANCESTOR rather than by a body marker class. This rule changes
    margins, so it has to apply on the very first paint, and both the original
    `body:has(.homePage:not(.hide))` and the `.kefin-home-active` marker that
@@ -87,7 +61,11 @@ div#discovery-loading-indicator:not(.show)::after {
 	content: "";
 }
 
-[data-loading-discovery="true"] div#discovery-loading-indicator {
+[data-loading-discovery="true"] div#discovery-loading-indicator,
+.homeSectionsContainer[data-loading-discovery="true"] ~ #discovery-loading-indicator,
+.homeSectionsContainer[data-loading-discovery="true"] + #discovery-loading-indicator,
+.sections[data-loading-discovery="true"] ~ #discovery-loading-indicator,
+.sections[data-loading-discovery="true"] + #discovery-loading-indicator {
 	display: flex;
 }
 
@@ -96,6 +74,32 @@ div#discovery-loading-indicator:not(.show)::after {
 	display: flex !important;
 	visibility: visible !important;
 	opacity: 1 !important;
+}
+
+/* Hide Discover More / loading affordance outside Home + Discover categories */
+#indexPage .homeSectionsContainer[data-category]:not([data-category="none"]):not([data-category="discovery"]) #discovery-loading-indicator,
+.homePage .homeSectionsContainer[data-category]:not([data-category="none"]):not([data-category="discovery"]) #discovery-loading-indicator,
+.libraryPage
+	.homeSectionsContainer[data-category]:not([data-category="none"]):not([data-category="discovery"])
+	#discovery-loading-indicator,
+#indexPage .homeSectionsContainer[data-category]:not([data-category="none"]):not([data-category="discovery"]) ~ #discovery-loading-indicator,
+.homePage .homeSectionsContainer[data-category]:not([data-category="none"]):not([data-category="discovery"]) ~ #discovery-loading-indicator,
+.libraryPage
+	.homeSectionsContainer[data-category]:not([data-category="none"]):not([data-category="discovery"])
+	~ #discovery-loading-indicator,
+#indexPage .homeSectionsContainer[data-category]:not([data-category="none"]):not([data-category="discovery"]) .discovery-loading-indicator,
+.homePage .homeSectionsContainer[data-category]:not([data-category="none"]):not([data-category="discovery"]) .discovery-loading-indicator,
+.libraryPage
+	.homeSectionsContainer[data-category]:not([data-category="none"]):not([data-category="discovery"])
+	.discovery-loading-indicator {
+	display: none !important;
+	visibility: hidden !important;
+	min-height: 0 !important;
+	height: 0 !important;
+	overflow: hidden !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	opacity: 0 !important;
 }
 
 #indexPage[data-discovery-ready] #discovery-loading-indicator:not(.show) .spinner {
@@ -174,22 +178,6 @@ div#discovery-loading-indicator:not(.show)::after {
 	}
 }
 
-/* Hide next up section if next up if KefinTweaks next up section is present */
-/* .homeSectionsContainer:has([data-section-id="nextUp"]) > div:nth-child(-n+10):has(a[href*="nextup"]) {
-    display: none;
-} */
-/* Hide continue watching section if continue watching if KefinTweaks continue watching section is present */
-/* .homeSectionsContainer:has([data-section-id="continueWatching"]) > div:nth-child(-n+10):has([data-positionticks][data-mediatype="Video"]) {
-    display: none;
-} */
-/* Hide recently added section if recently added if KefinTweaks recently added section is present */
-/* .homeSectionsContainer:has([data-section-id*="recently-added"]) > div:nth-child(-n+10):has(a[href*="movies&tab=1"]),
-.homeSectionsContainer:has([data-section-id*="recently-added"]) > div:nth-child(-n+10):has(a[href*="tv&tab=1"]),
-.homeSectionsContainer:has([data-section-id*="recently-added"]) > div:nth-child(-n+10):has(a[href*="music&tab=1"])
-  {
-    display: none;
-} */
-
 /* Hide scroll buttons on mobile using Jellyfin's layout classes */
 .layout-mobile .emby-scrollbuttons,
 .layout-tv .emby-scrollbuttons {
@@ -204,7 +192,11 @@ div#discovery-loading-indicator:not(.show)::after {
 	display: none !important;
 }
 
-.sections[data-loading-discovery="true"] .discovery-loading-indicator {
+.sections[data-loading-discovery="true"] .discovery-loading-indicator,
+.sections[data-loading-discovery="true"] ~ #discovery-loading-indicator,
+.sections[data-loading-discovery="true"] + #discovery-loading-indicator,
+.homeSectionsContainer[data-loading-discovery="true"] ~ #discovery-loading-indicator,
+.homeSectionsContainer[data-loading-discovery="true"] + #discovery-loading-indicator {
 	display: flex !important;
 	opacity: 1 !important;
 }
@@ -269,37 +261,16 @@ div#discovery-loading-indicator:not(.show)::after {
 	font-size: 1.5rem !important;
 	line-height: 1.8rem !important;
 }
-
-/* .homeSectionsContainer [data-section-id*="thematic-"] .card[data-type="Folder"] .cardText {
-	display: none;
-}
-
-[data-card-format="Square"] [data-type="Person"] .cardScalable,
-[data-card-format="Square"] [data-type="Actor"] .cardScalable,
-[data-card-format="Square"] [data-type="Writer"] .cardScalable,
-[data-card-format="Square"] [data-type="Director"] .cardScalable {
-	border-radius: 50% !important;
-	overflow: hidden;
-}
-
-[data-card-format="Square"] [data-type="Actor"] .cardText {
-	display: flex;
-	justify-content: center;
-} */
-
-.homeSectionsContainer:has([data-page], [data-section-id])
-	> :is(
-		.section0:not([data-page]),
-		.section1:not([data-page]),
-		.section2:not([data-page]),
-		.section3:not([data-page]),
-		.section4:not([data-page]),
-		.section5:not([data-page]),
-		.section6:not([data-page]),
-		.section7:not([data-page]),
-		.section8:not([data-page]),
-		.section9:not([data-page])
-	) {
+.section0:not([data-page]),
+.section1:not([data-page]),
+.section2:not([data-page]),
+.section3:not([data-page]),
+.section4:not([data-page]),
+.section5:not([data-page]),
+.section6:not([data-page]),
+.section7:not([data-page]),
+.section8:not([data-page]),
+.section9:not([data-page]) {
 	display: none !important;
 }
 
@@ -321,30 +292,6 @@ div#discovery-loading-indicator:not(.show)::after {
 	display: none;
 }
 
-body:not(:has(#slides-container)) .homeSectionsContainer .section9 + .custom-scroller-container {
-	margin-top: 1em;
-}
-
-/* .pageTabContent:has(.kefinHomeSectionsContainer[data-kefin-home-screen]) .homeSectionsContainer:not([data-kefin-home-screen]) {
-    display: none !important;
-}
-
-body[data-seasonal-background="true"]:has(.homePage:not(.hide)) #reactRoot:has(.libraryPage:not(.hide) .pageTabContent.is-active[data-index="0"])>.backgroundContainer::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0%;
-    background: linear-gradient(rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.85)), var(--seasonal-background-image);
-    background-position: center;
-    background-size: cover;
-}
-
-body[data-seasonal-animations="true"]:has(.homePage:not(.hide)) .snowverlay {
-    display: block;
-} */
-
 .homePage[data-discovery-ready] div#discovery-loading-indicator:not(.show) {
 	min-height: 50px;
 }
@@ -359,16 +306,6 @@ body[data-seasonal-animations="true"]:has(.homePage:not(.hide)) .snowverlay {
 		opacity: 1;
 		visibility: visible;
 	}
-}
-
-.homeSectionsContainer:not(:has([data-page]), :has([data-section-id]))::after {
-	content: "Customize your Home Screen from your User Settings > Home in the top right corner.";
-	text-align: center;
-	margin: 3em auto;
-	display: block;
-	animation: fadeInDelayed 0.1s linear 1s forwards;
-	opacity: 0;
-	visibility: hidden;
 }
 
 [data-section-id="browse-by-studio"] .card {
@@ -392,3 +329,283 @@ body[data-seasonal-animations="true"]:has(.homePage:not(.hide)) .snowverlay {
 		width: 30vw !important;
 	}
 }
+
+/* Home screen chrome: create section + category rail */
+.kefin-home-chrome {
+	position: fixed;
+	z-index: 12;
+	pointer-events: none;
+	opacity: 0.18;
+	transition: opacity 0.2s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+	.kefin-home-chrome:hover,
+	.kefin-home-chrome:focus-within {
+		opacity: 1;
+	}
+}
+.kefin-home-chrome.hide,
+#kefin-home-category-rail.hide,
+#kefin-home-category-rail.hide .kefin-home-category-rail {
+	display: none !important;
+}
+
+/* Hide home chrome off-home via root page key (no :has; JMP-safe) */
+html:not([data-active-page="home"]) #kefin-home-category-rail,
+html:not([data-active-page="home"]) #kefin-home-create-section-btn {
+	display: none !important;
+}
+
+.kefin-home-chrome button,
+#kefin-home-category-rail button {
+	pointer-events: auto;
+}
+.kefin-home-create-section {
+	left: 0;
+	bottom: 0.25em;
+}
+.kefin-home-create-section-btn {
+	padding: 0.25em;
+}
+.kefin-home-create-section-btn .material-icons {
+	font-size: 1.75rem;
+}
+
+/* Outer sectionTabs wrapper — no native header layout */
+#kefin-home-category-rail.sectionTabs {
+	position: static;
+	display: contents;
+}
+
+/* Inner visual bar — keep our layout over skinHeader / MuiAppBar positioning */
+:where(.kefin-home-category-rail) {
+	--AppBar-background: var(--jf-palette-AppBar-defaultBg);
+	--AppBar-color: var(--jf-palette-text-primary);
+	background-color: var(--jf-palette-AppBar-darkBg, var(--AppBar-background));
+	color: var(--jf-palette-AppBar-darkColor, var(--AppBar-color));
+	z-index: 10;
+	gap: 0.25rem;
+	pointer-events: auto;
+	display: flex;
+}
+@media (hover: hover) and (pointer: fine) {
+	#kefin-home-category-rail .kefin-home-category-rail:hover,
+	#kefin-home-category-rail .kefin-home-category-rail:focus-within {
+		opacity: 1;
+		background: #0f0f0f !important;
+		border-radius: 0 25px 25px 0;
+		box-shadow: 1px 0px 5px -1px black;
+	}
+}
+.kefin-home-category-item {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 0.15rem;
+	min-width: 0;
+}
+.kefin-home-category-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0.75;
+	-webkit-tap-highlight-color: transparent;
+}
+.kefin-home-category-btn.is-active,
+.kefin-home-category-item.is-active .kefin-home-category-btn {
+	opacity: 1;
+	color: var(--theme-primary-color, #00a4dc);
+	background: rgba(0, 164, 220, 0.18);
+}
+.kefin-home-category-btn .material-icons {
+	font-size: 1.35rem;
+	top: unset !important;
+}
+.kefin-home-category-btn-label {
+	display: none;
+	font-size: 0.65rem;
+	line-height: 1.1;
+	font-weight: 500;
+	letter-spacing: 0.01em;
+	max-width: 4.5rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	pointer-events: none;
+	text-align: center;
+}
+.kefin-home-category-item.is-active .kefin-home-category-btn-label {
+	color: var(--theme-primary-color, #00a4dc);
+}
+
+@media (max-width: 899px) {
+	#kefin-home-category-rail .kefin-home-category-rail {
+		top: auto;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		flex-direction: row;
+		justify-content: space-evenly;
+		align-items: center;
+		gap: 0.15rem;
+		padding: 0.4rem 0.5rem calc(0.4rem + env(safe-area-inset-bottom, 0px)) !important;
+		box-shadow: 1px 1px 1px 1px #fff !important;
+		border-radius: 0;
+		opacity: 1;
+		pointer-events: auto;
+		margin: 0 !important;
+		border: none !important;
+		transition:
+			transform 0.25s ease,
+			opacity 0.25s ease;
+	}
+	:where(#kefin-home-category-rail) .kefin-home-category-rail:hover,
+	:where(#kefin-home-category-rail) .kefin-home-category-rail:focus-within {
+		opacity: 1;
+		background: var(--jf-palette-AppBar-darkBg, var(--AppBar-background)) !important;
+		border-radius: 0;
+		box-shadow: 1px 1px 1px 1px #fff !important;
+	}
+	.kefin-home-category-btn-label {
+		display: block;
+	}
+	.kefin-home-category-btn:hover,
+	.kefin-home-category-btn:focus,
+	.kefin-home-category-btn:focus-visible,
+	.kefin-home-category-btn:active {
+		opacity: 0.75;
+		background: transparent;
+		color: inherit;
+	}
+	.kefin-home-category-btn.is-active,
+	.kefin-home-category-btn.is-active:hover,
+	.kefin-home-category-btn.is-active:focus,
+	.kefin-home-category-btn.is-active:focus-visible,
+	.kefin-home-category-btn.is-active:active,
+	.kefin-home-category-item.is-active .kefin-home-category-btn,
+	.kefin-home-category-item.is-active .kefin-home-category-btn:hover,
+	.kefin-home-category-item.is-active .kefin-home-category-btn:focus,
+	.kefin-home-category-item.is-active .kefin-home-category-btn:focus-visible,
+	.kefin-home-category-item.is-active .kefin-home-category-btn:active {
+		opacity: 1;
+		color: var(--theme-primary-color, #00a4dc);
+		background: rgba(0, 164, 220, 0.18);
+	}
+	#kefin-home-category-rail.is-scroll-hidden .kefin-home-category-rail {
+		transform: translateY(100%);
+		pointer-events: none;
+		opacity: 0;
+	}
+	.kefin-home-create-section,
+	#kefin-home-create-section-btn {
+		display: none !important;
+	}
+	.homePage:not(.hide) {
+		padding-bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+	}
+}
+
+.kefin-section-more-toggle {
+	margin-left: auto !important;
+}
+
+@media (min-width: 900px) {
+	#kefin-home-category-rail .kefin-home-category-rail,
+	#kefin-home-category-rail .kefin-home-category-rail::before {
+		background: none !important;
+		background-color: transparent !important;
+	}
+	#kefin-home-category-rail .kefin-home-category-rail {
+		position: fixed !important;
+		z-index: 10;
+		top: 50vh !important;
+		left: 0 !important;
+		right: auto !important;
+		bottom: auto !important;
+		width: auto !important;
+		height: auto !important;
+		max-width: none !important;
+		flex-direction: column !important;
+		transform: translateY(-50%);
+		overflow: visible !important;
+		padding: 5px 0 !important;
+		margin: 0 !important;
+		backdrop-filter: none;
+		border: none !important;
+		display: grid !important;
+		grid-auto-rows: 1fr;
+	}
+}
+
+#kefin-home-category-rail .kefin-home-category-rail {
+	height: auto !important;
+}
+
+.sections.homeSectionsContainer[data-category="discovery"] {
+	position: relative;
+}
+
+.sections.homeSectionsContainer[data-category="discovery"]::before {
+	content: "\E87A";
+	font-family: "Material Icons";
+	padding-left: max(env(safe-area-inset-left), 3.3%);
+	font-size: 1.5rem;
+	margin: 0;
+	padding-bottom: .2em;
+	padding-top: 1em;
+	display: block;
+	line-height: 1.2;
+}
+
+.sections.homeSectionsContainer[data-category="discovery"]::after {
+	content: "Discover Something To Watch";
+	font-family: inherit;
+	font-size: 1.5rem;
+	position: absolute;
+	left: calc(max(env(safe-area-inset-left), 3.3%) + 1.7em);
+	top: 1em;
+	line-height: 1.2;
+	pointer-events: none;
+}
+
+html:not([data-active-page="home"]) .snowverlay {
+	display: none;
+}
+
+// Hide the seasonal animations on mobile by default
+@media (max-width: 899px) {
+	.snowverlay {
+		display: none !important;
+	}
+}
+
+html[data-active-page="home"] body[data-seasonal-background="true"] #reactRoot > .backgroundContainer::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0%;
+	background: linear-gradient(rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.85)), var(--seasonal-background-image);
+	background-position: center;
+	background-size: cover;
+}
+
+/* Figure out a better way to do this without requiring :has() */
+/* .homeSectionsContainer:has(> .verticalSection.section0:empty):has(> .verticalSection.section1:empty):has(
+		> .verticalSection.section2:empty
+	):has(> .verticalSection.section3:empty):has(> .verticalSection.section4:empty):has(> .verticalSection.section5:empty):has(
+		> .verticalSection.section6:empty
+	):has(> .verticalSection.section7:empty):has(> .verticalSection.section8:empty):has(> .verticalSection.section9:empty):not(
+		:has(> .section9 ~ :not(.discovery-loading-indicator))
+	)::after {
+	content: "Customize your Home Screen from your User Settings > Home in the top right corner.";
+	text-align: center;
+	margin: 3em auto;
+	display: block;
+	animation: fadeInDelayed 0.1s linear 1s forwards;
+	opacity: 0;
+	visibility: hidden;
+}
+ */

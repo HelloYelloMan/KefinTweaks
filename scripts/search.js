@@ -535,9 +535,9 @@
         function updateButtonStates(activeType) {
             // Remove active class from all buttons
             smartAllBtn.classList.remove('active','button-submit');
-            smartCoreBtn.classList.remove('active','button-submit');
-            smartMusicBtn.classList.remove('active','button-submit');
-            smartBooksBtn.classList.remove('active','button-submit');
+            smartCoreBtn?.classList.remove('active','button-submit');
+            smartMusicBtn?.classList.remove('active','button-submit');
+            smartBooksBtn?.classList.remove('active','button-submit');
 
             if (smartRequestBtn) {
                 smartRequestBtn.classList.remove('active','button-submit');
@@ -547,13 +547,13 @@
             if (activeType === 'all') {
                 smartAllBtn.classList.add('active','button-submit');
             } else if (activeType === 'videos') {
-                smartCoreBtn.classList.add('active','button-submit');
+                smartCoreBtn?.classList.add('active','button-submit');
             } else if (activeType === 'music') {
-                smartMusicBtn.classList.add('active','button-submit');
+                smartMusicBtn?.classList.add('active','button-submit');
             } else if (activeType === 'books') {
-                smartBooksBtn.classList.add('active','button-submit');
+                smartBooksBtn?.classList.add('active','button-submit');
             } else if (activeType === 'request' && smartRequestBtn) {
-                smartRequestBtn.classList.add('active','button-submit');
+                smartRequestBtn?.classList.add('active','button-submit');
             }
         }
 
@@ -615,9 +615,9 @@
                     performSmartSearch((smartInput.value||'').trim(), internalType); 
                 }
             });
-            smartCoreBtn.addEventListener('click', ()=>setSearchType('videos'));
-            smartMusicBtn.addEventListener('click', ()=>setSearchType('music'));
-            smartBooksBtn.addEventListener('click', ()=>setSearchType('books'));
+            smartCoreBtn?.addEventListener('click', ()=>setSearchType('videos'));
+            smartMusicBtn?.addEventListener('click', ()=>setSearchType('music'));
+            smartBooksBtn?.addEventListener('click', ()=>setSearchType('books'));
             smartAllBtn.addEventListener('click', ()=>setSearchType('all'));
             if (smartRequestBtn) {
                 smartRequestBtn.addEventListener('click', ()=>setSearchType('request'));

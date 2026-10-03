@@ -68,8 +68,20 @@
             off: 'Studios without any image may be rendered in Popular Studios sections. You can enable the Optional CSS Module "Studio Thumbnails" to overlay a background with the Studio Name on items without an image.'
         },
         'home-loadPeopleEpisodeData': {
-            on: 'Loads all Person appearances from all episodes in your library. This data takes much longer to cache than just the Movies/Series level data.',
-            off: 'Person appearance data is limited to only Movies and Series.'
+            on: 'Not Recommended for larger libraries. Loads all Person appearances from all episodes in your library. This data takes much longer to cache than just the Movies/Series level data.',
+            off: 'This is recommended. Person appearance data is limited to only Movies and Series.'
+        },
+        'home-showCreateSectionButtonOnHome': {
+            on: 'Adds a button to the bottom left corner of the home screen so that you can quickly create a new section directly from the Home Screen. Only admins will see this button. The button is hidden on mobile.',
+            off: 'You must use the KefinTweaks Configuration > Home Screen > New Section flow to create new Home Screen sections.'
+        },
+        'home-showCategoryFilters': {
+            on: 'Category Filters will appear on the Home Screen to quickly navigate between Discovery, Pinned or any custom Category sections.',
+            off: 'Category Filters will not appear on the Home Screen.'
+        },
+        'home-renderCategoriesSeparately': {
+            on: 'Sections will only appear when their defined category is selected on the Home Screen. Discovery sections will only load when the Discovery category is selected.',
+            off: 'All sections will be visible when the default Home category is selected. Discovery sections will render at the bottom of the Home and Discovery categories.'
         }
     };
 
@@ -224,6 +236,53 @@
                 }
             }
         }
+    }
+
+    /**
+     * Whether today falls in an MM-DD (or M-D) seasonal window.
+     * Supports year-wrap when end < start (e.g. 12-20 … 01-05).
+     * @param {string} startDate
+     * @param {string} endDate
+     * @returns {boolean}
+     */
+    function isInSeasonalPeriod(startDate, endDate) {
+        if (startDate == null || endDate == null || startDate === '' || endDate === '') {
+            return false;
+        }
+        const parseMonthDay = (value) => {
+            const parts = String(value).trim().split(/[-/.]/).map((p) => parseInt(p, 10));
+            if (parts.length < 2 || parts.some((n) => !Number.isFinite(n))) return null;
+            let month;
+            let day;
+            // YYYY-MM-DD → take month/day
+            if (parts.length >= 3 && parts[0] > 31) {
+                month = parts[1];
+                day = parts[2];
+            } else {
+                month = parts[0];
+                day = parts[1];
+            }
+            if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+            return { month, day };
+        };
+        const startMd = parseMonthDay(startDate);
+        const endMd = parseMonthDay(endDate);
+        if (!startMd || !endMd) return false;
+
+        const now = new Date();
+        const year = now.getFullYear();
+        const start = new Date(year, startMd.month - 1, startMd.day, 0, 0, 0, 0);
+        let end = new Date(year, endMd.month - 1, endMd.day, 23, 59, 59, 999);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+
+        if (end < start) {
+            if (now >= start) {
+                end.setFullYear(year + 1);
+            } else {
+                start.setFullYear(year - 1);
+            }
+        }
+        return now >= start && now <= end;
     }
 
     /**
@@ -649,7 +708,8 @@
         { name: 'Universal Pictures', file: 'Universal_Pictures.svg' },
         { name: 'Walt Disney Pictures', file: 'Walt_Disney_Pictures.svg' },
         { name: 'Warner Bros.', file: 'Warner_Bros..svg' },
-        { name: 'HBO Max', file: 'HBO_Max.svg' }
+        { name: 'HBO Max', file: 'HBO_Max.svg' },
+        { name: 'Prime Video', file: 'Prime_Video.svg' }
     ];
 
     const BROWSE_BY_STUDIO_SECTION_ID = 'browse-by-studio';
@@ -667,7 +727,7 @@
         return BROWSE_BY_STUDIO_CATALOG.every((entry) => resolvedNames.has(entry.name));
     }
 
-    async function fetchAllStudiosForBrowseSection() {
+    function fetchAllStudiosForBrowseSection() {
         if (browseStudiosFetchPromise) {
             return browseStudiosFetchPromise;
         }
@@ -947,7 +1007,8 @@
                 if (browseSection && isBrowseByStudioCatalogFullyResolved(existingItems)) {
                     LOG('Browse by Studio catalog fully resolved; skipping /Studios fetch');
                 } else {
-                    const studios = await fetchAllStudiosForBrowseSection();
+                    const studiosPromise = fetchAllStudiosForBrowseSection();
+                    const studios = await studiosPromise;
 
                     if (!browseSection) {
                         const items = buildBrowseByStudioItems(studios, []);
@@ -986,14 +1047,182 @@
         queryOptions: ['Fields', 'Filters', 'IncludeItemTypes', 'MediaTypes', 'IsActive', 'IsScheduled', 'IsAiring', 'HasAired', 'IsInProgress'],
     };
 
-    function buildCanonicalHomeSectionMap() {
+    function buildCanonicalSectionMapForGroups(groupKey) {
         const defaults = window.KefinHomeConfig2;
         const map = new Map();
-        if (!defaults?.HOME_SECTION_GROUPS) return map;
-        flattenSectionGroups(defaults.HOME_SECTION_GROUPS).forEach(section => {
+        flattenSectionGroups(defaults?.[groupKey] || []).forEach((section) => {
             if (section?.id) map.set(section.id, section);
         });
         return map;
+    }
+
+    function buildCanonicalHomeSectionMap() {
+        return buildCanonicalSectionMapForGroups('HOME_SECTION_GROUPS');
+    }
+
+    function getAllKefinDefaultSectionIds() {
+        const ids = new Set();
+        ['HOME_SECTION_GROUPS', 'SEASONAL_SECTION_GROUPS', 'DISCOVERY_SECTION_GROUPS'].forEach((key) => {
+            buildCanonicalSectionMapForGroups(key).forEach((_, id) => ids.add(id));
+        });
+        return ids;
+    }
+
+    const KEFIN_DEFAULT_GROUP_KEYS = ['HOME_SECTION_GROUPS', 'SEASONAL_SECTION_GROUPS', 'DISCOVERY_SECTION_GROUPS'];
+    const LIBRARY_RESOLVED_ID_PREFIXES = ['recently-added-', 'popular-genres-'];
+    const FIXED_TEMPLATE_SECTION_IDS = new Set([BROWSE_BY_STUDIO_SECTION_ID]);
+
+    function isLibraryResolvedSectionId(sectionId) {
+        if (!sectionId) return false;
+        return LIBRARY_RESOLVED_ID_PREFIXES.some((prefix) => sectionId.startsWith(prefix));
+    }
+
+    function shouldKeepDefaultSurfaceSection(section, defaultSectionIds) {
+        if (!section?.id) return false;
+        if (section.deleted === true) return true;
+        if (defaultSectionIds.has(section.id)) return true;
+        if (FIXED_TEMPLATE_SECTION_IDS.has(section.id)) return true;
+        if (isLibraryResolvedSectionId(section.id)) return true;
+        return false;
+    }
+
+    function addMissingKefinDefaultSections(config) {
+        const defaults = window.KefinHomeConfig2;
+        if (!defaults) return false;
+        let hasChanges = false;
+
+        KEFIN_DEFAULT_GROUP_KEYS.forEach((groupKey) => {
+            const defaultGroups = defaults[groupKey] || [];
+            if (!Array.isArray(config[groupKey])) config[groupKey] = [];
+
+            defaultGroups.forEach((defaultGroup) => {
+                let savedGroup = null;
+                if (defaultGroup.id) {
+                    savedGroup = config[groupKey].find((g) => g.id === defaultGroup.id) || null;
+                }
+                if (!savedGroup && defaultGroup.name) {
+                    savedGroup = config[groupKey].find((g) => g.name === defaultGroup.name) || null;
+                }
+
+                if (!savedGroup) {
+                    config[groupKey].push(JSON.parse(JSON.stringify(defaultGroup)));
+                    hasChanges = true;
+                    return;
+                }
+
+                if (!Array.isArray(savedGroup.sections)) savedGroup.sections = [];
+                const existingIds = new Set(savedGroup.sections.map((s) => s?.id).filter(Boolean));
+                (defaultGroup.sections || []).forEach((defaultSection) => {
+                    if (!defaultSection?.id || existingIds.has(defaultSection.id)) return;
+                    const tombstone = savedGroup.sections.find((s) => s?.id === defaultSection.id && s.deleted === true);
+                    if (tombstone) return;
+                    savedGroup.sections.push(JSON.parse(JSON.stringify(defaultSection)));
+                    existingIds.add(defaultSection.id);
+                    hasChanges = true;
+                    LOG(`Added missing default section: ${defaultSection.id}`);
+                });
+            });
+        });
+
+        return hasChanges;
+    }
+
+    function countOrphanKefinDefaultSections(config) {
+        const defaultSectionIds = getAllKefinDefaultSectionIds();
+        let count = 0;
+        KEFIN_DEFAULT_GROUP_KEYS.forEach((groupKey) => {
+            (config[groupKey] || []).forEach((group) => {
+                (group.sections || []).forEach((section) => {
+                    if (!shouldKeepDefaultSurfaceSection(section, defaultSectionIds)) count += 1;
+                });
+            });
+        });
+        return count;
+    }
+
+    function pruneOrphanKefinDefaultSections(config) {
+        const defaultSectionIds = getAllKefinDefaultSectionIds();
+        let hasChanges = false;
+
+        KEFIN_DEFAULT_GROUP_KEYS.forEach((groupKey) => {
+            (config[groupKey] || []).forEach((group) => {
+                if (!Array.isArray(group.sections)) return;
+                const before = group.sections.length;
+                group.sections = group.sections.filter((section) => {
+                    const keep = shouldKeepDefaultSurfaceSection(section, defaultSectionIds);
+                    if (!keep) LOG(`Pruning orphan default-surface section: ${section?.id}`);
+                    return keep;
+                });
+                if (group.sections.length !== before) hasChanges = true;
+            });
+        });
+
+        return hasChanges;
+    }
+
+    async function backupConfigBeforeDefaultPrune(configToBackup) {
+        try {
+            if (!window.ApiClient || !window.ApiClient._serverAddress || !window.ApiClient.accessToken) {
+                WARN('ApiClient not available, cannot create pre-prune backup');
+                return false;
+            }
+            if (!window.KefinTweaksUtils?.resolvePluginId || !window.KefinTweaksUtils?.getPluginConfiguration) {
+                WARN('Cannot create pre-prune backup: plugin helpers unavailable');
+                return false;
+            }
+            if (!window.apiHelper?.getAuthHeader) {
+                WARN('Cannot create pre-prune backup: apiHelper unavailable');
+                return false;
+            }
+
+            const injectorAliases = ['JavaScript Injector', 'JS Injector'];
+            const pluginId = await window.KefinTweaksUtils.resolvePluginId(injectorAliases);
+            if (!pluginId) {
+                WARN('Cannot create pre-prune backup: Injector plugin not found');
+                return false;
+            }
+
+            const injectorConfig = await window.KefinTweaksUtils.getPluginConfiguration(injectorAliases);
+            if (!injectorConfig.CustomJavaScripts) injectorConfig.CustomJavaScripts = [];
+
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            const backupName = `KefinTweaks-Config-Backup-${timestamp}`;
+            const backupScriptContent = `// KefinTweaks Configuration Backup
+// Automatically created before default-section prune sync
+// Created: ${new Date().toISOString()}
+// Do not edit manually
+
+window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
+
+            injectorConfig.CustomJavaScripts.push({
+                Name: backupName,
+                Script: backupScriptContent,
+                Enabled: false,
+                RequiresAuthentication: false
+            });
+
+            const server = window.ApiClient._serverAddress;
+            const configUrl = `${server}/Plugins/${pluginId}/Configuration`;
+            const saveResponse = await fetch(configUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': window.apiHelper.getAuthHeader(),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(injectorConfig)
+            });
+
+            if (!saveResponse.ok) {
+                WARN(`Failed to save pre-prune backup: ${saveResponse.statusText}`);
+                return false;
+            }
+
+            LOG(`Created pre-prune backup: ${backupName}`);
+            return true;
+        } catch (error) {
+            ERR('Error creating pre-prune config backup:', error);
+            return false;
+        }
     }
 
     function getRecentlyAddedCanonicalQuery() {
@@ -1046,35 +1275,52 @@
     }
 
     function syncKefinTweaksDefaultSections(config) {
-        const canonicalMap = buildCanonicalHomeSectionMap();
         const recentlyAddedTemplate = getRecentlyAddedCanonicalQuery();
         let hasChanges = false;
 
-        const groups = config.HOME_SECTION_GROUPS || [];
-        for (const group of groups) {
-            for (const section of group.sections || []) {
-                if (!section?.id) continue;
+        KEFIN_DEFAULT_GROUP_KEYS.forEach((groupKey) => {
+            const canonicalMap = buildCanonicalSectionMapForGroups(groupKey);
+            const groups = config[groupKey] || [];
+            for (const group of groups) {
+                for (const section of group.sections || []) {
+                    if (!section?.id) continue;
 
-                let canonical = canonicalMap.get(section.id);
-                if (!canonical && section.id.startsWith('recently-added-')) {
-                    canonical = { queries: [recentlyAddedTemplate] };
-                }
-                if (!canonical?.queries?.length) continue;
-
-                if (!Array.isArray(section.queries)) section.queries = [];
-
-                for (let i = 0; i < canonical.queries.length; i++) {
-                    if (!section.queries[i]) {
-                        section.queries[i] = { queryOptions: {} };
+                    let canonical = canonicalMap.get(section.id);
+                    if (!canonical && section.id.startsWith('recently-added-')) {
+                        canonical = { queries: [recentlyAddedTemplate] };
                     }
-                    if (syncQueryFromCanonical(section.queries[i], canonical.queries[i])) {
-                        hasChanges = true;
+                    if (!canonical?.queries?.length) continue;
+
+                    if (!Array.isArray(section.queries)) section.queries = [];
+
+                    for (let i = 0; i < canonical.queries.length; i++) {
+                        if (!section.queries[i]) {
+                            section.queries[i] = { queryOptions: {} };
+                        }
+                        if (syncQueryFromCanonical(section.queries[i], canonical.queries[i])) {
+                            hasChanges = true;
+                        }
                     }
                 }
             }
-        }
+        });
 
         return hasChanges;
+    }
+
+    /**
+     * Always overwrite seasonalThemes from KefinHomeConfig2 (not user-editable yet).
+     * Preserves enableSeasonalAnimations / enableSeasonalBackground / seasonToggles / enabled.
+     */
+    function syncSeasonalThemesFromDefaults(config) {
+        const defaults = window.KefinHomeConfig2?.SEASONAL_THEME_SETTINGS;
+        if (!defaults?.seasonalThemes) return false;
+        const next = JSON.parse(JSON.stringify(defaults.seasonalThemes));
+        const prev = config.SEASONAL_THEME_SETTINGS?.seasonalThemes;
+        const changed = JSON.stringify(prev) !== JSON.stringify(next);
+        if (!config.SEASONAL_THEME_SETTINGS) config.SEASONAL_THEME_SETTINGS = {};
+        config.SEASONAL_THEME_SETTINGS.seasonalThemes = next;
+        return changed;
     }
 
     async function ensureKefinTweaksDefaultSections() {
@@ -1093,11 +1339,31 @@
 
             const config = loadConfig();
             const { hasChanges: libraryChanges } = await verifyLibrarySectionsConfig(config);
-            const queryChanges = syncKefinTweaksDefaultSections(config);
+            const addedDefaults = addMissingKefinDefaultSections(config);
 
-            if (libraryChanges || queryChanges) {
+            const orphanCount = countOrphanKefinDefaultSections(config);
+            let prunedOrphans = false;
+            if (orphanCount > 0) {
+                const snapshot = JSON.parse(JSON.stringify(window.KefinTweaksConfig || {}));
+                if (!snapshot.homeScreenConfig) {
+                    snapshot.homeScreenConfig = JSON.parse(JSON.stringify(config));
+                }
+                await backupConfigBeforeDefaultPrune(snapshot);
+                prunedOrphans = pruneOrphanKefinDefaultSections(config);
+            }
+
+            const queryChanges = syncKefinTweaksDefaultSections(config);
+            const seasonalThemeChanges = syncSeasonalThemesFromDefaults(config);
+
+            if (libraryChanges || addedDefaults || prunedOrphans || queryChanges || seasonalThemeChanges) {
                 await saveConfig(config);
-                LOG('KefinTweaks default home sections synced on startup');
+                LOG('KefinTweaks default home sections synced on startup', {
+                    libraryChanges,
+                    addedDefaults,
+                    prunedOrphans,
+                    queryChanges,
+                    seasonalThemeChanges
+                });
             }
         } catch (error) {
             ERR('Error ensuring KefinTweaks default sections:', error);
@@ -1120,6 +1386,15 @@
         }
 
         try {
+            let admin = false;
+            try {
+                admin = !!(await window.apiHelper?.isAdmin?.());
+            } catch {
+                return;
+            }
+            if (!admin) return;
+
+            // Legacy homeScreen → homeScreenConfig (no-ops once homeScreenConfig exists)
             if (window.migrateHomeScreenConfig) {
                 await window.migrateHomeScreenConfig();
             }
@@ -1166,7 +1441,13 @@
                     'custom'
                 ),
                 DISCOVERY_SETTINGS: { ...defaults.DISCOVERY_SETTINGS, ...(existingConfig.DISCOVERY_SETTINGS || {}) },
-                SEASONAL_THEME_SETTINGS: { ...defaults.SEASONAL_THEME_SETTINGS, ...(existingConfig.SEASONAL_THEME_SETTINGS || {}) },
+                SEASONAL_THEME_SETTINGS: {
+                    ...defaults.SEASONAL_THEME_SETTINGS,
+                    ...(existingConfig.SEASONAL_THEME_SETTINGS || {}),
+                    seasonalThemes: JSON.parse(JSON.stringify(
+                        defaults.SEASONAL_THEME_SETTINGS?.seasonalThemes || {}
+                    ))
+                },
                 CACHE: { ...defaults.CACHE, ...(existingConfig.CACHE || {}) },
                 SPOTLIGHT_SETTINGS: { ...defaults.SPOTLIGHT_SETTINGS, ...(existingConfig.SPOTLIGHT_SETTINGS || {}) },
                 HOME_SETTINGS: { ...defaults.HOME_SETTINGS, ...(existingConfig.HOME_SETTINGS || {}) },
@@ -1184,23 +1465,22 @@
                 mergedConfig.HOME_SETTINGS.minPeopleAppearancesEpisodes = legacyPeopleMin;
             }
 
+            mergedConfig.HOME_SETTINGS.categories = normalizeHomeCategories(mergedConfig.HOME_SETTINGS.categories);
+            if (mergedConfig.HOME_SETTINGS.renderCategoriesSeparately == null) {
+                mergedConfig.HOME_SETTINGS.renderCategoriesSeparately = false;
+            }
+            if (mergedConfig.HOME_SETTINGS.showCategoryFilters == null) {
+                mergedConfig.HOME_SETTINGS.showCategoryFilters = true;
+            }
+            if (mergedConfig.HOME_SETTINGS.showCreateSectionButtonOnHome == null) {
+                mergedConfig.HOME_SETTINGS.showCreateSectionButtonOnHome = false;
+            }
+
             // Add ENABLED_NORMAL_SECTIONS and ENABLED_DISCOVERY_SECTIONS
             // ENABLED_NORMAL_SECTIONS is all enabled sections from HOME_SECTION_GROUPS, SEASONAL_SECTION_GROUPS, and CUSTOM_SECTION_GROUPS that aren't discovery sections
             // If they have a start/end date the current date must fall within that date range
             // ENABLED_DISCOVERY_SECTIONS is all enabled sections from DISCOVERY_SECTION_GROUPS and CUSTOM_SECTION_GROUPS that are discovery sections
             // If they have a start/end date the current date must fall within that date range
-
-            const isInSeasonalPeriod = (startDate, endDate) => {
-                const currentDate = new Date();
-                const start = new Date(startDate);
-                const end = new Date(endDate);
-
-                // Ensure the years are the same as the current date year
-                start.setFullYear(currentDate.getFullYear());
-                end.setFullYear(currentDate.getFullYear());
-
-                return currentDate >= start && currentDate <= end;
-            };
 
             const enabledHomeSections = flattenSectionGroups(mergedConfig.HOME_SECTION_GROUPS).filter(s => s.enabled === true && s.discoveryEnabled !== true && (s.startDate && s.endDate ? isInSeasonalPeriod(s.startDate, s.endDate) : true));
             const enabledSeasonalSections = flattenSectionGroups(mergedConfig.SEASONAL_SECTION_GROUPS).filter(s => s.enabled === true && s.discoveryEnabled !== true && isInSeasonalPeriod(s.startDate, s.endDate));
@@ -1244,18 +1524,6 @@
     function getSections() {
 
         const config = getConfig();
-
-        const isInSeasonalPeriod = (startDate, endDate) => {
-            const currentDate = new Date();
-            const start = new Date(startDate);
-            const end = new Date(endDate);
-
-            // Ensure the years are the same as the current date year
-            start.setFullYear(currentDate.getFullYear());
-            end.setFullYear(currentDate.getFullYear());
-
-            return currentDate >= start && currentDate <= end;
-        };
 
         const enabledHomeSections = flattenSectionGroups(config.HOME_SECTION_GROUPS).filter(s => (s.enabled || s.userConfigurable || s.userConfigurable === undefined) && s.discoveryEnabled !== true && (s.startDate && s.endDate ? isInSeasonalPeriod(s.startDate, s.endDate) : true));
         const enabledSeasonalSections = flattenSectionGroups(config.SEASONAL_SECTION_GROUPS).filter(s => (s.enabled || s.userConfigurable || s.userConfigurable === undefined) && s.discoveryEnabled !== true && isInSeasonalPeriod(s.startDate, s.endDate));
@@ -1624,12 +1892,15 @@
     const LIBRARY_SYNC_GROUP_IDS = new Set(['home-recently-added', 'home-popular-genres']);
 
     /**
-     * Merge group objects, matching sections by id
+     * Merge group objects, matching sections by id.
      * @param {Object} savedGroup - Group from saved config
      * @param {Object} currentGroup - Group from current config
+     * @param {{ authoritativeSections?: boolean }} [options] - When authoritativeSections is true
+     *   (or group is in LIBRARY_SYNC_GROUP_IDS), current section list wins — saved-only sections
+     *   are not re-appended (discovery prune / library verify).
      * @returns {Object} Merged group object
      */
-    function mergeGroup(savedGroup, currentGroup) {
+    function mergeGroup(savedGroup, currentGroup, options = {}) {
         if (!savedGroup && !currentGroup) return null;
         if (!savedGroup) return JSON.parse(JSON.stringify(currentGroup));
         if (!currentGroup) return JSON.parse(JSON.stringify(savedGroup));
@@ -1674,9 +1945,12 @@
             }
         });
 
-        // Library template groups: current list is authoritative (verify may have pruned sections)
+        // Library sync groups + callers with authoritativeSections (e.g. discovery): current list wins
         const groupId = currentGroup.id || savedGroup.id;
-        if (!LIBRARY_SYNC_GROUP_IDS.has(groupId)) {
+        const authoritative =
+            options.authoritativeSections === true ||
+            LIBRARY_SYNC_GROUP_IDS.has(groupId);
+        if (!authoritative) {
             savedSectionMap.forEach(savedSection => {
                 if (!savedSection.deleted) {
                     mergedSections.push(JSON.parse(JSON.stringify(savedSection)));
@@ -1692,9 +1966,10 @@
      * Merge home screen group configs, matching groups by id
      * @param {Array} currentGroups - Groups from current config
      * @param {Array} savedGroups - Groups from saved config
+     * @param {{ authoritativeSections?: boolean }} [options] - Forwarded to mergeGroup
      * @returns {Array} Merged groups array
      */
-    function mergeHomeScreenGroupConfig(currentGroups, savedGroups) {
+    function mergeHomeScreenGroupConfig(currentGroups, savedGroups, options = {}) {
         if (!currentGroups || currentGroups.length === 0) {
             // Filter out deleted groups from saved config
             return (savedGroups || []).filter(g => !g.deleted).map(g => JSON.parse(JSON.stringify(g)));
@@ -1728,7 +2003,7 @@
             
             if (savedGroup) {
                 // Group exists in both - merge them
-                merged.push(mergeGroup(savedGroup, currentGroup));
+                merged.push(mergeGroup(savedGroup, currentGroup, options));
                 savedGroupMap.delete(key);
             } else {
                 // New group - add it
@@ -1790,7 +2065,8 @@
                 ),
                 DISCOVERY_SECTION_GROUPS: mergeHomeScreenGroupConfig(
                     config.DISCOVERY_SECTION_GROUPS || [],
-                    savedGroupsFor('DISCOVERY_SECTION_GROUPS')
+                    savedGroupsFor('DISCOVERY_SECTION_GROUPS'),
+                    { authoritativeSections: true }
                 ),
                 // Custom groups are replaced entirely (UI is source of truth)
                 CUSTOM_SECTION_GROUPS: config.CUSTOM_SECTION_GROUPS || [],
@@ -1963,10 +2239,10 @@
      */
     function buildSectionNavigationHTML(activeType = 'home') {
         const types = [
-            { id: 'home', label: 'Home Sections' },
-            { id: 'seasonal', label: 'Seasonal Sections' },
-            { id: 'discovery', label: 'Discovery Sections' },
-            { id: 'custom', label: 'Custom Sections' }
+            { id: 'home', label: 'Home' },
+            { id: 'seasonal', label: 'Seasonal' },
+            { id: 'discovery', label: 'Discovery' },
+            { id: 'custom', label: 'Custom' }
         ];
 
         return `
@@ -1988,10 +2264,11 @@
      */
     function buildGlobalSettingsNavigationHTML(activeSubTab = 'general') {
         const tabs = [
-            { id: 'general', label: 'General Settings' },
-            { id: 'spotlight', label: 'Spotlight Settings' },
-            { id: 'discovery', label: 'Discovery Settings' },
-            { id: 'cache', label: 'Cache Settings' }
+            { id: 'general', label: 'General' },
+            { id: 'spotlight', label: 'Spotlight' },
+            { id: 'discovery', label: 'Discovery' },
+            { id: 'categories', label: 'Category' },
+            { id: 'cache', label: 'Cache' }
         ];
         return `
             <div style="display: flex; flex-direction: column; gap: 0.5em;">
@@ -2015,6 +2292,7 @@
             case 'general': return buildGeneralSettingsHTML();
             case 'spotlight': return se().buildGlobalSpotlightSettingsHTML?.(currentConfig) || '';
             case 'discovery': return buildDiscoverySettingsHTML();
+            case 'categories': return buildCategorySettingsHTML();
             case 'cache': return buildCacheSettingsHTML();
             default: return buildGeneralSettingsHTML();
         }
@@ -2093,7 +2371,7 @@
                 return `
                     <div>
                         <div class="listItemBodyText" style="font-weight: 500; margin-bottom: 1em;">Discovery Sections</div>
-                        <div class="listItemBodyText secondary" style="font-size: 0.85em; margin-bottom: 0.75em;">Discovery sections will appear dynamically on the home screen as the user scrolls down. They are pre-fetched and cached in the background to ensure a smooth experience. You can customize their settings here.</div>
+                        <div class="listItemBodyText secondary" style="font-size: 0.85em; margin-bottom: 0.75em;">Discovery sections will appear dynamically on the home screen as the user scrolls down.</div>
                         <div id="discovery-sections-list">
                             ${discoveryGroups.map(g => buildGroupHTML(g, 'discovery')).join('')}
                         </div>
@@ -2106,8 +2384,7 @@
                 return `
                     <div>
                         <div class="listItemBodyText" style="font-weight: 500; margin-bottom: 1em;">Custom Sections</div>
-                        <div class="listItemBodyText secondary" style="font-size: 0.85em; margin-bottom: 0.75em;">Customize your Custom Home Sections here. You can add, edit, and delete your own sections. You can also import community collections or a file you exported from the Import / Export tab.</div>
-                        <div id="custom-sections-list">
+                        <div class="listItemBodyText secondary" style="font-size: 0.85em; margin-bottom: 0.75em;">Customize your Custom Home Sections here. You can add, edit, and delete your own sections.</div>                        <div id="custom-sections-list">
                             ${customGroups.map(g => buildGroupHTML(g, 'custom')).join('')}
                         </div>
                         <button type="button" class="emby-button button-submit raised add-custom-section-btn" style="padding: 0.75em 1.5em; margin-top: 0.75em;">
@@ -2141,7 +2418,7 @@
                         <span>New Section</span>
                     </button>
                     <button type="button" class="emby-button raised hsc-toolbar-update-btn" title="Save and apply these settings to all users.">
-                        <span class="material-icons" style="margin-right: 0.35em; font-size: 1.1em; vertical-align: middle;">sync</span>
+                        <span class="material-icons" style="margin-right: 0.35em; font-size: 1.1em; vertical-align: middle;">publish</span>
                         <span>Update</span>
                     </button>
                     <button type="button" class="emby-button raised hsc-toolbar-restore-defaults-btn" title="Restore default Home Screen sections">
@@ -2265,7 +2542,7 @@
         const D = GENERAL_TOGGLE_DESCRIPTIONS;
         const maxPeopleCount = homeSettings.maxPeopleCount ?? 100;
         const maxPeopleOptions = MAX_PEOPLE_COUNT_OPTIONS.map((n) => ({ value: String(n), label: String(n) }));
-        const settingsGroupStyle = 'margin-bottom: 1.5em; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 1em;';
+        const settingsGroupStyle = 'margin-top: 0.75em; margin-bottom: 1.5em; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 1em;';
         return `
             <div class="hsc-settings-grid hsc-settings-grid-2">
                 ${hscToggleCard('userHome-inlineConfigure', userHomeScreen.inlineConfigure !== false, 'Inline Section Configuration', D)}
@@ -2279,6 +2556,22 @@
                 ${hscToggleCard('seasonal-enableSeasonalBackground', seasonal.enableSeasonalBackground !== false, 'Seasonal Backgrounds', D)}
                 <div class="hsc-settings-span-2">
                     ${hscToggleCard('home-ensureThumbsForPopularTVNetworks', homeSettings.ensureThumbsForPopularTVNetworks === true, 'Require Studio Thumbs', D)}
+                </div>
+                <div class="hsc-settings-span-2">
+                    ${hscToggleCard('home-showCreateSectionButtonOnHome', homeSettings.showCreateSectionButtonOnHome === true, 'Quick Create Button', D)}
+                </div>
+                <div class="hsc-settings-span-2">
+                    <div class="kefin-toggle-card kefin-settings-input-card">
+                        <div class="kefin-toggle-card-text">
+                            <label class="listItemBodyText kefin-toggle-card-label" for="home-dismissEmptySectionTimer">Empty Section Dismiss Timer (ms)</label>
+                            <div class="listItemBodyText secondary kefin-toggle-card-desc">
+                                When a section loads with no items: 0 removes it immediately. Any other value shows “No items found” for that many milliseconds, then fades the section out.
+                            </div>
+                        </div>
+                        <div class="kefin-settings-input-card-control">
+                            <input type="number" id="home-dismissEmptySectionTimer" class="fld emby-input" value="${homeSettings.dismissEmptySectionTimer ?? 0}" min="0" step="1" aria-label="Empty Section Dismiss Timer (ms)">
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="hsc-settings-group" style="${settingsGroupStyle}">
@@ -2333,6 +2626,193 @@
      */
     function buildSeasonalSettingsHTML() {
         return '';
+    }
+
+    const CATEGORY_SENTINEL_IDS = new Set(['none', 'discovery', 'pinned']);
+
+    function normalizeHomeCategories(list) {
+        const defaults = window.KefinHomeConfig2?.HOME_SETTINGS?.categories || [];
+        const incoming = Array.isArray(list) ? list : [];
+        const byId = new Map();
+        defaults.forEach((cat) => {
+            if (cat?.id) byId.set(cat.id, { ...cat });
+        });
+        incoming.forEach((cat) => {
+            if (!cat?.id) return;
+            const prev = byId.get(cat.id) || {};
+            byId.set(cat.id, {
+                id: cat.id,
+                name: cat.name || prev.name || cat.id,
+                icon: cat.icon || prev.icon || 'label'
+            });
+        });
+        const ordered = [];
+        const seen = new Set();
+        incoming.forEach((cat) => {
+            if (!cat?.id || seen.has(cat.id)) return;
+            ordered.push(byId.get(cat.id));
+            seen.add(cat.id);
+        });
+        defaults.forEach((cat) => {
+            if (!cat?.id || seen.has(cat.id)) return;
+            ordered.push(byId.get(cat.id));
+            seen.add(cat.id);
+        });
+        return ordered.filter(Boolean);
+    }
+
+    function buildCategoryRowHTML(cat, index, total) {
+        const isSentinel = CATEGORY_SENTINEL_IDS.has(cat.id);
+        return `
+            <div class="listItem kefin-home-category-row" data-index="${index}" data-category-id="${escapeHtml(cat.id)}" style="border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 0.5em 0.65em; margin-bottom: 0.4em; display: flex; align-items: center; gap: 0.5em;${isSentinel ? ' background: rgba(255,255,255,0.04);' : ''}">
+                <span class="listItemBodyText secondary" style="min-width: 1.5em; text-align: right;">${index + 1}.</span>
+                <input type="text" class="emby-input kefin-home-category-name" value="${escapeHtml(cat.name || '')}" data-index="${index}" aria-label="Category name" style="flex: 1.2; min-width: 0;" />
+                <input type="text" class="emby-input kefin-home-category-icon" value="${escapeHtml(cat.icon || '')}" data-index="${index}" aria-label="Material icon name" placeholder="icon" style="flex: 0.8; min-width: 5em;" />
+                <button type="button" class="emby-button raised kefin-home-category-up" data-index="${index}" title="Move up" style="min-width: auto; padding: 0.35em 0.5em;" ${index === 0 ? 'disabled' : ''}>
+                    <span class="material-icons" style="font-size: 1.1em; vertical-align: middle;">arrow_upward</span>
+                </button>
+                <button type="button" class="emby-button raised kefin-home-category-down" data-index="${index}" title="Move down" style="min-width: auto; padding: 0.35em 0.5em;" ${index >= total - 1 ? 'disabled' : ''}>
+                    <span class="material-icons" style="font-size: 1.1em; vertical-align: middle;">arrow_downward</span>
+                </button>
+                ${isSentinel ? '' : `
+                <button type="button" class="emby-button raised kefin-home-category-remove" data-index="${index}" title="Remove" style="min-width: auto; padding: 0.35em 0.5em;">
+                    <span class="material-icons" style="font-size: 1.1em; vertical-align: middle;">delete</span>
+                </button>`}
+            </div>
+        `;
+    }
+
+    function buildCategorySettingsHTML() {
+        if (!currentConfig) return '';
+        const homeSettings = currentConfig.HOME_SETTINGS || {};
+        const categories = normalizeHomeCategories(homeSettings.categories);
+        const D = GENERAL_TOGGLE_DESCRIPTIONS;
+        return `
+            <div class="hsc-settings-panel">
+                <div class="hsc-settings-desc listItemBodyText secondary" style="margin-bottom: 1em;">
+                    Categories control which Home Screen sections are visible from the fixed category rail. Custom sections can be assigned a category in the section editor.
+                </div>
+                <div class="hsc-settings-grid hsc-settings-grid-2" style="margin-bottom: 1em;">
+                    ${hscToggleCard('home-showCategoryFilters', homeSettings.showCategoryFilters !== false, 'Show Category Filters', D)}
+                    ${hscToggleCard('home-renderCategoriesSeparately', homeSettings.renderCategoriesSeparately === true, 'Render Categories Separately', D)}
+                </div>
+                <div class="listItemBodyText" style="font-weight: 500; margin-bottom: 0.5em;">Categories</div>
+                <div class="listItemBodyText secondary" style="font-size: 0.85em; margin-bottom: 0.75em;">
+                    Home, Discover, and Pinned are built-in. Their ids cannot change and they cannot be deleted. Custom categories get a stable id when created.
+                </div>
+                <div id="kefin-home-category-list">
+                    ${categories.map((cat, i) => buildCategoryRowHTML(cat, i, categories.length)).join('')}
+                </div>
+                <div style="display: flex; gap: 0.5em; margin-top: 0.65em; flex-wrap: wrap;">
+                    <input type="text" id="kefin-home-category-add-name" class="emby-input" placeholder="Category name…" style="flex: 1; min-width: 140px;" />
+                    <input type="text" id="kefin-home-category-add-icon" class="emby-input" placeholder="Material icon (e.g. movie)" style="flex: 0.8; min-width: 120px;" />
+                    <button type="button" class="emby-button raised button-submit" id="kefin-home-category-add-btn">Add</button>
+                </div>
+            </div>
+        `;
+    }
+
+    function collectCategoriesFromForm(root) {
+        const rows = Array.from(root.querySelectorAll('.kefin-home-category-row'));
+        return rows.map((row) => ({
+            id: row.dataset.categoryId,
+            name: (row.querySelector('.kefin-home-category-name')?.value || '').trim() || row.dataset.categoryId,
+            icon: (row.querySelector('.kefin-home-category-icon')?.value || '').trim() || 'label'
+        })).filter((cat) => cat.id);
+    }
+
+    function refreshCategoryListUI(root) {
+        const list = root.querySelector('#kefin-home-category-list');
+        if (!list) return;
+        const categories = normalizeHomeCategories(currentConfig.HOME_SETTINGS?.categories);
+        list.innerHTML = categories.map((cat, i) => buildCategoryRowHTML(cat, i, categories.length)).join('');
+    }
+
+    function wireCategorySettingsListeners(root) {
+        if (!root?.querySelector('#kefin-home-category-list')) return;
+
+        const persistCategories = () => {
+            currentConfig.HOME_SETTINGS = {
+                ...(currentConfig.HOME_SETTINGS || {}),
+                showCategoryFilters: root.querySelector('#home-showCategoryFilters')?.checked === true,
+                renderCategoriesSeparately: root.querySelector('#home-renderCategoriesSeparately')?.checked === true,
+                categories: normalizeHomeCategories(collectCategoriesFromForm(root))
+            };
+            applyGlobalSettingsFromForm({ save: true });
+            try {
+                window.homeScreen3?.refreshHomeCategoryChrome?.();
+            } catch (_) { /* ignore */ }
+        };
+
+        root.querySelector('#home-showCategoryFilters')?.addEventListener('change', () => {
+            updateHscToggleCardHints(root, GENERAL_TOGGLE_DESCRIPTIONS);
+            persistCategories();
+        });
+
+        root.querySelector('#home-renderCategoriesSeparately')?.addEventListener('change', () => {
+            updateHscToggleCardHints(root, GENERAL_TOGGLE_DESCRIPTIONS);
+            persistCategories();
+        });
+
+        root.addEventListener('change', (e) => {
+            if (e.target.matches?.('.kefin-home-category-name, .kefin-home-category-icon')) {
+                persistCategories();
+            }
+        });
+
+        root.addEventListener('click', (e) => {
+            const up = e.target.closest?.('.kefin-home-category-up');
+            const down = e.target.closest?.('.kefin-home-category-down');
+            const remove = e.target.closest?.('.kefin-home-category-remove');
+            const add = e.target.closest?.('#kefin-home-category-add-btn');
+            if (!up && !down && !remove && !add) return;
+
+            let categories = collectCategoriesFromForm(root);
+
+            if (add) {
+                const name = (root.querySelector('#kefin-home-category-add-name')?.value || '').trim();
+                const icon = (root.querySelector('#kefin-home-category-add-icon')?.value || '').trim() || 'label';
+                if (!name) return;
+                const id = `cat_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+                categories.push({ id, name, icon });
+                const nameInput = root.querySelector('#kefin-home-category-add-name');
+                const iconInput = root.querySelector('#kefin-home-category-add-icon');
+                if (nameInput) nameInput.value = '';
+                if (iconInput) iconInput.value = '';
+            } else {
+                const index = parseInt((up || down || remove).dataset.index, 10);
+                if (!Number.isFinite(index)) return;
+                if (up && index > 0) {
+                    [categories[index - 1], categories[index]] = [categories[index], categories[index - 1]];
+                } else if (down && index < categories.length - 1) {
+                    [categories[index + 1], categories[index]] = [categories[index], categories[index + 1]];
+                } else if (remove) {
+                    const id = categories[index]?.id;
+                    if (CATEGORY_SENTINEL_IDS.has(id)) return;
+                    categories.splice(index, 1);
+                }
+            }
+
+            currentConfig.HOME_SETTINGS = {
+                ...(currentConfig.HOME_SETTINGS || {}),
+                showCategoryFilters: root.querySelector('#home-showCategoryFilters')?.checked === true,
+                renderCategoriesSeparately: root.querySelector('#home-renderCategoriesSeparately')?.checked === true,
+                categories: normalizeHomeCategories(categories)
+            };
+            refreshCategoryListUI(root);
+            applyGlobalSettingsFromForm({ save: true });
+            try {
+                window.homeScreen3?.refreshHomeCategoryChrome?.();
+            } catch (_) { /* ignore */ }
+        });
+    }
+
+    function escapeHtml(str) {
+        return String(str ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
     }
 
     /**
@@ -2472,6 +2952,21 @@
         // Drop undecided keys so spreading this cannot clobber a stored value.
         const decided = (obj) => Object.fromEntries(
             Object.entries(obj).filter(([, v]) => v !== undefined));
+        if (root.querySelector('#home-showCategoryFilters')
+            || root.querySelector('#home-renderCategoriesSeparately')
+            || root.querySelector('#kefin-home-category-list')) {
+            currentConfig.HOME_SETTINGS = {
+                ...(currentConfig.HOME_SETTINGS || {}),
+                showCategoryFilters: root.querySelector('#home-showCategoryFilters')?.checked === true,
+                renderCategoriesSeparately: root.querySelector('#home-renderCategoriesSeparately')?.checked === true,
+                ...(root.querySelector('#kefin-home-category-list')
+                    ? { categories: normalizeHomeCategories(collectCategoriesFromForm(root)) }
+                    : {})
+            };
+            try {
+                window.homeScreen3?.refreshHomeCategoryChrome?.();
+            } catch (_) { /* ignore */ }
+        }
 
         if (root.querySelector('#discovery-enabled')) {
             currentConfig.DISCOVERY_SETTINGS = {
@@ -2494,6 +2989,8 @@
             || root.querySelector('#userHome-inlineConfigure')
             || root.querySelector('#libraryCache-mdblistApiKey')
             || root.querySelector('#home-minPeopleAppearancesTotal')
+            || root.querySelector('#home-dismissEmptySectionTimer')
+            || root.querySelector('#home-showCreateSectionButtonOnHome')
             || root.querySelector('#home-loadPeopleEpisodeData')) {
             const prevLoadPeopleEpisodeData = currentConfig.HOME_SETTINGS?.loadPeopleEpisodeData === true;
             currentConfig.SEASONAL_THEME_SETTINGS = {
@@ -2507,11 +3004,14 @@
                         : season.enabled
                 }))
             };
+            const dismissEmptyRaw = parseInt(root.querySelector('#home-dismissEmptySectionTimer')?.value ?? '0', 10);
             currentConfig.HOME_SETTINGS = {
                 ...(currentConfig.HOME_SETTINGS || {}),
                 fadeInSections: root.querySelector('#home-fadeInSections')?.checked === true,
                 ensureThumbsForPopularTVNetworks: root.querySelector('#home-ensureThumbsForPopularTVNetworks')?.checked === true,
                 showStaleDataBeforeRefresh: root.querySelector('#home-showStaleDataBeforeRefresh')?.checked === true,
+                dismissEmptySectionTimer: Number.isFinite(dismissEmptyRaw) && dismissEmptyRaw > 0 ? dismissEmptyRaw : 0,
+                showCreateSectionButtonOnHome: root.querySelector('#home-showCreateSectionButtonOnHome')?.checked === true,
                 loadPeopleEpisodeData: root.querySelector('#home-loadPeopleEpisodeData')?.checked === true,
                 ...decided({
                     minPeopleAppearancesTotal: intField('#home-minPeopleAppearancesTotal'),
@@ -2995,6 +3495,7 @@
         window.KefinTweaksUI?.bindToggleCards?.(contentRoot);
         updateHscToggleCardHints(contentRoot, GENERAL_TOGGLE_DESCRIPTIONS);
         updateHscToggleCardHints(contentRoot, DISCOVERY_TOGGLE_DESCRIPTIONS);
+        wireCategorySettingsListeners(contentRoot);
     }
 
     function ensureGlobalSettingsLiveSync(dialog) {
@@ -3036,13 +3537,15 @@
         });
     }
 
-    function openNewCustomSectionEditor() {
+    function openNewCustomSectionEditor(options = {}) {
+        getConfig();
         const defaultTtl = Number(currentConfig?.CACHE?.DEFAULT_TTL);
         const newSection = {
             id: `custom-${Date.now()}`,
             name: 'New Custom Section',
             enabled: true,
             order: 100,
+            category: 'none',
             cardFormat: 'Poster',
             ...(Number.isFinite(defaultTtl) ? { ttl: defaultTtl } : {}),
             queries: [{
@@ -3052,7 +3555,7 @@
                 }
             }]
         };
-        openSectionEditor(newSection, 'custom');
+        openSectionEditor(newSection, 'custom', options);
     }
 
     function applyOrderListFromForm(dialogRoot) {
@@ -4887,6 +5390,9 @@
                 closeOnBackdrop: true,
                 closeOnEscape: true,
                 showCloseButton: true,
+                dialogStyle: window.innerWidth >= 900
+                    ? { maxWidth: '90vw', width: '1400px', height: '90vh' }
+                    : undefined,
                 onOpen: (modalInstance) => {
                     // Attach tab switching
                     attachTabListeners(modalInstance);
@@ -4936,12 +5442,6 @@
                 }
             });
 
-            if (window.innerWidth >= 900) {
-                mainModalInstance.dialog.style.maxWidth = '90vw';
-                mainModalInstance.dialog.style.width = '1400px';
-                mainModalInstance.dialog.style.height = '90vh';
-            }
-
             LOG('Main configuration modal opened');
         } catch (error) {
             ERR('Error opening config modal:', error);
@@ -4950,11 +5450,90 @@
     }
 
     /**
+     * Discovery templates need a source pick before queries are concrete.
+     */
+    function sectionNeedsDiscoveryResolve(section) {
+        if (!section) return false;
+        if (Array.isArray(section.items) && section.items.length > 0) return false;
+        if (Array.isArray(section.externalListUrls) && section.externalListUrls.length > 0) return false;
+        if (section.discoveryType) return true;
+        const type = String(section.type || '').toLowerCase();
+        return ['genre', 'studio', 'person', 'collection', 'similar', 'watchlist', 'tag'].includes(type);
+    }
+
+    function snapshotDiscoveryDedupeState(discoveryState) {
+        if (!discoveryState?.renderedDiscoveryIds) return null;
+        const renderedDiscoveryIds = {};
+        Object.keys(discoveryState.renderedDiscoveryIds).forEach((key) => {
+            const set = discoveryState.renderedDiscoveryIds[key];
+            renderedDiscoveryIds[key] = set instanceof Set ? new Set(set) : new Set();
+        });
+        return {
+            renderedDiscoveryIds,
+            currentDiscoveryGenre: discoveryState.currentDiscoveryGenre ?? null,
+            currentDiscoveryStudio: discoveryState.currentDiscoveryStudio ?? null
+        };
+    }
+
+    function restoreDiscoveryDedupeState(discoveryState, snapshot) {
+        if (!discoveryState?.renderedDiscoveryIds || !snapshot?.renderedDiscoveryIds) return;
+        Object.keys(discoveryState.renderedDiscoveryIds).forEach((key) => {
+            const live = discoveryState.renderedDiscoveryIds[key];
+            if (!(live instanceof Set)) return;
+            live.clear();
+            const saved = snapshot.renderedDiscoveryIds[key];
+            if (saved instanceof Set) saved.forEach((id) => live.add(id));
+        });
+        discoveryState.currentDiscoveryGenre = snapshot.currentDiscoveryGenre ?? null;
+        discoveryState.currentDiscoveryStudio = snapshot.currentDiscoveryStudio ?? null;
+    }
+
+    async function resolveDiscoverySectionForPreview(section) {
+        const helper = window.sectionHelper;
+        if (!helper?.buildDiscoverySectionInstance) {
+            throw new Error('Discovery resolver unavailable for preview');
+        }
+        const discoveryState = helper.getDiscoveryState?.();
+        const snapshot = snapshotDiscoveryDedupeState(discoveryState);
+        try {
+            const resolved = await helper.buildDiscoverySectionInstance(section, {
+                pairSpotlight: false,
+                resolveViewMore: false
+            });
+            if (!resolved?.queries?.length && !resolved?.items?.length) {
+                throw new Error('Could not resolve discovery source for preview');
+            }
+            return resolved;
+        } finally {
+            restoreDiscoveryDedupeState(discoveryState, snapshot);
+        }
+    }
+
+    /**
+     * Overlay resolved discovery display fields onto a live draft so appearance
+     * edits stay on the draft while titles/captions come from resolve.
+     * @param {Object} draft
+     * @param {Object|null|undefined} resolved
+     * @returns {Object}
+     */
+    function mergeDraftWithResolvedPreview(draft, resolved) {
+        if (!draft) return draft;
+        if (!resolved) return draft;
+        const merged = { ...draft };
+        if (resolved.name != null) merged.name = resolved.name;
+        if (resolved.caption != null) merged.caption = resolved.caption;
+        if (resolved.captionUrl != null) merged.captionUrl = resolved.captionUrl;
+        if (resolved.viewMoreUrl != null) merged.viewMoreUrl = resolved.viewMoreUrl;
+        if (resolved.metadata != null) merged.metadata = resolved.metadata;
+        return merged;
+    }
+
+    /**
      * Fetch items for a section preview (shared by modal preview and wizard inline preview).
      * @param {Object} section
      * @param {Object} [options]
      * @param {boolean} [options.useSpotlightFields] - Request spotlight-grade Fields regardless of renderMode
-     * @returns {Promise<{ items: Array, limit: number }>}
+     * @returns {Promise<{ items: Array, limit: number, section: Object }>}
      */
     async function fetchSectionPreviewItems(section, options = {}) {
         if (!window.ApiClient || !window.apiHelper || !window.cardBuilder) {
@@ -4968,27 +5547,32 @@
             throw new Error('Unable to get user ID or server URL');
         }
 
-        const queries = section.queries || [];
-        if (Array.isArray(section.externalListUrls) && section.externalListUrls.length > 0) {
+        let previewSection = section;
+        if (sectionNeedsDiscoveryResolve(section)) {
+            previewSection = await resolveDiscoverySectionForPreview(section);
+        }
+
+        const queries = previewSection.queries || [];
+        if (Array.isArray(previewSection.externalListUrls) && previewSection.externalListUrls.length > 0) {
             if (!window.KefinExternalList?.resolveExternalListItems) {
                 throw new Error('External list module not available for preview');
             }
-            const listResult = await window.KefinExternalList.resolveExternalListItems(section);
+            const listResult = await window.KefinExternalList.resolveExternalListItems(previewSection);
             const items = listResult?.Items || [];
             const processed = window.cardBuilder.postProcessItems
-                ? window.cardBuilder.postProcessItems(section, items)
+                ? window.cardBuilder.postProcessItems(previewSection, items)
                 : items;
-            return { items: processed, limit: processed.length };
+            return { items: processed, limit: processed.length, section: previewSection };
         }
 
-        if (section.items?.length) {
+        if (previewSection.items?.length) {
             const kefinTweaksRoot = window.KefinTweaksConfig?.kefinTweaksRoot || '';
             const serverId = ApiClient.serverId();
             const normalizeTemplate = (value) => (value || '')
                 .replace(/\$\{kefinTweaksRoot\}/g, kefinTweaksRoot)
                 .replace(/\$\{serverId\}/g, serverId);
 
-            const items = section.items.map((item, index) => {
+            const items = previewSection.items.map((item, index) => {
                 const posterUrl = normalizeTemplate(item.posterUrl);
                 const thumbUrl = normalizeTemplate(item.thumbUrl);
                 const squareUrl = normalizeTemplate(item.squareUrl);
@@ -5000,7 +5584,7 @@
 
                 return {
                     Name: item.Name,
-                    Id: item.Id || 'static-preview-' + (section.id || 'draft') + '-' + index,
+                    Id: item.Id || 'static-preview-' + (previewSection.id || 'draft') + '-' + index,
                     Type: item.Type || 'Folder',
                     posterUrl,
                     thumbUrl,
@@ -5015,9 +5599,9 @@
             });
 
             const processed = window.cardBuilder.postProcessItems
-                ? window.cardBuilder.postProcessItems(section, items)
+                ? window.cardBuilder.postProcessItems(previewSection, items)
                 : items;
-            return { items: processed, limit: processed.length };
+            return { items: processed, limit: processed.length, section: previewSection };
         }
 
         if (queries.length === 0) {
@@ -5025,7 +5609,7 @@
         }
 
         const useSpotlightFields = options.useSpotlightFields === true
-            || section.renderMode === 'Spotlight';
+            || previewSection.renderMode === 'Spotlight';
 
         let allItems = [];
         for (const query of queries) {
@@ -5035,7 +5619,7 @@
             if (previewQuery.dataSource) {
                 queryUrl = null;
             } else {
-                queryUrl = window.apiHelper.buildQueryFromSection(previewQuery, userId, serverUrl, useSpotlightFields, { sectionType: section.type });
+                queryUrl = window.apiHelper.buildQueryFromSection(previewQuery, userId, serverUrl, useSpotlightFields, { sectionType: previewSection.type });
             }
 
             try {
@@ -5055,16 +5639,16 @@
         }
 
         if (allItems.length === 0) {
-            return { items: [], limit: 0 };
+            return { items: [], limit: 0, section: previewSection };
         }
 
         const limit = withPreviewQueryOptions(queries[0]).queryOptions.Limit
-            || section.itemLimit
+            || previewSection.itemLimit
             || PREVIEW_DEFAULT_LIMIT;
-        allItems = window.cardBuilder.postProcessItems(section, allItems);
+        allItems = window.cardBuilder.postProcessItems(previewSection, allItems);
         const limitedItems = allItems.slice(0, parseInt(limit, 10));
 
-        return { items: limitedItems, limit: parseInt(limit, 10) };
+        return { items: limitedItems, limit: parseInt(limit, 10), section: previewSection };
     }
 
     const EDITOR_PREVIEW_SECTION_ID = 'hsae-editor-preview';
@@ -5129,8 +5713,9 @@
 
             try {
                 const draft = getDraftSection();
-                const { items } = await fetchSectionPreviewItems(draft);
-                await renderSectionPreviewInto(draft, items, containerEl, { getDraftSection });
+                const { items, section: resolvedSection } = await fetchSectionPreviewItems(draft);
+                const previewSection = mergeDraftWithResolvedPreview(draft, resolvedSection);
+                await renderSectionPreviewInto(previewSection, items, containerEl, { getDraftSection });
             } catch (err) {
                 console.error('[Preview] Refresh failed:', err);
                 containerEl.innerHTML = `<p class="listItemBodyText secondary" style="text-align:center;padding:1.5em 0;">${err.message || 'Preview refresh failed'}</p>`;
@@ -5212,7 +5797,8 @@
         Dashboard.showLoadingMsg();
 
         try {
-            const { items } = await fetchSectionPreviewItems(section);
+            const { items, section: resolvedSection } = await fetchSectionPreviewItems(section);
+            const previewSection = mergeDraftWithResolvedPreview(section, resolvedSection);
 
             if (items.length === 0) {
                 showToast('No items found for preview');
@@ -5237,7 +5823,7 @@
             content.style.cssText = 'padding: 1em; max-width: 1400px; width: 100%;';
             content.innerHTML = `
                 <div class="listItemBodyText" style="margin-bottom: 1em;">
-                    Preview: ${section.name || 'Unnamed Section'} (${items.length} item${items.length !== 1 ? 's' : ''})
+                    Preview: ${previewSection.name || 'Unnamed Section'} (${items.length} item${items.length !== 1 ? 's' : ''})
                 </div>
                 <div id="preview-container" style="min-height: 400px;"></div>
             `;
@@ -5253,10 +5839,10 @@
                 size: 'large',
                 closeOnBackdrop: true,
                 closeOnEscape: true,
+                dialogStyle: { width: '1400px' },
                 onOpen: async (modalInstance) => {
                     const container = modalInstance.dialogContent.querySelector('#preview-container');
-                    modalInstance.dialog.style.width = '1400px';
-                    await renderSectionPreviewInto(section, items, container);
+                    await renderSectionPreviewInto(previewSection, items, container);
                 }
             });
 
@@ -5273,13 +5859,19 @@
 
     // Export getConfig for use by other scripts
     window.KefinHomeScreen = window.KefinHomeScreen || {};
+    window.KefinHomeScreen.isInSeasonalPeriod = isInSeasonalPeriod;
     window.KefinHomeScreen.getConfig = getConfig;
     window.KefinHomeScreen.getSections = getSections;
     window.KefinHomeScreen.fetchSectionPreviewItems = fetchSectionPreviewItems;
+    window.KefinHomeScreen.mergeDraftWithResolvedPreview = mergeDraftWithResolvedPreview;
     window.KefinHomeScreen.renderSectionPreviewInto = renderSectionPreviewInto;
     window.KefinHomeScreen.buildEditorPreviewProgressiveSection = buildEditorPreviewProgressiveSection;
     window.KefinHomeScreen.canOpenSectionEditor = canOpenSectionEditor;
     window.KefinHomeScreen.openSectionEditorForId = openSectionEditorForId;
+    window.KefinHomeScreen.openNewCustomSection = (options = {}) => openNewCustomSectionEditor({
+        refreshHomeOnSave: true,
+        ...options
+    });
     window.KefinHomeScreen.publishSectionPresentationDefaults = publishSectionPresentationDefaults;
     window.KefinHomeScreen.findSectionInAllGroups = findSectionInAllGroups;
     window.KefinHomeScreen.ensureKefinTweaksDefaultSections = ensureKefinTweaksDefaultSections;

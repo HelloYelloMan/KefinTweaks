@@ -144,6 +144,7 @@
             enabled: true,
             order: 0,
             viewMoreUrl: buildSeasonViewMoreUrl(initialSeasonObj),
+            cardFormat: 'Thumb',
             overflowCard: true,
             ttl: EPISODES_CACHE_TTL,
             userConfigurable: false,
@@ -359,6 +360,54 @@
     }
 
     /**
+     * Infer Next Up episode from the native .nextUpSection card title (S#:E#).
+     * @param {HTMLElement} activePage
+     * @returns {Object|null}
+     */
+    function inferNextUpFromDom(activePage) {
+        if (!activePage) return null;
+
+        const card = activePage.querySelector('.nextUpSection .itemsContainer .card');
+        if (!card) return null;
+
+        const titleLink = card.querySelector('.cardText-first a[title]');
+        if (!titleLink) return null;
+
+        const title = titleLink.getAttribute('title') || '';
+        const match = title.match(/S(\d+)\s*:\s*E(\d+)/i);
+        if (!match) return null;
+
+        const season = parseInt(match[1], 10);
+        const episode = parseInt(match[2], 10);
+        if (!Number.isFinite(season) || !Number.isFinite(episode)) return null;
+
+        let id = null;
+        const href = titleLink.getAttribute('href') || '';
+        const idMatch = href.match(/[?&]id=([^&]+)/i);
+        if (idMatch) {
+            try {
+                id = decodeURIComponent(idMatch[1]);
+            } catch (_) {
+                id = idMatch[1];
+            }
+        }
+        if (!id) {
+            id = card.getAttribute('data-id') || card.dataset?.id || null;
+        }
+
+        const nameRemainder = title.replace(/S\d+\s*:\s*E\d+\s*-?\s*/i, '').trim();
+
+        LOG(`Inferred Next Up from DOM: S${season}:E${episode}${id ? ` (${id})` : ''}`);
+        return {
+            ParentIndexNumber: season,
+            IndexNumber: episode,
+            Id: id,
+            SeasonId: null,
+            Name: nameRemainder || title
+        };
+    }
+
+    /**
      * Fetches the Next Up episode for a given series
      * @param {string} seriesId - The series ID
      * @returns {Promise<Object|null>} - Episode number object with season and episode, or null
@@ -528,14 +577,24 @@
     }
 
     function performEpisodeScroll(scrollerContainer, targetCard, targetEpisodeNumber) {
-        const scrollerPadding = parseInt(window.getComputedStyle(scrollerContainer).paddingLeft, 10) || 0;
-        const translateX = targetCard.offsetLeft - scrollerPadding;
-        window.cardBuilder.setScrollerPosition(scrollerContainer, translateX, false);
+        const itemsContainer = scrollerContainer.querySelector('.itemsContainer') || scrollerContainer;
+        const cards = Array.from(itemsContainer.querySelectorAll(
+            ':scope > .card:not(.card-layout-dummy):not(.skeleton-card)'
+        ));
+        const index = cards.indexOf(targetCard);
+        if (index < 0) {
+            WARN(`Target episode card not in scroller card list S${targetEpisodeNumber.season}:E${targetEpisodeNumber.episode}`);
+            return;
+        }
+
+        if (window.cardBuilder?.scrollToCardIndex) {
+            window.cardBuilder.scrollToCardIndex(scrollerContainer, index, { animate: false });
+        }
 
         const scrollButtons = scrollerContainer.closest('.emby-scroller-container')?.querySelector('.emby-scrollbuttons');
         if (scrollButtons) {
             const leftButton = scrollButtons.querySelector('button[data-direction="left"]');
-            if (leftButton) {
+            if (leftButton && index > 0) {
                 leftButton.removeAttribute('disabled');
             }
         }
@@ -723,7 +782,7 @@
 
     /**
      * Processes a series page to add episodes section
-     * @param {string} seriesId - The series ID
+     * @param {Object} series - The series item
      */
     /**
      * Hide the season row once exactly one season card is visible on it.
@@ -827,9 +886,11 @@
             return;
         }
 
-        // Check if already processed
-        if (activePage.dataset.seriesEpisodesProcessed === 'true') {
-            LOG('Series page already processed, skipping');
+        // Already processed for this series on this page instance
+        if (activePage.dataset.seriesEpisodesItemId === seriesId
+            && (activePage.dataset.seriesEpisodesProcessed === 'true'
+                || activePage.querySelector('.series-episodes-section'))) {
+            LOG('Series page already processed for this item, skipping');
             return;
         }
 
@@ -861,8 +922,12 @@
             return;
         }
 
-        // Get NextUp episode
-        let targetEpisode = await fetchNextUpEpisode(seriesId);
+        // Prefer Next Up from native DOM (already painted); API only if missing
+        const pageForUi = document.querySelector('.libraryPage:not(.hide)') || activePage;
+        let targetEpisode = inferNextUpFromDom(pageForUi);
+        if (!targetEpisode) {
+            targetEpisode = await fetchNextUpEpisode(seriesId);
+        }
         let targetEpisodeNumber = null;
         
         // Determine target season
@@ -901,7 +966,7 @@
 
         // Extract NextUp header text
         let nextUpHeaderText = 'Next Up';
-        const nextUpSection = activePage.querySelector('.nextUpSection');
+        const nextUpSection = pageForUi.querySelector('.nextUpSection');
         if (nextUpSection) {
             const nextUpHeader = nextUpSection.querySelector('.sectionTitle, h2, h3');
             if (nextUpHeader) {
@@ -931,8 +996,10 @@
             hideSeasonRowWhenOneSeasonIsVisible(activePage);
         }
 
-        // Mark as processed
-        activePage.dataset.seriesEpisodesProcessed = 'true';
+        // Mark as processed for this series id (item-scoped for double onViewPage invokes)
+        const pageToMark = document.querySelector('.libraryPage:not(.hide)') || pageForUi;
+        pageToMark.dataset.seriesEpisodesProcessed = 'true';
+        pageToMark.dataset.seriesEpisodesItemId = seriesId;
     }
 
     async function verifyNextUpItem(seriesId) {
@@ -944,6 +1011,10 @@
         }
 
         const currentNextUpItem = document.querySelector('.libraryPage:not(.hide) .nextUpEpisode');
+        if (!currentNextUpItem) {
+            LOG('No Next Up episode element found, skipping');
+            return;
+        }
 
         if (currentNextUpItem?.dataset.id === nextUpItem.Id) {
             LOG('Next Up item is the same as the current one, skipping');
@@ -965,6 +1036,15 @@
         updateNextUpItem(targetEpisodeNumber, scrollerContainer);
     }
 
+    function getSeriesIdFromHash(hash = window.location.hash) {
+        try {
+            const match = String(hash || window.location.href).match(/[\?&]id=([^&]+)/);
+            return match ? decodeURIComponent(match[1]) : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
     /**
      * Initialize the series episodes hook
      */
@@ -979,18 +1059,19 @@
 
         window.KefinTweaksUtils.onViewPage(
             async (view, element, hash, itemPromise) => {
+                const currentItemId = getSeriesIdFromHash(hash);
                 const activePage = document.querySelector('.libraryPage:not(.hide)');
                 if (!activePage) return;
 
                 const existingSection = activePage.querySelector('.series-episodes-section');
+                const processedForId = activePage.dataset.seriesEpisodesItemId;
 
-                if (activePage.dataset.seriesEpisodesProcessed || existingSection) {
-                    LOG('Existing episodes section found, only verifying NextUp item');
-                    const itemId = document.querySelector('.libraryPage:not(.hide) .btnPlaystate')?.dataset?.id;
-
-                    if (itemId) {
-                        verifyNextUpItem(itemId);
-                    }
+                // Only treat as already done when this page was processed for the current item
+                if (currentItemId
+                    && processedForId === currentItemId
+                    && (activePage.dataset.seriesEpisodesProcessed === 'true' || existingSection)) {
+                    LOG('Existing episodes section for current item, only verifying NextUp item');
+                    verifyNextUpItem(currentItemId);
                     return;
                 }
 
@@ -1000,14 +1081,9 @@
                     return;
                 }
 
-                if (item && item.Type === 'Series') {
-                    LOG(`Found series: ${item.Id} (${item.Name})`);
-                    
-                    // Small delay to ensure page is ready
-                    setTimeout(async () => {
-                        await processSeriesPage(item);
-                    }, 100);
-                }
+                LOG(`Found series: ${item.Id} (${item.Name})`);
+
+                await processSeriesPage(item);
             },
             {
                 pages: ['details']

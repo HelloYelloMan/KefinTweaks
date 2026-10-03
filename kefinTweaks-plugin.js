@@ -1767,39 +1767,26 @@ window.KefinTweaksConfig = ${JSON.stringify(config, null, 2)};`;
 
     function injectCustomPageStyles(config) {
         if (!shouldInjectCustomPageStyles(config)) return;
-        if (document.getElementById('kefin-custom-page-styles')) return;
 
-        const style = document.createElement('style');
-        style.id = 'kefin-custom-page-styles';
-        style.textContent = `
-/* NOTE: this block is duplicated in scripts/utils.js (ensureCustomPageStyles).
-   This copy is injected first and wins -- utils.js bails when
-   #kefin-custom-page-styles already exists -- so editing only that one has no
-   effect. Change both, or neither.
-
-   .skinHeader:not(.osdHeader) on the .pageTitle rule is load-bearing: .pageTitle
-   is a single element Jellyfin reuses for every view, including the playback
-   OSD, so without it the player loses its series and episode title. */
-/* Keyed off html.kefin-custom-page-visible, which utils.js sets while one of
-   KefinTweaks' custom pages is showing (syncCustomPageMarker). These used to be
-   #reactRoot:has(.customPage:not(.hide)): a document-wide :has() whose argument
-   is the .hide class, so every .hide toggle anywhere in the app made Chromium
-   re-check it across the whole tree. Measured scrolling the home screen, which
-   toggles .hide constantly: about 40% of all style-recalc time. */
-html.kefin-custom-page-visible #reactRoot .skinBody #fallbackPage {
+        const css = `
+#reactRoot.kefin-custom-page-active .skinBody #fallbackPage {
 	display: none;
 }
 
-html:not(.kefin-custom-page-visible) #reactRoot .skinHeader:not(.osdHeader) .pageTitle {
-    display: none !important;
+/* .skinHeader:not(.osdHeader) is load-bearing: .pageTitle is a single element
+   Jellyfin reuses for every view, including the playback OSD, so without it
+   the player loses its series and episode title. utils.js (ensureCustomPageStyles)
+   carries the same rule and replaces this block once it loads. */
+#reactRoot:not(.kefin-custom-page-active) .skinHeader:not(.osdHeader) .pageTitle {
+	display: none !important;
 }
 
-html:not(.kefin-custom-page-visible) #reactRoot .skinBody #fallbackPage > * {
-    display: none;
+#reactRoot:not(.kefin-custom-page-active) #fallbackPage:not([data-kefin-fallback-ready]) > * {
+	display: none;
 }
 
-html:not(.kefin-custom-page-visible) #reactRoot #fallbackPage::after {
-	content:'';
+#reactRoot:not(.kefin-custom-page-active) #fallbackPage:not([data-kefin-fallback-ready])::after {
+	content: '';
 	display: inline-block;
 	width: 20px;
 	height: 20px;
@@ -1813,15 +1800,45 @@ html:not(.kefin-custom-page-visible) #reactRoot #fallbackPage::after {
 	top: 1em;
 }
 
-/* Modern layout only. .MuiAppBar-root, not .MuiBox-root: MUI boxes are
-   inserted constantly (and 12's legacy details page has them too), so as a
-   :has() argument they re-ran this check on every insertion. The app bar only
-   exists in the modern layout and is mounted once. */
-#reactRoot:has(.MuiAppBar-root) .libraryPage:not(.noSecondaryNavPage).customPage {
-  padding-top: 0 !important;
+#fallbackPage[data-kefin-fallback-ready]::after {
+	display: none !important;
+	content: none !important;
+}
+
+#reactRoot.kefin-custom-page-active .backdropImage {
+	background: none !important;
+}
+
+header.MuiPaper-root + main.MuiBox-root .customPage {
+	margin-top: 3rem;
+}
+
+.layout-mobile .kefin-custom-page-active .MuiToolbar-root > .MuiStack-root > :nth-child(n+2),
+.layout-mobile .kefin-custom-page-active .MuiToolbar-root > .MuiStack-root > :first-child .MuiButton-icon img {
+  display: none;
+}
+.layout-mobile .kefin-custom-page-active .MuiToolbar-root > .MuiStack-root > :first-child .MuiButton-icon::after {
+  content: '\\e88a';
+  font-family: 'Material Icons';
+  font-size: 1.2rem;
+}
+.layout-mobile .kefin-custom-page-active .MuiToolbar-root > .MuiStack-root > :first-child {
+  font-size: 0px;
+}
+main.MuiBox-root .customPage.libraryPage:not(.noSecondaryNavPage)[data-kefin-custom-page] {
+  padding-top:  1rem !important;
+}
+.layout-mobile :not(main.MuiBox-root) .customPage.libraryPage:not(.noSecondaryNavPage)[data-kefin-custom-page] {
+  padding-top:  5rem !important;
 }
 `;
-        (document.head || document.documentElement).appendChild(style);
+        let style = document.getElementById('kefin-custom-page-styles');
+        if (!style) {
+            style = document.createElement('style');
+            style.id = 'kefin-custom-page-styles';
+            (document.head || document.documentElement).appendChild(style);
+        }
+        style.textContent = css;
     }
 
     // Initialize the installer (no login/admin gate — admin is checked when rendering the card)

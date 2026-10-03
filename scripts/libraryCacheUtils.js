@@ -5,12 +5,17 @@
 
     function stripPerson(person) {
         if (!person) return null;
-        return {
+        const out = {
             Name: person.Name,
             Id: person.Id,
             Role: person.Role,
             Type: person.Type
         };
+        if (person.PrimaryImageTag) out.PrimaryImageTag = person.PrimaryImageTag;
+        if (person.ImageBlurHashes?.Primary) {
+            out.ImageBlurHashes = { Primary: person.ImageBlurHashes.Primary };
+        }
+        return out;
     }
 
     function stripChapter(chapter) {
@@ -76,6 +81,7 @@
             Chapters: Array.isArray(item.Chapters) ? item.Chapters.map(stripChapter).filter(Boolean) : [],
             Trickplay: item.Trickplay || undefined,
             DateCreated: item.DateCreated,
+            DateLastMediaAdded: item.DateLastMediaAdded,
             DateLastSaved: item.DateLastSaved,
             UserData: item.UserData || {}
         };
@@ -252,6 +258,172 @@
         return (existingItems || []).filter((item) => item?.Id && !removeIds.has(item.Id));
     }
 
+    function isVideoPlaybackRoute() {
+        const hash = String(window.location?.hash || '');
+        return hash.includes('#/video') || hash.includes('/video');
+    }
+
+    /**
+     * Wait while Jellyfin video playback is active or the tab is hidden,
+     * so library cache crawls do not compete for network during playback.
+     */
+    async function waitWhileCacheNetworkPaused() {
+        while (isVideoPlaybackRoute() || (typeof document !== 'undefined' && document.hidden)) {
+            await new Promise((resolve) => {
+                let settled = false;
+                const done = () => {
+                    if (settled) return;
+                    settled = true;
+                    cleanup();
+                    resolve();
+                };
+                const cleanup = () => {
+                    window.removeEventListener('hashchange', onHash);
+                    document.removeEventListener('visibilitychange', onVis);
+                    clearTimeout(timer);
+                };
+                const onHash = () => {
+                    if (!isVideoPlaybackRoute() && !(typeof document !== 'undefined' && document.hidden)) {
+                        done();
+                    }
+                };
+                const onVis = () => {
+                    if (!document.hidden && !isVideoPlaybackRoute()) done();
+                };
+                window.addEventListener('hashchange', onHash);
+                document.addEventListener('visibilitychange', onVis);
+                const timer = setTimeout(done, 1000);
+            });
+        }
+    }
+
+    const IDLE_HOLD_MS = 15000;
+    const BOOTSTRAP_FALLBACK_MS = 30000;
+    const SESSION_READY_FALLBACK_MS = 30000;
+
+    function hasMouseIdle() {
+        return typeof document !== 'undefined'
+            && document.body
+            && document.body.classList.contains('mouseIdle');
+    }
+
+    /**
+     * After login (+ home painted or session-ready fallback), fire onReady once when
+     * the first of these happens: 15s continuous body.mouseIdle, document.hidden,
+     * or 30s fallback. Background tabs are allowed (and preferred).
+     *
+     * @param {{ waitForLogin: () => Promise<boolean>, onReady: () => void }} opts
+     */
+    function scheduleIdleBootstrap(opts) {
+        const waitForLogin = opts?.waitForLogin;
+        const onReady = opts?.onReady;
+        if (typeof onReady !== 'function') return;
+
+        let fired = false;
+        let idleTimer = null;
+        let fallbackTimer = null;
+        let sessionReadyTimer = null;
+        let mo = null;
+
+        const cleanup = () => {
+            if (idleTimer) {
+                clearTimeout(idleTimer);
+                idleTimer = null;
+            }
+            if (fallbackTimer) {
+                clearTimeout(fallbackTimer);
+                fallbackTimer = null;
+            }
+            if (sessionReadyTimer) {
+                clearTimeout(sessionReadyTimer);
+                sessionReadyTimer = null;
+            }
+            if (mo) {
+                mo.disconnect();
+                mo = null;
+            }
+            document.removeEventListener('visibilitychange', onVisibility);
+            document.removeEventListener('kefinTweaksHomePainted', onHomePainted);
+        };
+
+        const fire = () => {
+            if (fired) return;
+            fired = true;
+            cleanup();
+            try {
+                onReady();
+            } catch (e) {
+                console.error('[KefinTweaks LibraryCacheUtils] scheduleIdleBootstrap onReady failed:', e);
+            }
+        };
+
+        const syncIdleHold = () => {
+            if (fired) return;
+            if (hasMouseIdle()) {
+                if (!idleTimer) {
+                    idleTimer = setTimeout(() => {
+                        idleTimer = null;
+                        if (hasMouseIdle()) fire();
+                    }, IDLE_HOLD_MS);
+                }
+            } else if (idleTimer) {
+                clearTimeout(idleTimer);
+                idleTimer = null;
+            }
+        };
+
+        const onVisibility = () => {
+            if (document.hidden) fire();
+        };
+
+        const armGates = () => {
+            if (fired) return;
+
+            if (document.hidden) {
+                fire();
+                return;
+            }
+
+            fallbackTimer = setTimeout(fire, BOOTSTRAP_FALLBACK_MS);
+            document.addEventListener('visibilitychange', onVisibility);
+
+            if (typeof MutationObserver !== 'undefined' && document.body) {
+                mo = new MutationObserver(syncIdleHold);
+                mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+            }
+            syncIdleHold();
+        };
+
+        const onHomePainted = () => {
+            document.removeEventListener('kefinTweaksHomePainted', onHomePainted);
+            if (sessionReadyTimer) {
+                clearTimeout(sessionReadyTimer);
+                sessionReadyTimer = null;
+            }
+            armGates();
+        };
+
+        Promise.resolve()
+            .then(() => (typeof waitForLogin === 'function' ? waitForLogin() : true))
+            .then((ok) => {
+                if (fired) return;
+                if (!ok) {
+                    fire();
+                    return;
+                }
+                document.addEventListener('kefinTweaksHomePainted', onHomePainted);
+                sessionReadyTimer = setTimeout(() => {
+                    sessionReadyTimer = null;
+                    document.removeEventListener('kefinTweaksHomePainted', onHomePainted);
+                    armGates();
+                }, SESSION_READY_FALLBACK_MS);
+            })
+            .catch((e) => {
+                console.error('[KefinTweaks LibraryCacheUtils] scheduleIdleBootstrap login wait failed:', e);
+                fire();
+            });
+    }
+
     window.LibraryCacheUtils = {
         stripMovieForCache,
         stripSeriesForCache,
@@ -263,6 +435,9 @@
         buildProviderIdIndex,
         getLibraryCacheSettings,
         upsertById,
-        removeByIds
+        removeByIds,
+        isVideoPlaybackRoute,
+        waitWhileCacheNetworkPaused,
+        scheduleIdleBootstrap
     };
 })();

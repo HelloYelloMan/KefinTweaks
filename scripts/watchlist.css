@@ -9,7 +9,6 @@
 /* Watchlist Tab Styling */
 .sections.watchlist {
 	padding-bottom: 20px;
-	margin-top: 20px;
 }
 
 .sections.watchlist .watchlist-tabs {
@@ -1660,7 +1659,7 @@ div[data-tab="statistics"][data-ready="false"] > .loading-container {
 	margin-top: 4px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 899px) {
 	.stats-charts-grid,
 	.stats-lists-grid {
 		grid-template-columns: 1fr;

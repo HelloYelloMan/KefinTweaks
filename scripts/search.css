@@ -13,33 +13,22 @@
 }
 
 div#smart-search-wrapper:not([style*="display: none"]) ~ #jellyseerr-search-icon {
-	transform: unset;
-	position: relative;
-	top: 0.4em;
-	right: unset;
-}
-
-.inputContainer.flex-grow:has(.smart-search-wrapper) {
-	display: grid;
-	grid-template-columns: 1fr 30px;
-	gap: 1em;
+	transform: translateX(calc(100% + 1.5em));
+	position: absolute;
+	top: 0;
+	right: 0;
 }
 
 .smart-search-mode .searchFieldsInner {
 	position: relative;
 }
 
-div#searchPage {
-	padding-top: 3rem !important;
-}
-
-@media (min-width: 600px) {
-	div#searchPage {
-		padding-top: 5rem !important;
-	}
+main.MuiBox-root div#searchPage {
+	padding-top: 2rem !important;
 }
 
 div#searchPage {
+	padding-top: 5rem !important;
 	display: flex;
 	flex-direction: column;
 }

@@ -20,12 +20,33 @@
         { value: 'Custom', label: 'Custom', path: null }
     ];
 
+    const PEOPLE_CACHE_ITEM_TYPE_VALUES = [
+        { value: '', label: 'All' },
+        { value: 'Movie', label: 'Movie' },
+        { value: 'Series', label: 'Series' },
+        { value: 'Episode', label: 'Episode' }
+    ];
+
+    const PEOPLE_CACHE_ARGS = [
+        {
+            key: 'ItemType',
+            type: 'select',
+            label: 'Item Type',
+            possibleValues: PEOPLE_CACHE_ITEM_TYPE_VALUES
+        },
+        { key: 'MinCount', type: 'number', label: 'Min Count' }
+    ];
+
     const CACHE_SOURCE_OPTIONS = [
         { value: 'MoviesCache.getImdbTop250Movies', label: 'IMDb Top 250 Movies' },
-        { value: 'StudiosCache.getPopularTVNetworks', label: 'Popular TV Networks' },
-        { value: 'PeopleCache.getTopActors', label: 'Top Actors' },
-        { value: 'PeopleCache.getTopDirectors', label: 'Top Directors' },
-        { value: 'PeopleCache.getTopWriters', label: 'Top Writers' }
+        {
+            value: 'StudiosCache.getPopularTVNetworks',
+            label: 'Popular TV Networks',
+            args: [{ key: 'MinCount', type: 'number', label: 'Min Count' }]
+        },
+        { value: 'PeopleCache.getTopActors', label: 'Top Actors', args: PEOPLE_CACHE_ARGS },
+        { value: 'PeopleCache.getTopDirectors', label: 'Top Directors', args: PEOPLE_CACHE_ARGS },
+        { value: 'PeopleCache.getTopWriters', label: 'Top Writers', args: PEOPLE_CACHE_ARGS }
     ];
 
     const DEFAULT_SECTION_QUERY_LIMIT = window.KefinHomeScreenEditorConstants?.DEFAULT_SECTION_QUERY_LIMIT ?? 16;
@@ -391,9 +412,22 @@
     };
 
     const ADVANCED_TOGGLE_DESCRIPTIONS = {
-        'section-flattenSeries': 'Multiple episodes from the same series will be grouped into one item in the section.',
-        'hsae-limit-before-sort': 'When enabled, the item limit is applied before section-level sort.',
-        'hsae-hide-card-titles': 'Card titles for individual items in the section will not be shown.'
+        'section-flattenSeries': {
+            on: 'Multiple episodes from the same series will be grouped into one item in the section.',
+            off: 'Episodes from the same series appear as separate items in the section.'
+        },
+        'hsae-limit-before-sort': {
+            on: 'When enabled, the item limit is applied before section-level sort.',
+            off: 'The item limit is applied after section-level sort.'
+        },
+        'hsae-hide-card-titles': {
+            on: 'Card titles for individual items in the section will not be shown.',
+            off: 'Card titles for individual items in the section will be shown.'
+        },
+        'hsae-use-parent-card': {
+            on: 'Items in this section will link to their Parent item where available. This means that an Episode or Season will link to the Series.',
+            off: 'Items in this section will link to the normal item.'
+        }
     };
 
     const RANDOM_QUERY_TOGGLE_DESCRIPTIONS = {
@@ -1034,6 +1068,15 @@
         if (groupNewEl) state.groupNew = groupNewEl.value;
         if (visibilityEl) state.sectionVisibility = visibilityEl.value;
         if (orderEl) state.order = orderEl.value;
+
+        const categoryEl = root.querySelector('#section-category');
+        if (categoryEl) {
+            const isDiscovery = state.sectionVisibility === 'discovery';
+            state.category = isDiscovery ? 'discovery' : (categoryEl.value || 'none');
+            state.section = state.section || {};
+            state.section.category = state.category;
+        }
+
         if (hideWatchedEl) state.hideWatched = hideWatchedEl.checked === true;
         if (hideNameEl) state.hideName = hideNameEl.checked === true;
         if (startDateEl) state.startDate = startDateEl.value;
@@ -1174,6 +1217,13 @@
                 delete state.section.cardTitleVisibility;
                 delete state.section.hideCardTitles;
             }
+        }
+
+        const useParentCardEl = root.querySelector('#hsae-use-parent-card');
+        if (useParentCardEl) {
+            state.section = state.section || {};
+            if (useParentCardEl.checked === true) state.section.useParentCard = true;
+            else delete state.section.useParentCard;
         }
 
         const cardTitlePositionEl = root.querySelector('#hsae-card-title-position');
@@ -1379,9 +1429,60 @@
         if (list) list.innerHTML = buildStaticItemsListHTML(items);
     }
 
+    function getCacheSourceOption(dataSource) {
+        const value = dataSource || CACHE_SOURCE_OPTIONS[0]?.value;
+        return CACHE_SOURCE_OPTIONS.find(o => o.value === value) || CACHE_SOURCE_OPTIONS[0] || null;
+    }
+
+    function buildCacheArgsHTML(queryIndex, dataSource, dataSourceOptions) {
+        const { buildSelect, buildTextInput } = getApi();
+        const source = getCacheSourceOption(dataSource);
+        const args = Array.isArray(source?.args) ? source.args : [];
+        if (!args.length) return '';
+
+        const fields = args.map((arg) => {
+            const id = `query-${queryIndex}-dsArg-${arg.key}`;
+            const raw = dataSourceOptions?.[arg.key];
+            const selected = raw != null ? String(raw) : (arg.default != null ? String(arg.default) : '');
+            if (arg.type === 'select') {
+                const options = Array.isArray(arg.possibleValues) ? arg.possibleValues : [];
+                return buildSelect(id, options, selected, arg.label || arg.key);
+            }
+            if (arg.type === 'number') {
+                return buildTextInput(id, selected, arg.label || arg.key, 'number', '', { step: 1 });
+            }
+            return buildTextInput(id, selected, arg.label || arg.key);
+        }).join('');
+
+        return `<div class="hsae-cache-args hsae-field-grid hsae-field-grid-2" data-query-index="${queryIndex}">${fields}</div>`;
+    }
+
+    function collectCacheArgsIntoDataSourceOptions(editor, queryIndex, dataSource, dataSourceOptions) {
+        const source = getCacheSourceOption(dataSource);
+        const args = Array.isArray(source?.args) ? source.args : [];
+        args.forEach((arg) => {
+            const el = editor.querySelector(`#query-${queryIndex}-dsArg-${arg.key}`);
+            if (!el) return;
+            const raw = el.value;
+            if (raw === '' || raw == null) return;
+            if (arg.type === 'number') {
+                const n = parseFloat(raw);
+                if (Number.isFinite(n)) dataSourceOptions[arg.key] = n;
+                return;
+            }
+            dataSourceOptions[arg.key] = raw;
+        });
+    }
+
     function buildQueryCard(query, index, canDelete, isExpanded = true) {
         const { buildSelect, buildTextInput, SORT_ORDERS, SORT_ORDER_DIRECTIONS } = getApi();
         const queryOptions = query.queryOptions || {};
+        // Prefer dataSourceOptions; fall back to legacy ItemType/MinCount stored in queryOptions
+        const dataSourceOptions = {
+            ...(query.queryOptions?.ItemType != null ? { ItemType: query.queryOptions.ItemType } : {}),
+            ...(query.queryOptions?.MinCount != null ? { MinCount: query.queryOptions.MinCount } : {}),
+            ...(query.dataSourceOptions || {})
+        };
         const sourceType = inferQuerySourceType(query);
         const endpointValue = sourceType === 'static' ? 'Items' : inferEndpointValue(query);
         const customPathDisplay = endpointValue === 'Custom' && sourceType === 'jellyfin' ? 'block' : 'none';
@@ -1389,8 +1490,10 @@
         const endpointDisplay = sourceType === 'jellyfin' || sourceType === 'static' ? 'block' : 'none';
         const jellyfinDisplay = sourceType === 'jellyfin' ? 'block' : 'none';
         const staticDisplay = sourceType === 'static' ? 'block' : 'none';
-        const sortExtrasDisplay = sourceType === 'jellyfin' || sourceType === 'static' ? 'block' : 'none';
+        const limitDisplay = sourceType === 'jellyfin' || sourceType === 'static' || sourceType === 'cache' ? 'block' : 'none';
+        const searchDisplay = sourceType === 'jellyfin' || sourceType === 'static' ? 'block' : 'none';
         const staticItems = getQueryStaticItems(query);
+        const selectedDataSource = query.dataSource || CACHE_SOURCE_OPTIONS[0]?.value;
 
         const parentSelection = getQueryParentSelection(query);
         const includeTypes = Array.isArray(queryOptions.IncludeItemTypes)
@@ -1425,11 +1528,14 @@
                             ${buildEndpointSelectHTML(index, endpointValue, sourceType === 'static')}
                         </div>
                         <div class="hsae-cache-wrap" data-query-index="${index}" style="display:${cacheDisplay};">
-                            ${buildSelect(`query-${index}-dataSource`, CACHE_SOURCE_OPTIONS, query.dataSource || CACHE_SOURCE_OPTIONS[0].value, 'Cache Source')}
+                            ${buildSelect(`query-${index}-dataSource`, CACHE_SOURCE_OPTIONS, selectedDataSource, 'Cache Source')}
                         </div>
                         <div id="query-${index}-path-container" class="hsae-custom-path hsae-query-jellyfin-only" style="display:${customPathDisplay};">
                             ${buildTextInput(`query-${index}-path`, query.path || '', 'Custom Endpoint Path', 'text', '/Shows/Upcoming, etc.')}
                         </div>
+                    </div>
+                    <div class="hsae-cache-args-wrap" data-query-index="${index}" style="display:${cacheDisplay};" data-hsae-profiles="full">
+                        ${sourceType === 'cache' ? buildCacheArgsHTML(index, selectedDataSource, dataSourceOptions) : ''}
                     </div>
 
                     <div class="hsae-field-grid hsae-query-row-sort">
@@ -1439,10 +1545,10 @@
                         <div class="hsae-query-sort-order" data-hsae-profiles="full normal dateCutoffs">
                             ${buildSelect(`query-${index}-SortOrder`, SORT_ORDER_DIRECTIONS, queryOptions.SortOrder || '', 'Sort Order')}
                         </div>
-                        <div class="hsae-query-limit hsae-query-sort-extras" data-hsae-profiles="full minimal postProcessing normal dateCutoffs" style="display:${sortExtrasDisplay};">
+                        <div class="hsae-query-limit" data-hsae-profiles="full minimal postProcessing normal dateCutoffs" style="display:${limitDisplay};">
                             ${buildTextInput(`query-${index}-Limit`, queryOptions.Limit ?? '', 'Limit', 'number', '', { min: 0, step: 1 })}
                         </div>
-                        <div class="hsae-query-search hsae-query-sort-extras" data-hsae-profiles="full" style="display:${sortExtrasDisplay};">
+                        <div class="hsae-query-search" data-hsae-profiles="full" style="display:${searchDisplay};">
                             ${buildTextInput(`query-${index}-SearchTerm`, queryOptions.SearchTerm || '', 'Search Term')}
                         </div>
                     </div>
@@ -1545,11 +1651,33 @@
                 <div class="hsae-card">
                     <div class="hsae-field-grid hsae-field-grid-2 hsae-basic-name-caption">
                         ${buildTextInput('section-name', section.name || state.sectionName || '', 'Section Name')}
-                        ${buildTextInput('section-caption', section.caption || state.caption || '', 'Caption', 'text', 'Displayed below the Section Name.')}
+                        ${buildTextInput('section-caption', section.caption || state.caption || '', 'Caption', 'text', 'Displayed below the Section Name')}
                     </div>
 
-                    <div class="hsae-basic-group-row" data-hsae-profiles="full">
+                    <div class="hsae-field-grid hsae-field-grid-2 hsae-basic-group-row" data-hsae-profiles="full">
                         ${buildSelect('section-group', groupOptions, selectedGroup, 'Section Group')}
+                        ${(() => {
+                            const categories = (context.config?.HOME_SETTINGS?.categories
+                                || window.KefinTweaksConfig?.homeScreenConfig?.HOME_SETTINGS?.categories
+                                || window.KefinHomeConfig2?.HOME_SETTINGS?.categories
+                                || []).map((c) => ({ value: c.id, label: c.name || c.id }));
+                            const isDiscovery = state.sectionVisibility === 'discovery'
+                                || section.discoveryEnabled === true
+                                || section.type === 'discovery';
+                            const selectedCategory = isDiscovery ? 'discovery' : (section.category || state.category || 'none');
+                            const categorySelect = buildSelect(
+                                'section-category',
+                                categories.length ? categories : [{ value: 'none', label: 'Home' }],
+                                selectedCategory,
+                                'Category'
+                            );
+                            return isDiscovery
+                                ? categorySelect.replace(
+                                    'id="section-category" class="fld emby-select emby-select-withcolor"',
+                                    'id="section-category" class="fld emby-select emby-select-withcolor" disabled'
+                                )
+                                : categorySelect;
+                        })()}
                         <div id="section-group-new-container" class="hsae-group-new" style="display:${selectedGroup === 'New...' ? 'block' : 'none'};">
                             ${buildTextInput('section-group-new', state.groupNew || '', 'New Group Name')}
                         </div>
@@ -1875,6 +2003,7 @@
             itemsLayout: draft?.itemsLayout,
             cardTitleVisibility: draft?.cardTitleVisibility,
             hideCardTitles: draft?.hideCardTitles,
+            useParentCard: draft?.useParentCard === true,
             cardTitlePosition: draft?.cardTitlePosition,
             cardTitleCapitalization: draft?.cardTitleCapitalization,
             cardTitleFontFamily: draft?.cardTitleFontFamily,
@@ -1891,7 +2020,7 @@
 
     let appearancePreviewDebounceTimer = null;
     let appearancePreviewRequestId = 0;
-    let appearancePreviewCache = { fetchKey: null, renderKey: null, items: null };
+    let appearancePreviewCache = { fetchKey: null, renderKey: null, items: null, resolvedSection: null };
 
     function clearAppearancePreviewScheduling() {
         if (appearancePreviewDebounceTimer) {
@@ -1911,6 +2040,7 @@
 
         const fetchPreview = window.KefinHomeScreen?.fetchSectionPreviewItems;
         const renderPreview = window.KefinHomeScreen?.renderSectionPreviewInto;
+        const mergeResolved = window.KefinHomeScreen?.mergeDraftWithResolvedPreview;
         if (typeof fetchPreview !== 'function' || typeof renderPreview !== 'function') {
             container.innerHTML = '<p class="listItemBodyText secondary hsae-preview-placeholder">Preview unavailable.</p>';
             return;
@@ -1943,9 +2073,9 @@
 
         try {
             if (!cacheHit) {
-                const { items } = await fetchPreview(draft);
+                const { items, section: resolvedSection } = await fetchPreview(draft);
                 if (requestId !== appearancePreviewRequestId) return;
-                appearancePreviewCache = { fetchKey, renderKey, items };
+                appearancePreviewCache = { fetchKey, renderKey, items, resolvedSection: resolvedSection || null };
             } else {
                 appearancePreviewCache.renderKey = renderKey;
             }
@@ -1958,10 +2088,14 @@
                 return;
             }
 
-            await renderPreview(getDraftSection(), previewItems, container, { getDraftSection });
+            const liveDraft = getDraftSection();
+            const previewSection = typeof mergeResolved === 'function'
+                ? mergeResolved(liveDraft, appearancePreviewCache.resolvedSection)
+                : liveDraft;
+            await renderPreview(previewSection, previewItems, container, { getDraftSection });
         } catch (err) {
             if (requestId !== appearancePreviewRequestId) return;
-            appearancePreviewCache = { fetchKey: null, renderKey: null, items: null };
+            appearancePreviewCache = { fetchKey: null, renderKey: null, items: null, resolvedSection: null };
             container.innerHTML = `<p class="listItemBodyText secondary hsae-preview-placeholder">${escapeHtml(err.message || 'Preview failed')}</p>`;
         }
     }
@@ -2039,7 +2173,8 @@
                             'hsae-hide-card-titles',
                             hideCardTitles,
                             'Hide Card Titles',
-                            ADVANCED_TOGGLE_DESCRIPTIONS['hsae-hide-card-titles']
+                            ADVANCED_TOGGLE_DESCRIPTIONS['hsae-hide-card-titles'][hideCardTitles ? 'on' : 'off'],
+                            { hintKey: 'hsae-hide-card-titles' }
                         )}
                     </div>
                     <div id="hsae-card-title-options-row" style="display:${hideCardTitles ? 'none' : ''};">
@@ -2172,13 +2307,25 @@
                     </div>
 
                     <div class="hsae-advanced-section-sort hsae-field-grid hsae-field-grid-2 hsae-advanced-sort-row" data-hsae-profiles="full postProcessing normal dateCutoffs">
-                        ${buildSelect('hsae-advanced-sortBy', toSortBySelectOptions(SORT_ORDERS), state.sortBy || '', 'Sort By')}
-                        ${buildSelect('hsae-advanced-sortOrder', getSectionSortOrderDirectionOptions(SORT_ORDER_DIRECTIONS), state.sortOrder || '', 'Sort Order')}
+                        <div class="hsae-field-with-hint">
+                            ${buildSelect('hsae-advanced-sortBy', toSortBySelectOptions(SORT_ORDERS), state.sortBy || '', 'Sort By')}
+                            <div class="listItemBodyText secondary hsae-field-hint">Items will be sorted in this order after they are returned from Jellyfin.</div>
+                        </div>
+                        <div class="hsae-field-with-hint">
+                            ${buildSelect('hsae-advanced-sortOrder', getSectionSortOrderDirectionOptions(SORT_ORDER_DIRECTIONS), state.sortOrder || '', 'Sort Order')}
+                            <div class="listItemBodyText secondary hsae-field-hint">Items will be sorted in this direction after they are returned from Jellyfin.</div>
+                        </div>
                     </div>
 
                     <div class="hsae-advanced-min-max-age hsae-field-grid hsae-field-grid-2 hsae-advanced-age-row" data-hsae-profiles="full dateCutoffs">
-                        ${buildTextInput('hsae-query-minAge', premiereAge.minAge, 'Minimum Age (Days)', 'number')}
-                        ${buildTextInput('hsae-query-maxAge', premiereAge.maxAge, 'Maximum Age (Days)', 'number')}
+                        <div class="hsae-field-with-hint">
+                            ${buildTextInput('hsae-query-minAge', premiereAge.minAge, 'Minimum Age (Days)', 'number')}
+                            <div class="listItemBodyText secondary hsae-field-hint">Only show items that have a Premiere Date older than this.</div>
+                        </div>
+                        <div class="hsae-field-with-hint">
+                            ${buildTextInput('hsae-query-maxAge', premiereAge.maxAge, 'Maximum Age (Days)', 'number')}
+                            <div class="listItemBodyText secondary hsae-field-hint">Only show items that have a Premiere Date newer than this.</div>
+                        </div>
                     </div>
 
                     <div class="hsae-advanced-limits hsae-field-grid hsae-field-grid-2 hsae-advanced-limits-row" data-hsae-profiles="full postProcessing normal dateCutoffs">
@@ -2198,7 +2345,8 @@
                                 'section-flattenSeries',
                                 section.flattenSeries === true,
                                 'Flatten Series',
-                                ADVANCED_TOGGLE_DESCRIPTIONS['section-flattenSeries']
+                                ADVANCED_TOGGLE_DESCRIPTIONS['section-flattenSeries'][section.flattenSeries === true ? 'on' : 'off'],
+                                { hintKey: 'section-flattenSeries' }
                             )}
                         </div>
                         <div class="hsae-advanced-limit-before-sort" data-hsae-profiles="full postProcessing normal dateCutoffs">
@@ -2206,9 +2354,19 @@
                                 'hsae-limit-before-sort',
                                 section.limitBeforeSort === true,
                                 'Limit Before Sort',
-                                ADVANCED_TOGGLE_DESCRIPTIONS['hsae-limit-before-sort']
+                                ADVANCED_TOGGLE_DESCRIPTIONS['hsae-limit-before-sort'][section.limitBeforeSort === true ? 'on' : 'off'],
+                                { hintKey: 'hsae-limit-before-sort' }
                             )}
                         </div>
+                    </div>
+                    <div class="hsae-toggle-card-grid" data-hsae-profiles="full minimal">
+                        ${buildToggleCard(
+                            'hsae-use-parent-card',
+                            section.useParentCard === true,
+                            'Link Parent Item',
+                            ADVANCED_TOGGLE_DESCRIPTIONS['hsae-use-parent-card'][section.useParentCard === true ? 'on' : 'off'],
+                            { hintKey: 'hsae-use-parent-card' }
+                        )}
                     </div>
                 </div>
             </details>
@@ -2310,17 +2468,36 @@
         }
 
         if (sourceType === 'cache') {
-            const dataSource = editor.querySelector(`#query-${queryIndex}-dataSource`)?.value;
+            const dataSource = editor.querySelector(`#query-${queryIndex}-dataSource`)?.value
+                || CACHE_SOURCE_OPTIONS[0]?.value;
             if (dataSource) query.dataSource = dataSource;
-        } else {
-            const endpoint = editor.querySelector(`#query-${queryIndex}-endpoint`)?.value || 'Items';
-            const endpointMeta = ENDPOINT_OPTIONS.find(o => o.value === endpoint);
-            if (endpoint === 'Custom') {
-                const path = editor.querySelector(`#query-${queryIndex}-path`)?.value?.trim();
-                if (path) query.path = path;
-            } else if (endpointMeta?.path) {
-                query.path = endpointMeta.path;
+            query.queryOptions = {};
+            ['SortBy', 'SortOrder'].forEach(key => {
+                const value = editor.querySelector(`#query-${queryIndex}-${key}`)?.value;
+                if (value) query.queryOptions[key] = value;
+            });
+            const limit = editor.querySelector(`#query-${queryIndex}-Limit`)?.value;
+            if (limit !== '' && limit != null) {
+                const limitN = parseInt(limit, 10);
+                if (Number.isFinite(limitN) && limitN >= 0) {
+                    query.queryOptions.Limit = limitN;
+                }
             }
+            const dataSourceOptions = {};
+            collectCacheArgsIntoDataSourceOptions(editor, queryIndex, dataSource, dataSourceOptions);
+            if (Object.keys(dataSourceOptions).length) {
+                query.dataSourceOptions = dataSourceOptions;
+            }
+            return query;
+        }
+
+        const endpoint = editor.querySelector(`#query-${queryIndex}-endpoint`)?.value || 'Items';
+        const endpointMeta = ENDPOINT_OPTIONS.find(o => o.value === endpoint);
+        if (endpoint === 'Custom') {
+            const path = editor.querySelector(`#query-${queryIndex}-path`)?.value?.trim();
+            if (path) query.path = path;
+        } else if (endpointMeta?.path) {
+            query.path = endpointMeta.path;
         }
 
         query.queryOptions = {};
@@ -2551,6 +2728,8 @@
         else section.cardTitleVisibility = '';
         section.hideCardTitles = '';
 
+        section.useParentCard = dialog.querySelector('#hsae-use-parent-card')?.checked === true;
+
         const cardTitlePosition = dialog.querySelector('#hsae-card-title-position')?.value;
         if (cardTitlePosition && cardTitlePosition !== 'default') section.cardTitlePosition = cardTitlePosition;
         else section.cardTitlePosition = '';
@@ -2572,6 +2751,14 @@
             section._targetGroupName = targetGroupName === 'New...'
                 ? (dialog.querySelector('#section-group-new')?.value || '').trim() || 'Custom Sections'
                 : targetGroupName;
+        }
+
+        const categoryEl = dialog.querySelector('#section-category');
+        if (categoryEl) {
+            const isDiscovery = dialog.querySelector('#hsae-section-visibility')?.value === 'discovery'
+                || section.discoveryEnabled === true
+                || section.type === 'discovery';
+            section.category = isDiscovery ? 'discovery' : (categoryEl.value || 'none');
         }
 
         return section;
@@ -2645,12 +2832,15 @@
 
         const sourceSelect = editor.querySelector(`#query-${queryIndex}-sourceType`);
         const endpointSelect = editor.querySelector(`#query-${queryIndex}-endpoint`);
+        const dataSourceSelect = editor.querySelector(`#query-${queryIndex}-dataSource`);
         const pathContainer = editor.querySelector(`#query-${queryIndex}-path-container`);
         const endpointWrap = editor.querySelector('.hsae-jellyfin-endpoint-wrap');
         const cacheWrap = editor.querySelector('.hsae-cache-wrap');
+        const cacheArgsWrap = editor.querySelector('.hsae-cache-args-wrap');
         const jellyfinOnlyBlocks = editor.querySelectorAll('.hsae-query-jellyfin-only');
         const staticOnlyBlocks = editor.querySelectorAll('.hsae-query-static-only');
-        const sortExtrasBlocks = editor.querySelectorAll('.hsae-query-sort-extras');
+        const limitBlock = editor.querySelector('.hsae-query-limit');
+        const searchBlock = editor.querySelector('.hsae-query-search');
 
         const updateSourceVisibility = () => {
             const sourceType = sourceSelect?.value || 'jellyfin';
@@ -2660,15 +2850,21 @@
                 if (sourceType === 'static') endpointSelect.value = 'Items';
             }
             if (cacheWrap) cacheWrap.style.display = sourceType === 'cache' ? 'block' : 'none';
+            if (cacheArgsWrap) cacheArgsWrap.style.display = sourceType === 'cache' ? 'block' : 'none';
             jellyfinOnlyBlocks.forEach(block => {
                 block.style.display = sourceType === 'jellyfin' ? '' : 'none';
             });
             staticOnlyBlocks.forEach(block => {
                 block.style.display = sourceType === 'static' ? '' : 'none';
             });
-            sortExtrasBlocks.forEach(block => {
-                block.style.display = sourceType === 'jellyfin' || sourceType === 'static' ? '' : 'none';
-            });
+            if (limitBlock) {
+                limitBlock.style.display = sourceType === 'jellyfin' || sourceType === 'static' || sourceType === 'cache'
+                    ? ''
+                    : 'none';
+            }
+            if (searchBlock) {
+                searchBlock.style.display = sourceType === 'jellyfin' || sourceType === 'static' ? '' : 'none';
+            }
         };
 
         const updateEndpointVisibility = () => {
@@ -2677,6 +2873,9 @@
         };
 
         sourceSelect?.addEventListener('change', () => {
+            refreshEditorBody(modalInstance);
+        });
+        dataSourceSelect?.addEventListener('change', () => {
             refreshEditorBody(modalInstance);
         });
         endpointSelect?.addEventListener('change', updateEndpointVisibility);
@@ -2912,13 +3111,17 @@
             { key: 'hideName', checkboxId: 'hsae-hide-section-name', tooltips: HIDE_NAME_TOGGLE_DESCRIPTIONS },
             { key: 'hideWatched', checkboxId: 'hsae-hide-watched', tooltips: HIDE_WATCHED_TOGGLE_DESCRIPTIONS },
             { key: 'userEnabledByDefault', checkboxId: 'hsae-user-enabled-by-default', tooltips: USER_TOGGLE_TOOLTIPS.userEnabledByDefault },
-            { key: 'userConfigurable', checkboxId: 'hsae-user-configurable', tooltips: USER_TOGGLE_TOOLTIPS.userConfigurable }
+            { key: 'userConfigurable', checkboxId: 'hsae-user-configurable', tooltips: USER_TOGGLE_TOOLTIPS.userConfigurable },
+            { key: 'hsae-hide-card-titles', checkboxId: 'hsae-hide-card-titles', tooltips: ADVANCED_TOGGLE_DESCRIPTIONS['hsae-hide-card-titles'] },
+            { key: 'hsae-use-parent-card', checkboxId: 'hsae-use-parent-card', tooltips: ADVANCED_TOGGLE_DESCRIPTIONS['hsae-use-parent-card'] },
+            { key: 'section-flattenSeries', checkboxId: 'section-flattenSeries', tooltips: ADVANCED_TOGGLE_DESCRIPTIONS['section-flattenSeries'] },
+            { key: 'hsae-limit-before-sort', checkboxId: 'hsae-limit-before-sort', tooltips: ADVANCED_TOGGLE_DESCRIPTIONS['hsae-limit-before-sort'] }
         ];
 
         toggles.forEach(({ key, checkboxId, tooltips }) => {
             const checkbox = root.querySelector(`#${checkboxId}`);
             const hint = root.querySelector(`[data-hsae-hint="${key}"]`);
-            if (!checkbox || !hint) return;
+            if (!checkbox || !hint || !tooltips) return;
             const enabled = checkbox.checked === true;
             hint.textContent = tooltips[enabled ? 'on' : 'off'];
         });
@@ -3263,7 +3466,7 @@
             state.renderMode = renderMode;
             const renderModeInput = root.querySelector('#hsae-render-mode-value');
             if (renderModeInput) renderModeInput.value = renderMode;
-            appearancePreviewCache = { fetchKey: null, renderKey: null, items: null };
+            appearancePreviewCache = { fetchKey: null, renderKey: null, items: null, resolvedSection: null };
             refreshEditorBody(modalInstance);
             return;
         }
@@ -3480,7 +3683,7 @@
 
     function attachListeners(modalInstance, context, callbacks = {}) {
         clearAppearancePreviewScheduling();
-        appearancePreviewCache = { fetchKey: null, renderKey: null, items: null };
+        appearancePreviewCache = { fetchKey: null, renderKey: null, items: null, resolvedSection: null };
         modalInstance._hsaePreviewInitialized = false;
 
         const section = context.section || {};
@@ -3545,7 +3748,7 @@
                     }
                 }
 
-                if (target.id === 'hsae-hide-section-name' || target.id === 'hsae-hide-watched' || target.id === 'hsae-user-enabled-by-default' || target.id === 'hsae-user-configurable') {
+                if (target.matches?.('input[type="checkbox"]') && target.closest('.kefin-toggle-card')) {
                     updateToggleCardHints(root);
                 }
             });

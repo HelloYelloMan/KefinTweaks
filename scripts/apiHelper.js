@@ -270,19 +270,11 @@
     }
 
     function getAuthHeaderForToken(token) {
-        // ApiClient may not exist yet. Its caller guards with
-        // `typeof ApiClient !== 'undefined'` and then calls this, which used to
-        // dereference it directly -- and `typeof ApiClient.applicationName` does NOT
-        // protect against that, because the guard only covers the property, not the
-        // undeclared identifier. So this threw ReferenceError on a fast load, from
-        // watchlist.js at startup: it waits for KefinTweaksUtils before adding its
-        // menu link, but nothing waits for ApiClient. Resolving it once here fixes
-        // every caller rather than each of them separately.
-        const api = typeof ApiClient !== 'undefined' ? ApiClient : null;
-        const client = typeof api?.applicationName === 'function' ? api.applicationName() : 'Jellyfin Web';
-        const device = typeof api?.deviceName === 'function' ? api.deviceName() : (navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Browser');
-        const deviceId = typeof api?.deviceId === 'function' ? api.deviceId() : '';
-        const version = api?._appVersion || api?._serverVersion || '';
+        const api = (typeof ApiClient !== 'undefined' && ApiClient) || window.ApiClient || null;
+        const client = api && typeof api.applicationName === 'function' ? api.applicationName() : 'Jellyfin Web';
+        const device = api && typeof api.deviceName === 'function' ? api.deviceName() : (navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Browser');
+        const deviceId = api && typeof api.deviceId === 'function' ? api.deviceId() : '';
+        const version = (api && (api._appVersion || api._serverVersion)) || '';
         const parts = [
             `Client="${encodeAuthParam(client)}"`,
             `Device="${encodeAuthParam(device)}"`,
@@ -464,7 +456,7 @@
          * @param {Object} options - Cache options
          * @param {boolean} options.useCache - Whether to return cached data first (default: false)
          * @param {number} options.ttl - Cache time to live in milliseconds (default: 300000)
-         * @returns {Promise<Object>|Object} - If useCache is true, returns { data, dataPromise, isStalePromise }. Otherwise returns Promise<data>.
+         * @returns {Object|Promise<Object>} - If useCache is true, returns progressive stub { data, ensureData, isStalePromise } synchronously. Otherwise returns Promise<data>.
          */
         getQuery: function(url, options = {}) {
             ensureApiClient();
@@ -675,15 +667,35 @@
             });
 
             // 3. Lazy data promise — do not start fetchData until ensureData()/dataPromise is used
+            // Stale-while-revalidate: return usable cache immediately; refresh in _refreshPromise
+            const hasUsableCachedPayload = (data) => {
+                if (!data) return false;
+                if (Array.isArray(data)) return data.length > 0;
+                if (Array.isArray(data.Items)) return data.Items.length > 0;
+                return false;
+            };
+
             result.ensureData = function() {
                 if (!result._dataPromise) {
                     result._dataPromise = result.isStalePromise.then(isStale => {
-                        if (isStale) {
-                            LOG(`[Fetch] Refreshing data for: ${url}...`);
-                            return fetchData();
+                        if (!isStale) {
+                            LOG(`[Fetch] Using cached data for: ${url}...`);
+                            return result.data;
                         }
-                        LOG(`[Fetch] Using cached data for: ${url}...`);
-                        return result.data;
+
+                        const refreshPromise = fetchData().then((fresh) => {
+                            if (fresh != null) result.data = fresh;
+                            return fresh;
+                        });
+
+                        if (hasUsableCachedPayload(result.data)) {
+                            result._refreshPromise = refreshPromise;
+                            LOG(`[Fetch] Returning stale cache; refreshing in background: ${url}...`);
+                            return result.data;
+                        }
+
+                        LOG(`[Fetch] Refreshing data for: ${url}...`);
+                        return refreshPromise;
                     });
                 }
                 return result._dataPromise;
@@ -695,14 +707,49 @@
                     return result.ensureData();
                 }
             });
-            
-            return (async () => {
-                // Initial check for cached data
-                const entry = await cachePromise;
-                result.data = entry ? entry.payload : null;
-                result.isStale = forceRefresh || !entry || (Date.now() - entry.timestamp > ttl);
-                return result;
-            })();
+
+            // Sync stub: do not await IndexedDB before return (home first paint).
+            // cachePromise / isStalePromise hydrate result.data in the background.
+            // Thenable waits for hydrate but must NOT fulfill with `result` itself
+            // (Promise assimilation would recurse on result.then forever).
+            result.data = { Items: [] };
+            result.isStale = true;
+            const readyPromise = cachePromise.then((entry) => {
+                if (entry) {
+                    result.data = entry.payload;
+                    result.isStale = forceRefresh || (Date.now() - entry.timestamp > ttl);
+                } else {
+                    // Cache miss: clear placeholder so data?.Items cannot fake a hit
+                    result.data = null;
+                    result.isStale = true;
+                }
+            }).catch(() => {
+                result.data = null;
+                result.isStale = true;
+            });
+
+            function toSettledView() {
+                return {
+                    data: result.data,
+                    isStale: result.isStale,
+                    isStalePromise: result.isStalePromise,
+                    ensureData: result.ensureData,
+                    get dataPromise() {
+                        return result.ensureData();
+                    }
+                };
+            }
+
+            result.then = function (onFulfilled, onRejected) {
+                return readyPromise.then(
+                    () => (typeof onFulfilled === 'function' ? onFulfilled(toSettledView()) : toSettledView()),
+                    onRejected
+                );
+            };
+            result.catch = function (onRejected) {
+                return result.then(undefined, onRejected);
+            };
+            return result;
         },
 
         invalidateCache: function(url) {
@@ -800,7 +847,7 @@
                 throw new Error('Invalid watchlist query URL');
             }
 
-            const queryResult = await this.getQuery(url, {
+            const queryResult = this.getQuery(url, {
                 useCache: true,
                 ttl,
                 forceRefresh
@@ -823,8 +870,8 @@
             };
 
             const result = {
-                data: normalize(queryResult.data),
-                isStale: queryResult.isStale === true,
+                data: { Items: [] },
+                isStale: true,
                 isStalePromise: queryResult.isStalePromise || Promise.resolve(false),
                 ensureData,
                 urls: [url]
@@ -1093,7 +1140,11 @@
             }
             
             if (query.dataSource) {
-                return { dataSource: query.dataSource, options: queryOptions };
+                return {
+                    dataSource: query.dataSource,
+                    options: queryOptions,
+                    dataSourceOptions: query.dataSourceOptions || {}
+                };
             }
             
             return this.buildStandardQuery(queryOptions, userId, serverUrl, buildContext);
@@ -1166,14 +1217,37 @@
         },
         
         /**
+         * Resolve args for a cache dataSource method.
+         * Prefers explicit dataSourceOptions; falls back to legacy ItemType/MinCount in queryOptions.
+         */
+        resolveDataSourceMethodArgs: function(dataSourceOptions, queryOptions) {
+            if (dataSourceOptions && typeof dataSourceOptions === 'object') {
+                const keys = Object.keys(dataSourceOptions);
+                if (keys.length) return { ...dataSourceOptions };
+            }
+            const qo = queryOptions || {};
+            const out = {};
+            if (qo.ItemType != null && qo.ItemType !== '') out.ItemType = qo.ItemType;
+            else if (qo.itemType != null && qo.itemType !== '') out.ItemType = qo.itemType;
+            if (qo.MinCount != null && qo.MinCount !== '') out.MinCount = qo.MinCount;
+            else if (qo.minCount != null && qo.minCount !== '') out.MinCount = qo.minCount;
+            else if (qo.minimumSeries != null && qo.minimumSeries !== '') out.minimumSeries = qo.minimumSeries;
+            return out;
+        },
+
+        /**
          * Fetch from data source (cache-based)
          * @param {string} dataSource - Data source in format "CacheName.methodName"
-         * @param {Object} options - Query options (sorting, limits, etc.)
+         * @param {Object} queryOptions - Post-processing options (SortBy, SortOrder, Limit, etc.)
+         * @param {boolean} [useCache=true]
+         * @param {Object} [dataSourceOptions] - Args passed to the cache method (e.g. ItemType, MinCount)
          * @returns {Object} - Object with data, dataPromise, and isStalePromise
          */
-        fetchFromDataSource: async function(dataSource, options, useCache = true) {
+        fetchFromDataSource: async function(dataSource, queryOptions, useCache = true, dataSourceOptions) {
             const [cacheName, methodName] = dataSource.split('.');
             const cache = window[cacheName];
+            const options = queryOptions || {};
+            const methodArgs = this.resolveDataSourceMethodArgs(dataSourceOptions, options);
             
             if (!cache || !cache[methodName]) {
                 WARN(`Data source not available: ${dataSource}`);
@@ -1185,7 +1259,7 @@
             }
             
             try {
-                let dataPromise = Promise.resolve(cache[methodName](options));
+                let dataPromise = Promise.resolve(cache[methodName](methodArgs));
                 dataPromise = dataPromise.then(data => {
                     if (!Array.isArray(data)) {
                         data = [];

@@ -178,7 +178,7 @@
             name: 'homeScreen-configuration',
             script: '../configuration/homeScreen-configuration.js',
             css: '../configuration/homeScreen-configuration.css',
-            dependencies: ['modal', 'toaster', 'utils', 'cardBuilder', 'ui', 'homeScreenCustomItemsEditor', 'homeScreenSectionEditor', 'homescreenBenchmark'],
+            dependencies: ['modal', 'toaster', 'utils', 'cardBuilder', 'ui', 'homeScreenCustomItemsEditor', 'homeScreenSectionEditor', 'homescreenBenchmark', 'sectionHelper'],
             description: 'Home screen configuration for KefinTweaks'
         },
         {
@@ -393,10 +393,17 @@
             description: 'Watchlist statistics charts and activity analytics'
         },
         {
+            name: 'watchlist-configuration',
+            script: '../configuration/watchlist-configuration.js',
+            css: null,
+            dependencies: ['modal', 'ui'],
+            description: 'Configuration UI for Watchlist menu placements'
+        },
+        {
             name: 'watchlist',
             script: 'watchlist.js',
             css: 'watchlist.css',
-            dependencies: ['cardBuilder', 'localStorageCache', 'modal', 'utils', 'statistics'],
+            dependencies: ['cardBuilder', 'localStorageCache', 'modal', 'utils', 'statistics', 'watchlist-configuration'],
             thirdParty: ['chartjs'],
             description: 'Adds watchlist functionality throughout Jellyfin interface'
         },
@@ -649,7 +656,8 @@
         'seriesInfo-configuration',
         'versionPreferences-configuration', 'skinManager-configuration',
         'customMenuLinks-configuration', 'thumbnailScrubber-configuration',
-        'watchTogether-configuration', 'userManager-configuration', 'apiHelper'
+        'watchTogether-configuration', 'watchlist-configuration', 'userManager-configuration', 'apiHelper',
+        'sectionHelper'
     ];
 
     const CONFIGURATION_FILES = { script: 'configuration.js', css: 'configuration.css' };

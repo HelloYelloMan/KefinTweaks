@@ -345,10 +345,11 @@
     function buildPrefOverrides(cfg) {
         const spotlight = cfg.spotlightConfig || {};
         return {
+            renderMode: resolveRenderMode(cfg),
             order: cfg.order,
             ttl: cfg.ttl,
             cardFormat: cfg.cardFormat,
-            animationEnabled: spotlight.panAnimation,
+            animationEnabled: spotlight.panAnimation !== false,
             hideName: cfg.hideName === true,
             hideCardTitles: cfg.cardTitleVisibility === 'hidden' || cfg.hideCardTitles === true,
             cardTitlePosition: cfg.cardTitlePosition,
@@ -377,24 +378,55 @@
     }
 
     function sectionHasUserOverrides(entry, serverDefaults) {
-        const api = getConfigApi();
         const cfg = entry?.effectiveConfig;
         const defaults = serverDefaults || entry?.serverDefaults || {};
-        if (!api?.serializeSectionPref || !cfg) return false;
-        const prefStr = api.serializeSectionPref(
-            resolveStoredSectionPrefId(entry.sectionId, cfg),
-            cfg.enabled !== false,
-            buildPrefOverrides(cfg),
-            defaults
-        );
-        const parts = String(prefStr || '').split(';');
-        if (parts[1] === 'false') return true;
-        return parts.slice(2).some((part) => part !== '');
+        if (!cfg) return false;
+        if (cfg.enabled === false) return true;
+
+        const overrides = buildPrefOverrides(cfg);
+        const norm = (v) => (v == null || v === '' ? '' : String(v));
+        const boolEq = (a, b) => (a === true) === (b === true);
+
+        const layout = overrides.itemsLayout === 'grid' || overrides.itemsLayout === 'row'
+            ? overrides.itemsLayout
+            : (overrides.gridExpanded === true ? 'grid' : 'row');
+        const serverLayout = defaults.itemsLayout === 'grid' || defaults.itemsLayout === 'row'
+            ? defaults.itemsLayout
+            : (defaults.gridExpanded === true ? 'grid' : 'row');
+
+        if (norm(overrides.renderMode) !== norm(defaults.renderMode || 'Normal')
+            && norm(overrides.renderMode) !== '') return true;
+        if (norm(overrides.order) !== norm(defaults.order)) return true;
+        if (norm(overrides.ttl) !== norm(defaults.ttl)) return true;
+        if (norm(overrides.cardFormat) !== norm(defaults.cardFormat)) return true;
+        {
+            const anim = overrides.animationEnabled !== false;
+            const serverAnim = (defaults.animationEnabled ?? defaults.panAnimation) !== false;
+            if (anim !== serverAnim) return true;
+        }
+        if (!boolEq(overrides.hideName === true, defaults.hideName === true)) return true;
+        if (!boolEq(overrides.hideCardTitles === true, defaults.hideCardTitles === true)) return true;
+        if (norm(overrides.cardTitlePosition) !== norm(defaults.cardTitlePosition)) return true;
+        if (norm(overrides.borderStyle) !== norm(defaults.borderStyle)) return true;
+        if (norm(overrides.borderColor) !== norm(defaults.borderColor)) return true;
+        if (norm(overrides.spotlightLayout) !== norm(defaults.spotlightLayout)) return true;
+        if (norm(overrides.spotlightSize) !== norm(defaults.spotlightSize)) return true;
+        if (norm(overrides.spotlightTileCount) !== norm(defaults.spotlightTileCount)) return true;
+        if (layout !== serverLayout) return true;
+        if (!boolEq(overrides.useGaplessCards === true, defaults.useGaplessCards === true)) return true;
+        if (norm(overrides.cardTitleCapitalization || 'normal') !== norm(defaults.cardTitleCapitalization || 'normal')) return true;
+        if (norm(overrides.cardTitleFontFamily || 'default') !== norm(defaults.cardTitleFontFamily || 'default')) return true;
+        if (norm(overrides.cardTitleFontSize || 'normal') !== norm(defaults.cardTitleFontSize || 'normal')) return true;
+        if (norm(overrides.cardTitleColor) !== norm(defaults.cardTitleColor)) return true;
+        return false;
     }
 
     function applyServerDefaultsToConfig(cfg, defaults) {
         if (!cfg || !defaults) return;
-        cfg.order = defaults.order;
+        const renderMode = defaults.renderMode || 'Normal';
+        cfg.renderMode = renderMode;
+        cfg.spotlight = renderMode === 'Spotlight';
+        // Keep cfg.order — restore should not move the section on the page
         cfg.ttl = defaults.ttl;
         cfg.cardFormat = defaults.cardFormat;
         cfg.cardTitlePosition = defaults.cardTitlePosition;
@@ -446,6 +478,7 @@
 
     function syncRestoreDefaultsButton(btn, dirty) {
         if (!btn) return;
+        btn.hidden = !dirty;
         btn.disabled = !dirty;
         btn.classList.toggle('is-disabled', !dirty);
         btn.setAttribute('aria-disabled', String(!dirty));
@@ -537,7 +570,11 @@
 
     async function restoreSectionToServerDefaults(entry, serverDefaults) {
         const defaults = serverDefaults || entry.serverDefaults || {};
+        const preservedOrder = entry.effectiveConfig?.order;
         applyServerDefaultsToConfig(entry.effectiveConfig, defaults);
+        if (preservedOrder != null) {
+            entry.effectiveConfig.order = preservedOrder;
+        }
 
         pendingSaves.delete(entry.sectionId);
         clearTimeout(saveTimeout);
@@ -557,18 +594,16 @@
             });
             pendingSaves.clear();
         }
-        const storedId = resolveStoredSectionPrefId(entry.sectionId, entry.effectiveConfig);
-        homeScreen.sections = (homeScreen.sections || []).filter(
-            (s) => api.parseSectionPrefString?.(s)?.id !== storedId
+        const prefStr = api.serializeSectionPref(
+            resolveStoredSectionPrefId(entry.sectionId, entry.effectiveConfig),
+            entry.effectiveConfig.enabled !== false,
+            buildPrefOverrides(entry.effectiveConfig),
+            defaults
         );
+        homeScreen = api.upsertSectionPref(homeScreen, prefStr);
         pendingHomeScreen = homeScreen;
         await api.saveKefinTweaksHomeScreen(homeScreen);
         pendingHomeScreen = null;
-
-        if (entry.element && defaults.order != null) {
-            entry.element.style.order = defaults.order;
-            entry.element.dataset.order = String(defaults.order);
-        }
 
         applyPresentationToElement(entry);
         rerenderSection(entry);
@@ -751,8 +786,60 @@
         ];
     }
 
+    function resolveRenderMode(cfg) {
+        const api = getConfigApi();
+        if (api?.resolveRenderMode) return api.resolveRenderMode(cfg);
+        return cfg?.renderMode || (cfg?.spotlight === true ? 'Spotlight' : 'Normal');
+    }
+
     function isSpotlightSection(cfg) {
         return cfg?.renderMode === 'Spotlight' || cfg?.spotlight === true;
+    }
+
+    // 'Random' picks a mode at render time, so a re-render must keep whatever is on screen.
+    function shouldRenderAsSpotlight(entry) {
+        if (resolveRenderMode(entry?.effectiveConfig) === 'Random') {
+            return entry?.element?.classList?.contains('spotlight-section') === true;
+        }
+        return isSpotlightSection(entry?.effectiveConfig);
+    }
+
+    function resolveSpotlightPresentationLocal(options = {}) {
+        if (window.cardBuilder?.resolveSpotlightPresentation) {
+            return window.cardBuilder.resolveSpotlightPresentation({
+                ...options,
+                capForViewport: false
+            });
+        }
+        const fullScreen = options.fullScreen === true;
+        const layout = options.spotlightLayout ?? (fullScreen ? 'Borderless' : 'Border');
+        const size = options.spotlightSize ?? (fullScreen ? 'full' : 'normal');
+        let tileCount = options.tileCount;
+        if (tileCount == null || tileCount < 1 || tileCount > 3) {
+            tileCount = size === 'full' ? 1 : size === 'large' ? 2 : 3;
+        }
+        tileCount = Math.max(1, Math.min(3, Math.floor(tileCount)));
+        return { layout, size, tileCount };
+    }
+
+    // A section that was never spotlight has no spotlightConfig, so the popover controls and
+    // the renderer would otherwise fall back to different defaults.
+    function buildSpotlightConfigSeed(existingConfig, serverDefaults = {}) {
+        const existing = existingConfig || {};
+        const admin = window.KefinHomeScreen?.getConfig?.()?.SPOTLIGHT_SETTINGS || {};
+        const merged = { ...admin, ...existing };
+        const resolved = resolveSpotlightPresentationLocal({
+            ...merged,
+            spotlightLayout: existing.spotlightLayout ?? admin.spotlightLayout ?? serverDefaults.spotlightLayout,
+            spotlightSize: existing.spotlightSize ?? admin.spotlightSize ?? serverDefaults.spotlightSize,
+            tileCount: existing.tileCount ?? admin.tileCount ?? serverDefaults.spotlightTileCount
+        });
+        return {
+            ...merged,
+            spotlightLayout: resolved.layout,
+            spotlightSize: resolved.size,
+            tileCount: resolved.tileCount
+        };
     }
 
     function applyPresentationToElement(entry) {
@@ -827,17 +914,12 @@
             delete el.dataset.fontSize;
         }
 
-        if (isSpotlightSection(cfg)) {
+        if (shouldRenderAsSpotlight(entry)) {
             const spotlight = cfg.spotlightConfig || {};
-            if (spotlight.spotlightLayout) {
-                el.dataset.layout = spotlight.spotlightLayout;
-            }
-            if (spotlight.spotlightSize) {
-                el.dataset.size = spotlight.spotlightSize;
-            }
-            if (spotlight.tileCount != null) {
-                el.dataset.tileCount = String(spotlight.tileCount);
-            }
+            const resolved = resolveSpotlightPresentationLocal(spotlight);
+            el.dataset.layout = resolved.layout;
+            el.dataset.size = resolved.size;
+            el.dataset.tileCount = String(resolved.tileCount);
             el.querySelectorAll('.spotlight-overlay').forEach(overlay => {
                 const hasVisibleTitle = cfg.hideName !== true
                     && !!el.querySelector('.spotlight-section-title');
@@ -846,9 +928,16 @@
         }
     }
 
+    // Structural classes/attributes owned by each render mode's builder. When a section
+    // switches modes the freshly built root must keep its own set instead of inheriting
+    // the previous mode's.
+    const SPOTLIGHT_MODE_CLASSES = ['spotlight-section', 'padded-left'];
+    const NORMAL_MODE_CLASSES = ['verticalSection', 'emby-scroller-container', 'custom-scroller-container'];
+    const SPOTLIGHT_MODE_ATTRS = ['data-layout', 'data-size', 'data-tile-count'];
+
     function replaceSectionElement(entry, newContent) {
         const cfg = entry.effectiveConfig;
-        const isSpotlight = isSpotlightSection(cfg);
+        const isSpotlight = newContent.classList.contains('spotlight-section');
         let preservedLayout = null;
         let preservedGapless = null;
         if (!isSpotlight) {
@@ -862,9 +951,21 @@
                 || window.cardBuilder?.resolveUseGaplessCards?.(cfg) === true;
         }
 
+        const wasSpotlight = entry.element.classList.contains('spotlight-section');
+        const modeChanged = wasSpotlight !== isSpotlight;
+
         newContent.style.cssText = entry.element.style.cssText;
-        newContent.className = entry.element.className;
+        if (modeChanged) {
+            const staleClasses = wasSpotlight ? SPOTLIGHT_MODE_CLASSES : NORMAL_MODE_CLASSES;
+            entry.element.classList.forEach(cls => {
+                if (!staleClasses.includes(cls)) newContent.classList.add(cls);
+            });
+        } else {
+            newContent.className = entry.element.className;
+        }
         Array.from(entry.element.attributes).forEach(attr => {
+            if (attr.name === 'class') return;
+            if (modeChanged && !isSpotlight && SPOTLIGHT_MODE_ATTRS.includes(attr.name)) return;
             newContent.setAttribute(attr.name, attr.value);
         });
         if (cfg.order != null) {
@@ -878,6 +979,16 @@
         entry.element = newContent;
         registerRuntime(entry);
         applyPresentationToElement(entry);
+        // Fresh cards from format/mode rerender need explicit lazy observe (push path, no MO).
+        if (window.cardBuilder?.registerLazyImagesInSection) {
+            window.cardBuilder.registerLazyImagesInSection(newContent);
+        } else if (window.cardBuilder?.registerLazyImagesIn) {
+            window.cardBuilder.registerLazyImagesIn(newContent);
+        }
+        // Spotlight (and any section without .itemsContainer) still needs a root pass.
+        if (isSpotlight && window.cardBuilder?.registerLazyImagesIn) {
+            window.cardBuilder.registerLazyImagesIn(newContent);
+        }
 
         if (!isSpotlight && window.cardBuilder?.applyItemsLayoutState) {
             window.cardBuilder.invalidateLastRowPadding?.(newContent.querySelector('.itemsContainer'));
@@ -910,7 +1021,7 @@
         }
 
         let newContent = null;
-        if (isSpotlightSection(cfg) && window.cardBuilder?.renderSpotlightSection) {
+        if (shouldRenderAsSpotlight(entry) && window.cardBuilder?.renderSpotlightSection) {
             const activeSlide = entry.element?.querySelector('.spotlight-item[data-active]');
             const initialIndex = parseInt(activeSlide?.getAttribute('data-index'), 10);
             newContent = window.cardBuilder.renderSpotlightSection(items, cfg.name, {
@@ -965,7 +1076,11 @@
         modal.dialog.style.maxHeight = 'none';
         modal.dialog.style.minWidth = '8rem';
         modal.dialog.style.width = 'auto';
-        modal.dialog.style.animation = '160ms ease-out 0s 1 normal both running scaleup';
+        if (typeof window.ModalSystem?.applyOpenAnimation === 'function') {
+            window.ModalSystem.applyOpenAnimation(modal.dialog);
+        } else {
+            modal.dialog.style.animation = '160ms ease-out 0s 1 normal both running scaleup';
+        }
         if (modal.dialogContent) {
             modal.dialogContent.style.padding = '0.25em 0';
             modal.dialogContent.style.overflow = 'hidden';
@@ -981,10 +1096,18 @@
         requestAnimationFrame(() => positionFormatMenu(modal.dialog, anchorBtn));
     }
 
+    function setMenuOpenState(btn, open) {
+        if (!btn) return;
+        btn.classList.toggle('is-menu-open', !!open);
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
     function closeActiveFormatMenu() {
+        const anchor = activePopover?.formatMenuAnchor || null;
         if (window.ModalSystem?.isOpen?.(OPTION_MENU_MODAL_ID)) {
             window.ModalSystem.close(OPTION_MENU_MODAL_ID);
         }
+        setMenuOpenState(anchor, false);
         if (activePopover) {
             activePopover.formatMenu = null;
             activePopover.formatMenuAnchor = null;
@@ -993,9 +1116,11 @@
     }
 
     function closeCardTitleMenuOnly() {
+        const anchor = activePopover?.cardTitleMenuAnchor || null;
         if (window.ModalSystem?.isOpen?.(CARD_TITLE_MENU_MODAL_ID)) {
             window.ModalSystem.close(CARD_TITLE_MENU_MODAL_ID);
         }
+        setMenuOpenState(anchor, false);
         if (activePopover) {
             activePopover.cardTitleMenu = null;
             activePopover.cardTitleMenuAnchor = null;
@@ -1013,9 +1138,11 @@
         activePopover.formatMenu = modal?.dialog || null;
         activePopover.formatMenuAnchor = anchorBtn;
         activePopover.formatMenuModalId = modalId;
+        setMenuOpenState(anchorBtn, true);
         if (modal) {
             modal.onClose = () => {
                 if (activePopover?.formatMenuModalId === modalId) {
+                    setMenuOpenState(activePopover.formatMenuAnchor, false);
                     activePopover.formatMenu = null;
                     activePopover.formatMenuAnchor = null;
                     activePopover.formatMenuModalId = null;
@@ -1029,10 +1156,12 @@
         activePopover.cardTitleMenu = modal?.dialog || null;
         activePopover.cardTitleMenuAnchor = anchorBtn;
         activePopover.cardTitleMenuModalId = CARD_TITLE_MENU_MODAL_ID;
+        setMenuOpenState(anchorBtn, true);
         if (modal) {
             modal.onClose = () => {
                 closeActiveFormatMenu();
                 if (activePopover?.cardTitleMenuModalId === CARD_TITLE_MENU_MODAL_ID) {
+                    setMenuOpenState(activePopover.cardTitleMenuAnchor, false);
                     activePopover.cardTitleMenu = null;
                     activePopover.cardTitleMenuAnchor = null;
                     activePopover.cardTitleMenuModalId = null;
@@ -1129,6 +1258,7 @@
             showCloseButton: false,
             closeOnBackdrop: true,
             closeOnEscape: true,
+            fixedSize: false,
             onOpen: (modalInstance) => {
                 styleAnchoredPopoverDialog(modalInstance, anchorBtn);
                 const root = modalInstance.dialogContent;
@@ -1314,6 +1444,7 @@
             showCloseButton: false,
             closeOnBackdrop: true,
             closeOnEscape: true,
+            fixedSize: false,
             onOpen: (modalInstance) => {
                 styleAnchoredPopoverDialog(modalInstance, anchorBtn);
                 const root = modalInstance.dialogContent;
@@ -1959,20 +2090,16 @@
     }
 
     function resolvePopoverMount(anchorButton, sectionElement) {
-        return anchorButton?.closest(
-            '.sectionTitleContainer, .spotlight-section-title-container'
-        ) || sectionElement;
+        return document.body;
     }
 
     function preparePopoverMount(anchorButton, sectionElement) {
         const mountElement = resolvePopoverMount(anchorButton, sectionElement);
-        mountElement.classList.add('kefin-section-has-configure-popover');
         sectionElement?.classList.add('kefin-section-configure-popover-open');
         return mountElement;
     }
 
     function cleanupPopoverMount(mountElement, sectionElement) {
-        mountElement?.classList.remove('kefin-section-has-configure-popover');
         sectionElement?.classList.remove('kefin-section-configure-popover-open');
     }
 
@@ -2139,54 +2266,51 @@
     }
 
     function positionConfigurePopover(popover, anchorButton, mountElement) {
-        const sectionElement = mountElement.closest('[data-section-id]')
-            || activePopover?.entry?.element
+        const sectionElement = activePopover?.entry?.element
+            || anchorButton?.closest?.('[data-section-id]')
             || mountElement;
-        const mountRect = mountElement.getBoundingClientRect();
-        const sectionRect = sectionElement.getBoundingClientRect();
+        const sectionRect = sectionElement?.getBoundingClientRect?.() || anchorButton.getBoundingClientRect();
         const buttonRect = anchorButton.getBoundingClientRect();
-        const popoverWidth = popover.offsetWidth || popover.getBoundingClientRect().width;
+        const popoverWidth = popover.offsetWidth || popover.getBoundingClientRect().width || 280;
         const margin = 8;
         const gap = 8;
 
-        // Center on the configure button in viewport space first.
         let leftViewport = buttonRect.left + (buttonRect.width / 2) - (popoverWidth / 2);
-
-        // Keep inside the section when possible; always keep inside the viewport.
         const minLeft = Math.max(sectionRect.left + margin, margin);
         const maxLeft = Math.min(sectionRect.right - popoverWidth - margin, window.innerWidth - popoverWidth - margin);
 
         if (maxLeft >= minLeft) {
             leftViewport = Math.min(Math.max(leftViewport, minLeft), maxLeft);
         } else {
-            // Section narrower than popover (common when section name is hidden):
-            // pin to the section's left edge, then clamp to the viewport.
             leftViewport = Math.min(
                 Math.max(sectionRect.left + margin, margin),
                 Math.max(margin, window.innerWidth - popoverWidth - margin)
             );
         }
 
-        popover.style.left = `${leftViewport - mountRect.left}px`;
-
-        // Spotlights: always open below so the popover stays inside the banner
-        // (overflow/mask on .spotlight-banner-container would clip anything above).
-        // Normal sections: decide once from expanded height; never flip after open.
         let placeBelow;
         if (activePopover?.anchorMode === 'above' || activePopover?.anchorMode === 'below') {
             placeBelow = activePopover.anchorMode === 'below';
         } else {
-            const isSpotlight = !!mountElement.closest('.spotlight-section')
-                || activePopover?.entry?.element?.classList.contains('spotlight-section');
+            const isSpotlight = !!sectionElement?.classList?.contains('spotlight-section')
+                || !!anchorButton?.closest?.('.spotlight-section');
             const expandedHeight = getPopoverPlacementHeight(popover, true);
-            const spaceAbove = mountRect.top - margin;
+            const spaceAbove = buttonRect.top - margin;
             placeBelow = isSpotlight || spaceAbove < expandedHeight + gap;
             if (activePopover) activePopover.anchorMode = placeBelow ? 'below' : 'above';
         }
 
         popover.classList.toggle('is-below', placeBelow);
-        popover.style.top = '';
-        popover.style.bottom = '';
+        popover.style.position = 'fixed';
+        popover.style.left = `${leftViewport}px`;
+        if (placeBelow) {
+            popover.style.top = `${buttonRect.bottom + gap}px`;
+            popover.style.bottom = 'auto';
+        } else {
+            const height = getPopoverPlacementHeight(popover, popover.classList.contains('is-expanded'));
+            popover.style.top = `${Math.max(margin, buttonRect.top - gap - height)}px`;
+            popover.style.bottom = 'auto';
+        }
     }
 
     function openConfigurePopover(sectionConfig, sectionElement, anchorButton) {
@@ -2246,8 +2370,9 @@
                 : ''}
         `;
 
-        const spotlightLayout = spotlight.spotlightLayout || 'Border';
-        const spotlightTileCount = normalizeSpotlightTileCount(spotlight.tileCount);
+        const resolvedSpotlight = resolveSpotlightPresentationLocal(spotlight);
+        const spotlightLayout = resolvedSpotlight.layout;
+        const spotlightTileCount = normalizeSpotlightTileCount(resolvedSpotlight.tileCount);
         const spotlightNextTileCount = nextSpotlightTileCount(spotlightTileCount);
         const spotlightTilesIcon = spotlightNextTileCount === 1
             ? 'looks_one'
@@ -2263,6 +2388,13 @@
             <div class="kefin-section-configure-title-container">
                 <div class="kefin-section-configure-title-row">
                     <h3>${escapeHtml(sectionConfig.name)}</h3>
+                    <button type="button" is="paper-icon-button-light" class="paper-icon-button-light emby-button kefin-section-restore-defaults-btn${sectionDirty ? '' : ' is-disabled'}" title="Restore defaults" aria-label="Restore defaults" ${sectionDirty ? '' : 'hidden disabled'} aria-disabled="${sectionDirty ? 'false' : 'true'}">
+                        <span class="material-icons" aria-hidden="true">settings_backup_restore</span>
+                    </button>
+                    ${isPinnedParent ? `
+                    <button type="button" is="paper-icon-button-light" class="paper-icon-button-light emby-button kefin-section-unpin-button" title="Unpin" aria-label="Unpin from Home Screen">
+                        <span class="material-icons" aria-hidden="true">push_pin</span>
+                    </button>` : ''}
                     <button type="button" is="paper-icon-button-light" class="paper-icon-button-light emby-button kefin-section-publish-btn" title="Apply to all users" aria-label="Apply to all users" hidden>
                         <span class="material-icons" aria-hidden="true">publish</span>
                     </button>
@@ -2287,6 +2419,10 @@
                     <button type="button" is="paper-icon-button-light" class="paper-icon-button-light emby-button kefin-section-visibility-btn${cfg.enabled !== false ? '' : ' is-hidden-visibility'}" title="${cfg.enabled !== false ? 'Hide section' : 'Show section'}" aria-label="${cfg.enabled !== false ? 'Hide section' : 'Show section'}" aria-pressed="${cfg.enabled !== false}">
                         <span class="material-icons" aria-hidden="true">${cfg.enabled !== false ? 'visibility' : 'visibility_off'}</span>
                     </button>
+                    <button type="button" is="paper-icon-button-light" class="paper-icon-button-light emby-button kefin-section-view-carousel-btn${isSpotlight ? ' is-active' : ''}" title="${isSpotlight ? 'Spotlight mode' : 'Normal mode'}" aria-label="Toggle Spotlight" aria-pressed="${isSpotlight}">
+                        <span class="material-icons" aria-hidden="true">view_carousel</span>
+                    </button>
+                    <span class="kefin-section-configure-divider" aria-hidden="true"></span>
                     ${!isSpotlight ? `
                     <button type="button" is="paper-icon-button-light" class="paper-icon-button-light emby-button kefin-section-format-btn" title="Card Format" aria-label="Card Format">
                         <span class="material-icons" aria-hidden="true">image</span>
@@ -2306,13 +2442,6 @@
                     <button type="button" is="paper-icon-button-light" class="paper-icon-button-light emby-button kefin-section-spotlight-tiles-btn" title="${escapeHtml(spotlightTilesLabel)}" aria-label="${escapeHtml(spotlightTilesLabel)}" data-tile-count="${spotlightTileCount}">
                         <span class="material-icons" aria-hidden="true">${spotlightTilesIcon}</span>
                     </button>`}
-                    ${isPinnedParent ? `
-                    <button type="button" is="paper-icon-button-light" class="paper-icon-button-light emby-button kefin-section-unpin-button" title="Unpin" aria-label="Unpin from Home Screen">
-                        <span class="material-icons" aria-hidden="true">push_pin</span>
-                    </button>` : ''}
-                    <button type="button" is="paper-icon-button-light" class="paper-icon-button-light emby-button kefin-section-restore-defaults-btn${sectionDirty ? '' : ' is-disabled'}" title="Restore defaults" aria-label="Restore defaults" ${sectionDirty ? '' : 'disabled'} aria-disabled="${sectionDirty ? 'false' : 'true'}">
-                        <span class="material-icons" aria-hidden="true">settings_backup_restore</span>
-                    </button>
                     <button type="button" is="paper-icon-button-light" class="paper-icon-button-light emby-button kefin-section-more-toggle" title="More options" aria-label="More options" aria-expanded="false">
                         <span class="material-icons" aria-hidden="true">more_horiz</span>
                     </button>
@@ -2504,13 +2633,11 @@
 
         const spotlightLayoutBtn = popover.querySelector('.kefin-section-spotlight-layout-btn');
         if (spotlightLayoutBtn) {
-            syncSpotlightLayoutButton(
-                spotlightLayoutBtn,
-                entry.effectiveConfig.spotlightConfig?.spotlightLayout || 'Border'
-            );
+            const seedLayout = resolveSpotlightPresentationLocal(entry.effectiveConfig.spotlightConfig || {}).layout;
+            syncSpotlightLayoutButton(spotlightLayoutBtn, seedLayout);
             spotlightLayoutBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const current = entry.effectiveConfig.spotlightConfig?.spotlightLayout || 'Border';
+                const current = resolveSpotlightPresentationLocal(entry.effectiveConfig.spotlightConfig || {}).layout;
                 const next = current === 'Borderless' ? 'Border' : 'Borderless';
                 entry.effectiveConfig.spotlightConfig = {
                     ...(entry.effectiveConfig.spotlightConfig || {}),
@@ -2524,8 +2651,9 @@
         const spotlightSizeBtn = popover.querySelector('.kefin-section-spotlight-size-btn');
         spotlightSizeBtn?.addEventListener('click', (e) => {
             e.stopPropagation();
+            const seedSize = resolveSpotlightPresentationLocal(entry.effectiveConfig.spotlightConfig || {}).size;
             openOptionMenu(spotlightSizeBtn, getSpotlightSizeOptions(), {
-                activeValue: entry.effectiveConfig.spotlightConfig?.spotlightSize || 'normal',
+                activeValue: seedSize,
                 onSelect: (value) => {
                     entry.effectiveConfig.spotlightConfig = {
                         ...(entry.effectiveConfig.spotlightConfig || {}),
@@ -2538,14 +2666,12 @@
 
         const spotlightTilesBtn = popover.querySelector('.kefin-section-spotlight-tiles-btn');
         if (spotlightTilesBtn) {
-            syncSpotlightTilesButton(
-                spotlightTilesBtn,
-                entry.effectiveConfig.spotlightConfig?.tileCount || 1
-            );
+            const seedTileCount = resolveSpotlightPresentationLocal(entry.effectiveConfig.spotlightConfig || {}).tileCount;
+            syncSpotlightTilesButton(spotlightTilesBtn, seedTileCount);
             spotlightTilesBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const current = normalizeSpotlightTileCount(
-                    entry.effectiveConfig.spotlightConfig?.tileCount
+                    resolveSpotlightPresentationLocal(entry.effectiveConfig.spotlightConfig || {}).tileCount
                 );
                 const next = nextSpotlightTileCount(current);
                 entry.effectiveConfig.spotlightConfig = {
@@ -2587,6 +2713,25 @@
             e.stopPropagation();
             if (!sectionHasUserOverrides(entry, serverDefaults)) return;
             openRestoreSectionDefaultsConfirm(() => restoreSectionToServerDefaults(entry, serverDefaults));
+        });
+
+        popover.querySelector('.kefin-section-view-carousel-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const nextSpotlight = !isSpotlightSection(entry.effectiveConfig);
+            entry.effectiveConfig.renderMode = nextSpotlight ? 'Spotlight' : 'Normal';
+            entry.effectiveConfig.spotlight = nextSpotlight;
+            if (nextSpotlight) {
+                entry.effectiveConfig.spotlightConfig = buildSpotlightConfigSeed(
+                    entry.effectiveConfig.spotlightConfig,
+                    serverDefaults
+                );
+            }
+            persistAndApply(entry, serverDefaults, () => {
+                closePopover();
+                rerenderSection(entry);
+                const anchor = getConfigureAnchorButton(entry);
+                if (anchor) openConfigurePopover(entry.effectiveConfig, entry.element, anchor);
+            });
         });
 
         popover.querySelector('.kefin-section-more-toggle')?.addEventListener('click', (e) => {
@@ -2645,8 +2790,8 @@
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'section-configure-button material-icons settings';
-        button.title = 'Configure Section';
-        button.setAttribute('aria-label', 'Configure Section');
+        button.title = 'Configure';
+        button.setAttribute('aria-label', 'Configure');
         button.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -2674,7 +2819,7 @@
         return {
             id: 'configure',
             icon: 'settings',
-            label: 'Configure Section',
+            label: 'Configure',
             className: 'section-configure-button',
             isVisible: () => true,
             onClick: (e, anchorButton) => {
@@ -2724,9 +2869,7 @@
             overflow: visible;
         }
         .kefin-section-configure-popover {
-            position: absolute;
-            bottom: calc(100% - 15px);
-            top: auto;
+            position: fixed;
             z-index: 12000;
             box-sizing: border-box;
             display: flex;
@@ -2738,8 +2881,6 @@
             overflow: hidden;
         }
         .kefin-section-configure-popover.is-below {
-            top: 55px;
-            bottom: auto;
             flex-direction: column-reverse;
         }            
         .kefin-section-configure-popover.is-below .kefin-section-configure-title-container {
@@ -2809,19 +2950,33 @@
         .kefin-section-configure-primary-row .paper-icon-button-light .material-icons {
             font-size: 1.25rem;
         }
-        .kefin-section-configure-primary-row .kefin-section-restore-defaults-btn {
-            margin-left: auto;
+        .kefin-section-configure-divider {
+            width: 1px;
+            align-self: stretch;
+            margin: 0.35em 0.25em;
+            background: rgba(255, 255, 255, 0.2);
+            flex: 0 0 1px;
         }
         .kefin-section-visibility-btn.is-hidden-visibility {
             opacity: 0.45;
         }
+        .kefin-section-view-carousel-btn:not(.is-active) {
+            opacity: 0.4;
+        }
+        .kefin-section-view-carousel-btn.is-active {
+            opacity: 1;
+        }
         .kefin-section-restore-defaults-btn.is-disabled,
         .kefin-section-restore-defaults-btn:disabled {
-            opacity: 0.4;
-            pointer-events: none;
+            display: none !important;
         }
         .kefin-section-more-toggle[aria-expanded="true"] {
             opacity: 1;
+        }
+        .kefin-section-configure-popover .paper-icon-button-light.is-menu-open,
+        .kefin-section-card-title-menu-icons .paper-icon-button-light.is-menu-open {
+            opacity: 1;
+            background: rgba(0, 164, 220, 0.15);
         }
         .kefin-section-configure-field {
             display: flex;
@@ -3066,7 +3221,9 @@
             margin: 0 0 0.5rem 0.5rem;
         }
         .kefin-section-configure-title-row .kefin-section-open-editor-btn,
-        .kefin-section-configure-title-row .kefin-section-publish-btn {
+        .kefin-section-configure-title-row .kefin-section-publish-btn,
+        .kefin-section-configure-title-row .kefin-section-restore-defaults-btn,
+        .kefin-section-configure-title-row .kefin-section-unpin-button {
             flex: 0 0 auto;
             opacity: 0.85;
             padding: 0;
@@ -3075,7 +3232,9 @@
             height: 2.25rem;
         }
         .kefin-section-configure-title-row .kefin-section-open-editor-btn .material-icons,
-        .kefin-section-configure-title-row .kefin-section-publish-btn .material-icons {
+        .kefin-section-configure-title-row .kefin-section-publish-btn .material-icons,
+        .kefin-section-configure-title-row .kefin-section-restore-defaults-btn .material-icons,
+        .kefin-section-configure-title-row .kefin-section-unpin-button .material-icons {
             font-size: 1.25rem;
         }
         .kefin-section-configure-title-row .kefin-section-open-editor-btn[hidden],
@@ -3083,7 +3242,9 @@
             display: none !important;
         }
         .kefin-section-configure-title-row .kefin-section-open-editor-btn:hover,
-        .kefin-section-configure-title-row .kefin-section-publish-btn:hover {
+        .kefin-section-configure-title-row .kefin-section-publish-btn:hover,
+        .kefin-section-configure-title-row .kefin-section-restore-defaults-btn:hover,
+        .kefin-section-configure-title-row .kefin-section-unpin-button:hover {
             opacity: 1;
         }
     `;
@@ -3094,6 +3255,7 @@
         attachSectionControls,
         createConfigureButton,
         getConfigureSectionControl,
+        openConfigurePopover,
         updateRuntimeItemsLayout,
         updateRuntimeGridExpanded
     };

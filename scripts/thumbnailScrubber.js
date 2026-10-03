@@ -44,6 +44,35 @@
     let hoverPreviewRafId = null;
     let hoverPreviewIntervalId = null;
 
+    /** True while the user is actively scrolling; blocks scrubber attach. */
+    let isViewportScrolling = false;
+    let scrollIdleTimer = null;
+    const SCROLL_IDLE_MS = 150;
+
+    function markViewportScrolling() {
+        isViewportScrolling = true;
+        if (scrollIdleTimer) clearTimeout(scrollIdleTimer);
+        scrollIdleTimer = setTimeout(() => {
+            scrollIdleTimer = null;
+            isViewportScrolling = false;
+        }, SCROLL_IDLE_MS);
+    }
+
+    function setScrubberVisible(card, visible) {
+        if (!card?.classList) return;
+        card.classList.toggle('kefin-scrubber-visible', !!visible);
+        if (!visible) card.classList.remove('kefin-scrubber-zone-active');
+    }
+
+    function setScrubberZoneActive(card, active) {
+        if (!card?.classList) return;
+        card.classList.toggle('kefin-scrubber-zone-active', !!active);
+    }
+
+    function isScrubberZoneActive(card) {
+        return !!card?.classList?.contains('kefin-scrubber-zone-active');
+    }
+
     if (!document.getElementById('kefin-scrubber-styles')) {
         const style = document.createElement('style');
         style.id = 'kefin-scrubber-styles';
@@ -54,8 +83,8 @@
                 pointer-events: none;
                 opacity: 0; transition: opacity 0.15s ease;
             }
-            .kefin-scrubber-overlay.is-visible { opacity: 1; }
-            .kefin-scrubber-overlay.is-zone-active {
+            .card.kefin-scrubber-visible .kefin-scrubber-overlay { opacity: 1; }
+            .card.kefin-scrubber-zone-active .kefin-scrubber-overlay {
                 pointer-events: auto;
             }
             .kefin-scrubber-progress-wrap {
@@ -65,7 +94,7 @@
                 position: relative;
                 z-index: 20;
             }
-            .kefin-scrubber-overlay.is-zone-active .kefin-scrubber-progress-wrap {
+            .card.kefin-scrubber-zone-active .kefin-scrubber-progress-wrap {
                 transform: translateY(-8px);
                 padding-bottom: 8px;
                 pointer-events: auto;
@@ -92,7 +121,7 @@
                 z-index: 10;
                 transition: transform 0.2s ease;
             }
-            .kefin-scrubber-overlay.is-zone-active .kefin-scrubber-preview {
+            .card.kefin-scrubber-zone-active .kefin-scrubber-preview {
                 display: flex;
             }
             .kefin-scrubber-overlay.is-popover-open .kefin-scrubber-preview {
@@ -128,14 +157,14 @@
                 background: rgba(0,0,0,0.85); border-radius: 4px;
                 color: #fff; font-size: 13px; font-weight: 500;
             }
-            .card:has(.kefin-scrubber-overlay.is-visible.is-zone-active)  .cardOverlayButton-br {
-                bottom: 30px;
+            .card.kefin-scrubber-host .cardOverlayButton-br {
+                transition: bottom 200ms ease;
             }
-            .card:has(.kefin-scrubber-overlay.is-visible)  .cardOverlayButton-br {
+            .card.kefin-scrubber-visible .cardOverlayButton-br {
                 bottom: 10px;
             }
-            .card:has(.kefin-scrubber-overlay)  .cardOverlayButton-br {
-                transition: bottom 200ms ease;
+            .card.kefin-scrubber-visible.kefin-scrubber-zone-active .cardOverlayButton-br {
+                bottom: 30px;
             }
             .kefin-scrubber-popover-option {
                 display: block;
@@ -204,27 +233,21 @@
                 display: block;
             }
 
-            .cardScalable:has(.kefin-hover-preview-sibling) .cardOverlayContainer,
-            .cardScalable:has(.kefin-hover-preview-frame[style]:not([style=""])) .cardOverlayContainer {
+            .cardScalable.kefin-hover-preview-active .cardOverlayContainer {
                 background: none !important;
                 pointer-events: none;
                 transition: background 0.3s ease-in-out !important;
             }
-
-            .cardScalable:has(.kefin-hover-preview-sibling) .cardOverlayButton[data-action="resume"],
-            .cardScalable:has(.kefin-hover-preview-frame[style]:not([style=""])) .cardOverlayButton[data-action="resume"] {
-                display: none !important;
-            }
-
-            .cardScalable:has(.kefin-hover-preview-sibling) .cardOverlayButton[data-action="resume"],
-            .cardScalable:has(.kefin-hover-preview-frame[style]:not([style=""])) .cardOverlayButton[data-action="resume"] {
-                opacity: 0;
-                visibility: hidden;
-                pointer-events: none;
-                transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
-            }
         `;
         document.head.appendChild(style);
+    }
+
+    function setHoverPreviewActiveClass(state, active) {
+        if (!state) return;
+        const scalable = state.cardImageContainer?.closest?.('.cardScalable')
+            || state.card?.querySelector?.('.cardScalable');
+        if (!scalable) return;
+        scalable.classList.toggle('kefin-hover-preview-active', !!active);
     }
 
     /**
@@ -843,7 +866,7 @@
     function collapseZone() {
         if (currentCardState && currentCardState.overlay) {
             const overlay = currentCardState.overlay;
-            overlay.classList.remove('is-zone-active');
+            setScrubberZoneActive(currentCardState.card, false);
             if (overlay._progressFill) overlay._progressFill.style.width = '0%';
         }
     }
@@ -942,20 +965,32 @@
                 box.style.width = '';
             }
         }
+        setHoverPreviewActiveClass(state, false);
     }
 
     function teardown() {
         if (!currentCardState) return;
         const state = currentCardState;
-        if (state._cardMouseLeaveHandler && state.card) {
-            state.card.removeEventListener('mouseleave', state._cardMouseLeaveHandler);
-            state._cardMouseLeaveHandler = null;
+        if (state.card) {
+            if (state._cardMouseLeaveHandler) {
+                state.card.removeEventListener('mouseleave', state._cardMouseLeaveHandler);
+                state._cardMouseLeaveHandler = null;
+            }
+            if (state._cardMouseMoveHandler) {
+                state.card.removeEventListener('mousemove', state._cardMouseMoveHandler);
+                state._cardMouseMoveHandler = null;
+            }
+            if (state._cardClickHandler) {
+                state.card.removeEventListener('click', state._cardClickHandler);
+                state._cardClickHandler = null;
+            }
         }
         clearActivationTimer();
         stopHoverPreview();
         if (state.overlay) {
             const overlay = state.overlay;
-            overlay.classList.remove('is-visible', 'is-zone-active', 'is-popover-open');
+            setScrubberVisible(state.card, false);
+            overlay.classList.remove('is-popover-open');
             if (overlay._progressFill) overlay._progressFill.style.width = '0%';
             overlay._popoverOpen = false;
             if (overlay._popover) overlay._popover.style.display = 'none';
@@ -1022,6 +1057,7 @@
 
         container.after(wrapper);
         state._videoPreviewWrapper = wrapper;
+        setHoverPreviewActiveClass(state, true);
 
         const videoUrl = `${baseUrl}/Videos/${videoId}/stream?static=true&startTimeTicks=${startTimeTicks}&ApiKey=${token}`;
         const video = document.createElement('video');
@@ -1121,11 +1157,13 @@
                 box.appendChild(frame);
                 box._frame = frame;
                 container.appendChild(box);
+                setHoverPreviewActiveClass(state, true);
             }
             const frameEl = box._frame || box.firstElementChild || box;
 
             box.style.width = cw + 'px';
             box.style.height = ch + 'px';
+            setHoverPreviewActiveClass(state, true);
 
             const positionTicks = state.hoverPreviewPositionTicks || 0;
 
@@ -1179,7 +1217,7 @@
         if (!data) {
             if (state.overlay) {
                 state.overlay.setAttribute('data-no-trickplay', 'true');
-                state.overlay.classList.remove('is-visible', 'is-zone-active');
+                setScrubberVisible(state.card, false);
             }
             return;
         }
@@ -1242,13 +1280,23 @@
 
     function attachCard(ctx) {
         if (!ctx) return;
+        if (isViewportScrolling) return;
         const overlay = getOrCreateScrubberOverlay(ctx.cardImageContainer);
         const noTrickplay = overlay.hasAttribute('data-no-trickplay');
         const card = ctx.card;
+        card.classList.add('kefin-scrubber-host');
         function handleCardMouseLeave() {
             teardown();
         }
+        function handleCardMouseMove(e) {
+            onCardMouseMove(e);
+        }
+        function handleCardClick(e) {
+            onCardClick(e);
+        }
         card.addEventListener('mouseleave', handleCardMouseLeave);
+        card.addEventListener('mousemove', handleCardMouseMove);
+        card.addEventListener('click', handleCardClick);
         currentCardState = {
             card: card,
             cardImageContainer: ctx.cardImageContainer,
@@ -1263,11 +1311,13 @@
             hoverPreviewLastTs: 0,
             hoverPreviewPositionTicks: 0,
             hoverPreviewFrameAccumMs: 0,
-            _cardMouseLeaveHandler: handleCardMouseLeave
+            _cardMouseLeaveHandler: handleCardMouseLeave,
+            _cardMouseMoveHandler: handleCardMouseMove,
+            _cardClickHandler: handleCardClick
         };
         // Scrub overlay stays hidden when there is no trickplay; video hover still attaches.
         if (!noTrickplay) {
-            overlay.classList.add('is-visible');
+            setScrubberVisible(card, true);
         }
         if (isHoverPreviewEnabled()) {
             maybeStartHoverPreview();
@@ -1299,10 +1349,10 @@
         if (!data) {
             LOG('activateScrubber: no data, abort', itemId);
             overlay.setAttribute('data-no-trickplay', 'true');
-            overlay.classList.remove('is-visible', 'is-zone-active');
+            setScrubberVisible(currentCardState.card, false);
             return;
         }
-        overlay.classList.add('is-zone-active');
+        setScrubberZoneActive(currentCardState.card, true);
         currentCardState.scrubberData = data;
         updateUI(currentCardState, currentCardState.lastClientX, currentCardState.lastClientY);
     }
@@ -1320,6 +1370,8 @@
     }
 
     function onDelegatedMouseOver(e) {
+        if (isViewportScrolling) return;
+        if (!e.target?.closest?.('.itemsContainer, .detailImageContainer')) return;
         const ctx = resolveCardFromElement(e.target);
         if (!ctx) return;
         if (currentCardState && currentCardState.card === ctx.card) return;
@@ -1327,22 +1379,20 @@
         attachCard(ctx);
     }
 
-    function onDelegatedMouseMove(e) {
-        const ctx = resolveCardFromElement(e.target);
-        if (!ctx) {
-            if (currentCardState) teardown();
-            return;
-        }
-        if (currentCardState && ctx.card !== currentCardState.card) {
-            teardown();
-            attachCard(ctx);
-        }
+    function onCardMouseMove(e) {
         if (!currentCardState) return;
         const state = currentCardState;
+        const card = state.card;
+        if (!card || (e.target && card.contains && !card.contains(e.target))) return;
 
-        // Do not activate scrubber when hovering overlay action button (play, etc.)
-        if (e.target && e.target.closest && e.target.closest('.cardOverlayButton-br')) {
+        // Do not activate scrubber when hovering overlay action buttons (play/resume, watched, watchlist, etc.)
+        if (e.target && e.target.closest && e.target.closest('.cardOverlayButton, .cardOverlayButton-br')) {
             clearActivationTimer();
+            const overlay = state.overlay;
+            if (overlay && !overlay._popoverOpen) {
+                setScrubberZoneActive(card, false);
+                if (overlay._progressFill) overlay._progressFill.style.width = '0%';
+            }
             return;
         }
 
@@ -1364,7 +1414,7 @@
             scheduleUIUpdate();
         } else {
             if (!overlay._popoverOpen) {
-                overlay.classList.remove('is-zone-active');
+                setScrubberZoneActive(card, false);
                 if (overlay._progressFill) overlay._progressFill.style.width = '0%';
             }
             if (!overlay._popoverOpen) clearActivationTimer();
@@ -1376,17 +1426,11 @@
         }
     }
 
-    function onDelegatedMouseOut(e) {
-        const related = resolveCardFromElement(e.relatedTarget);
-        if (related) return;
-        teardown();
-    }
-
-    function onDelegatedClick(e) {
-        const ctx = resolveCardFromElement(e.target);
-        if (!ctx || !currentCardState || ctx.card !== currentCardState.card) return;
+    function onCardClick(e) {
+        if (!currentCardState) return;
         const overlay = currentCardState.overlay;
         if (!overlay) return;
+        if (!currentCardState.card.contains(e.target)) return;
 
         if (overlay._popoverOpen && overlay._popover && !overlay._popover.contains(e.target) && currentCardState.card.contains(e.target)) {
             hidePopoverState();
@@ -1395,7 +1439,7 @@
             return;
         }
 
-        if (!overlay.classList.contains('is-zone-active')) return;
+        if (!isScrubberZoneActive(currentCardState.card)) return;
         if (overlay._popover && overlay._popover.contains(e.target)) return;
         if (!overlay.contains(e.target)) return;
         if (!isInScrubZone(currentCardState.cardImageContainer, e.clientY)) return;
@@ -1410,7 +1454,7 @@
                 data = await getScrubberData(itemId);
                 if (!data) {
                     overlay.setAttribute('data-no-trickplay', 'true');
-                    overlay.classList.remove('is-visible', 'is-zone-active');
+                    setScrubberVisible(clickCard, false);
                     return;
                 }
                 currentCardState.scrubberData = data;
@@ -1464,11 +1508,9 @@
 
     function init() {
         const root = getDelegationRoot();
-        root.addEventListener('mouseover', onDelegatedMouseOver, true);
-        root.addEventListener('mousemove', onDelegatedMouseMove, true);
-        root.addEventListener('mouseout', onDelegatedMouseOut, true);
-        root.addEventListener('click', onDelegatedClick, true);
-        LOG('Initialized (event delegation)');
+        root.addEventListener('mouseover', onDelegatedMouseOver, false);
+        window.addEventListener('scroll', markViewportScrolling, { passive: true, capture: true });
+        LOG('Initialized (scoped enter + card-local move/click)');
     }
 
     if (document.readyState === 'loading') {

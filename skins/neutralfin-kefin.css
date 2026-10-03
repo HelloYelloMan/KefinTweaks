@@ -1,9 +1,9 @@
 .series-episodes-section {
-    grid-column: 1 / 5;
+	grid-column: 1 / 5;
 }
 
-.detailSection:has(.series-episodes-section)>#listChildrenCollapsible {
-    grid-column: 1 / 5;
+.detailSection:has(.series-episodes-section) > #listChildrenCollapsible {
+	grid-column: 1 / 5;
 }
 
 /* Media bar: this top override matches the ElegantFin "Media Bar Support"
@@ -18,4 +18,19 @@
    default-on include and does not carry the upstream filename. */
 html:has(link[href*="media-bar-plugin-support"], link[href*="mediaBarSupport"]) #slides-container {
     top: calc(var(--appBarHeight) * 2 + 1.25em) !important;
+}
+
+.skinHeader
+	.headerTabs.sectionTabs
+	.emby-tabs-slider
+	> .emby-tab-button.kefin-custom-menu-top-link[data-kefin-custom-menu-top-link^="Watchlist||"]::before {
+	content: "bookmark";
+}
+
+.spotlight-section-title.headerTabs.sectionTabs,
+.spotlight-section .headerTabs.sectionTabs,
+.spotlight-nav-container.headerTabs.sectionTabs {
+  background-color: transparent;
+  border-radius: unset;
+  backdrop-filter: none;
 }

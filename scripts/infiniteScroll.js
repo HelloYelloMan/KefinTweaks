@@ -597,6 +597,9 @@
                         card.setAttribute('data-index', startIndex + index);
                         container.appendChild(card);
                     });
+                    if (typeof window.cardBuilder.registerLazyImagesIn === 'function') {
+                        window.cardBuilder.registerLazyImagesIn(container);
+                    }
                     
                     LOG('Cards built successfully');
                 }
@@ -688,13 +691,12 @@
     function checkScrollPosition() {
         // Don't trigger if already loading, no more items, or request in progress
         if (loading || !hasMore || isScrollTriggered || isRequestInProgress) {
-            LOG('Scroll check blocked:', { loading, hasMore, isScrollTriggered, isRequestInProgress });
             return;
         }
         
+        // Don't trigger when not on a supported page
         const container = getContainer();
         if (!container) {
-            LOG('No container found in scroll check');
             return;
         }
         
@@ -712,19 +714,6 @@
         // Calculate distance from bottom - trigger when one viewport height away
         const distanceFromBottom = documentHeight - (scrollTop + windowHeight);
         const triggerThreshold = windowHeight; // One viewport height from bottom
-        
-        LOG('Scroll check:', {
-            scrollTop,
-            windowHeight,
-            documentHeight,
-            distanceFromBottom,
-            triggerThreshold,
-            existingItemsCount,
-            loading,
-            hasMore,
-            isScrollTriggered,
-            isRequestInProgress
-        });
         
         if (distanceFromBottom <= triggerThreshold) {
             isScrollTriggered = true;

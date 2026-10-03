@@ -1177,7 +1177,7 @@
     // Build script toggle switches
     function buildScriptToggles(scripts) {
         // Features that have configuration options (not just toggles)
-        const featuresWithConfig = new Set(['homeScreen', 'search', 'flattenSingleSeasonShows', 'skinManager', 'customMenuLinks', 'seriesInfo', 'versionPreferences', 'thumbnailScrubber', 'themeMediaCastFix', 'pauseScreen', 'osdLogo', 'watchTogether', 'userManager']);
+        const featuresWithConfig = new Set(['homeScreen', 'search', 'flattenSingleSeasonShows', 'skinManager', 'customMenuLinks', 'seriesInfo', 'versionPreferences', 'thumbnailScrubber', 'themeMediaCastFix', 'pauseScreen', 'osdLogo', 'watchTogether', 'watchlist', 'userManager']);
         
         const scriptNames = [
             { key: 'watchlist', label: 'Watchlist', desc: 'Allows your users to add items to their Watchlist. The Watchlist page shows an overview of all items on a user\'s Watchlist, as well as their Series Progress and Movie History. It also includes a Statistics page with an overview of your user watched stats.' },
@@ -2549,17 +2549,10 @@
             footer: footer,
             closeOnBackdrop: true,
             closeOnEscape: true,
+            dialogStyle: window.innerWidth >= 900
+                ? { maxWidth: '90vw', width: '1400px', maxHeight: '90vh' }
+                : undefined,
             onOpen: (modalInstance) => {
-                // Check if window is less than 900px
-                const layoutMobile = window.innerWidth < 900;
-
-                // Update modal dialog styling for large size
-                if (modalInstance && modalInstance.dialog && !layoutMobile) {
-                    modalInstance.dialog.style.maxWidth = '90vw';
-                    modalInstance.dialog.style.width = '1400px';
-                    modalInstance.dialog.style.maxHeight = '90vh';
-                }
-
                 // Add event handlers
                 setupConfigModalHandlers(modalInstance, config);
                 }
@@ -5689,8 +5682,17 @@
             return;
         }
 
+        let scheduled = false;
         appUserMenuConfigObserver = new MutationObserver(() => {
-            addConfigButtonToAppUserMenu();
+            if (document.querySelector('[data-kefintweaks-user-menu-config-button]')) {
+                return;
+            }
+            if (scheduled) return;
+            scheduled = true;
+            requestAnimationFrame(() => {
+                scheduled = false;
+                addConfigButtonToAppUserMenu();
+            });
         });
 
         appUserMenuConfigObserver.observe(document.body, {

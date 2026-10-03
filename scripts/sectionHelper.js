@@ -22,6 +22,8 @@
             watchlist: new Set(),
             customDiscoverySections: new Set()
         },
+        /** Session-scoped: discovery template ids whose source pool resolved empty (not incomplete cache). */
+        emptyDiscoverySourceTemplates: new Set(),
         currentDiscoveryGenre: null,
         currentDiscoveryStudio: null,
         // Map of pairKey -> Promise resolving to dynamicResult for spotlight pairing
@@ -51,34 +53,68 @@
         Object.keys(ids).forEach((key) => {
             if (ids[key] instanceof Set) ids[key].clear();
         });
+        discoveryState.emptyDiscoverySourceTemplates.clear();
         discoveryState.currentDiscoveryGenre = null;
         discoveryState.currentDiscoveryStudio = null;
         discoveryState.pairResolvePromises.clear();
+    }
+
+    function getDiscoveryTemplateExclusionKey(configOrId) {
+        if (configOrId == null) return '';
+        if (typeof configOrId === 'string') {
+            const id = configOrId;
+            const stamped = id.replace(/-\d{10,}-[a-z0-9]+$/i, '');
+            return stamped || id.split('-')[0] || id;
+        }
+        if (configOrId.discoveryTemplateId) return String(configOrId.discoveryTemplateId);
+        return getDiscoveryTemplateExclusionKey(String(configOrId.id || ''));
+    }
+
+    function markEmptyDiscoverySourceTemplate(configOrId) {
+        const key = getDiscoveryTemplateExclusionKey(configOrId);
+        if (!key) return;
+        discoveryState.emptyDiscoverySourceTemplates.add(key);
+        LOG(`Excluding empty discovery source template for session: ${key}`);
+    }
+
+    function isEmptyDiscoverySourceTemplate(configOrId) {
+        const key = getDiscoveryTemplateExclusionKey(configOrId);
+        return !!key && discoveryState.emptyDiscoverySourceTemplates.has(key);
+    }
+
+    /**
+     * One-shot: whether this section's dependent Movies/Series/People cache is already complete.
+     * Incomplete → skip (do not poll/wait). Missing LibraryCache → treat as ready.
+     */
+    async function isSectionCacheReady(sectionConfig) {
+        if (!window.LibraryCache?.sectionDependsOnIncompleteCache) return true;
+        try {
+            return (await window.LibraryCache.sectionDependsOnIncompleteCache(sectionConfig)) !== true;
+        } catch (_) {
+            return true;
+        }
+    }
+
+    function scheduleViewMoreUrl(sectionConfig) {
+        resolveViewMoreUrl(sectionConfig).then((viewMoreUrl) => {
+            if (viewMoreUrl) sectionConfig.viewMoreUrl = viewMoreUrl;
+        }).catch((err) => {
+            WARN(`Failed to resolve viewMoreUrl for ${sectionConfig?.id}:`, err);
+        });
     }
 
     async function loadSectionForRendering(sectionConfig) {
         LOG(`Loading Section for Rendering: ${sectionConfig.id} (${sectionConfig.name})`);
 
         const loadSectionTimerStart = performance.now();
-
-        // Omit sections that would wait on incomplete Movies/Series/People crawls
-        // (static-item sections never depend on those caches)
         const hasStaticItems = sectionConfig.items && sectionConfig.items.length > 0;
-        if (!hasStaticItems && window.LibraryCache?.sectionDependsOnIncompleteCache?.(sectionConfig) === true) {
-            LOG(`Skipping section ${sectionConfig.id}: depends on incomplete library cache`);
-            return null;
-        }
 
-        // Prepare section (template replacements, view more URL, etc.)
-        const viewMoreUrl = await resolveViewMoreUrl(sectionConfig);
+        // Sync prep only (viewMore deferred for non-static so it does not block first paint)
         const cardFormat = resolveCardFormat(sectionConfig);
         const sectionName = fillTemplate(sectionConfig.name, sectionConfig.metadata);
 
         sectionConfig.overflowCard = true;
 
-        if (viewMoreUrl) {
-            sectionConfig.viewMoreUrl = viewMoreUrl;
-        }
         if (cardFormat) {
             sectionConfig.cardFormat = cardFormat;
         }
@@ -102,6 +138,11 @@
 
         // Static items: normalize and return immediately (no queries, no dataPromise)
         if (hasStaticItems) {
+            const viewMoreUrl = await resolveViewMoreUrl(sectionConfig);
+            if (viewMoreUrl) {
+                sectionConfig.viewMoreUrl = viewMoreUrl;
+            }
+
             const kefinTweaksRoot = window.KefinTweaksConfig?.kefinTweaksRoot || '';
             const serverId = ApiClient.serverId();
             const normalizeTemplate = (value) => (value || '')
@@ -147,6 +188,14 @@
             };
         }
 
+        // Cache-backed sections only mount once Movies/Series/People cache is complete
+        if (!(await isSectionCacheReady(sectionConfig))) {
+            LOG(`Skipping section ${sectionConfig.id}: dependent library cache not complete`);
+            return null;
+        }
+
+        scheduleViewMoreUrl(sectionConfig);
+
         // External list (MDBList) — progressive for network fetch when caches are already ready
         if (Array.isArray(sectionConfig.externalListUrls) && sectionConfig.externalListUrls.length > 0) {
             if (!window.KefinExternalList?.resolveExternalListItems) {
@@ -158,6 +207,9 @@
             const ensureData = () => {
                 if (!mappedDataPromise) {
                     mappedDataPromise = (async () => {
+                        if (!(await isSectionCacheReady(sectionConfig))) {
+                            return [];
+                        }
                         const listResult = await window.KefinExternalList.resolveExternalListItems(sectionConfig);
                         let items = listResult?.Items || [];
                         if (window.cardBuilder.postProcessItems) {
@@ -174,6 +226,7 @@
 
             const result = {
                 data: { Items: [] },
+                isStale: true,
                 ensureData
             };
             Object.defineProperty(result, 'dataPromise', {
@@ -198,7 +251,6 @@
 
         const userId = ApiClient.getCurrentUserId();
         const serverUrl = ApiClient.serverAddress();
-        const results = [];
 
         const resolveQueries = window.cardBuilder?.resolveQueriesToLoad;
         const queriesToLoad = typeof resolveQueries === 'function'
@@ -220,91 +272,120 @@
             LOG(`Section ${sectionConfig.id}: useRandomQuery — selected query index ${index}`);
         }
 
-        // Process each query in the queries array
-        for (const query of queriesToLoad) {
-            let queryResult;
-
-            if (query.dataSource) {
-                // Handle cache-based data sources
-                queryResult = await ApiHelper.fetchFromDataSource(query.dataSource, query.queryOptions || {});
-            } else {
-                // Build and execute query
-                const queryUrl = ApiHelper.buildQueryFromSection(query, userId, serverUrl, sectionConfig.renderMode === 'Spotlight', { sectionType: sectionConfig.type });
-
-                if (typeof queryUrl === 'string') {
-                    // Standard query
-                    const cacheCfg = Config().CACHE || {};
-                    let sectionTtl = cacheCfg.DEFAULT_TTL;
-                    if (Number(sectionConfig.ttl) >= 0) {
-                        sectionTtl = Number(sectionConfig.ttl);
-                    }
-
-                    queryResult = await ApiHelper.getQuery(queryUrl, {
-                        useCache: true,
-                        ttl: sectionTtl
-                    });
-                } else {
-                    WARN(`Invalid query URL for section ${sectionConfig.id}`);
-                    continue;
-                }
-            }
-
-            results.push(queryResult);
-        }
-
-        // If multiple queries, merge results using section-level sortBy/sortOrder
-        if (results.length > 1) {
-            const loadSectionTimerEnd = performance.now();
-            const loadSectionDuration = loadSectionTimerEnd - loadSectionTimerStart;
-            LOG(`Section ${sectionConfig.id} loaded for rendering in time: ${loadSectionDuration.toFixed(2)}ms`);
-            return ApiHelper.mergeMultiQueryResults(results, sectionConfig);
-        }
-
-        const loadSectionTimerEnd = performance.now();
-        const loadSectionDuration = loadSectionTimerEnd - loadSectionTimerStart;
-        LOG(`Section ${sectionConfig.id} loaded for rendering in time: ${loadSectionDuration.toFixed(2)}ms`);
-
-        const postProcess = (sectionConfig, items) => {
+        const postProcess = (cfg, items) => {
             let postProcessedItems = items;
             if (window.cardBuilder.postProcessItems) {
-                postProcessedItems = window.cardBuilder.postProcessItems(sectionConfig, items);
+                postProcessedItems = window.cardBuilder.postProcessItems(cfg, items);
             }
-            return sortItemsByConfiguredIds(sectionConfig, postProcessedItems);
+            return sortItemsByConfiguredIds(cfg, postProcessedItems);
         };
 
-        const queryResult = results[0];
         // postProcess is synchronous and applySmartFilter is not, so the filter
-        // wraps the data paths rather than joining postProcess.
+        // wraps every path data leaves by rather than joining postProcess. A
+        // filter that skips the section (null) becomes an empty row, which the
+        // progressive renderer already dismisses.
         const needsSmartFilter = !!(sectionConfig.refreshUserData || sectionConfig.postFetchFilter);
-
-        // A non-stale cache hit hands ensureData() back this same payload; reuse
-        // the filtered result instead of refreshing its UserData a second time.
-        const initialRaw = queryResult.data;
-        const initialData = needsSmartFilter
-            ? await applySmartFilter(sectionConfig, postProcess(sectionConfig, initialRaw))
-            : postProcess(sectionConfig, initialRaw);
+        const finish = async (data) => {
+            if (!needsSmartFilter) return data;
+            return (await applySmartFilter(sectionConfig, data)) ?? [];
+        };
 
         let mappedDataPromise = null;
+        const result = {
+            data: { Items: [] },
+            isStale: true,
+            ensureData: null
+        };
+
         const ensureData = () => {
             if (!mappedDataPromise) {
-                const raw = typeof queryResult.ensureData === 'function'
-                    ? queryResult.ensureData()
-                    : queryResult.dataPromise;
-                mappedDataPromise = Promise.resolve(raw).then((data) => {
-                    if (needsSmartFilter && initialRaw != null && data === initialRaw) return initialData;
-                    const processed = postProcess(sectionConfig, data);
-                    return needsSmartFilter ? applySmartFilter(sectionConfig, processed) : processed;
-                });
+                mappedDataPromise = (async () => {
+                    if (!(await isSectionCacheReady(sectionConfig))) {
+                        return [];
+                    }
+
+                    const results = [];
+                    for (const query of queriesToLoad) {
+                        let queryResult;
+
+                        if (query.dataSource) {
+                            queryResult = await ApiHelper.fetchFromDataSource(
+                                query.dataSource,
+                                query.queryOptions || {},
+                                true,
+                                query.dataSourceOptions
+                            );
+                        } else {
+                            const queryUrl = ApiHelper.buildQueryFromSection(query, userId, serverUrl, sectionConfig.renderMode === 'Spotlight', { sectionType: sectionConfig.type });
+
+                            if (typeof queryUrl !== 'string') {
+                                WARN(`Invalid query URL for section ${sectionConfig.id}`);
+                                continue;
+                            }
+
+                            const cacheCfg = Config().CACHE || {};
+                            let sectionTtl = cacheCfg.DEFAULT_TTL;
+                            if (Number(sectionConfig.ttl) >= 0) {
+                                sectionTtl = Number(sectionConfig.ttl);
+                            }
+
+                            queryResult = ApiHelper.getQuery(queryUrl, {
+                                useCache: true,
+                                ttl: sectionTtl
+                            });
+                        }
+
+                        if (queryResult) results.push(queryResult);
+                    }
+
+                    if (!results.length) {
+                        return [];
+                    }
+
+                    if (results.length > 1) {
+                        const merged = ApiHelper.mergeMultiQueryResults(results, sectionConfig);
+                        const raw = typeof merged.result?.ensureData === 'function'
+                            ? await merged.result.ensureData()
+                            : await merged.result?.dataPromise;
+
+                        const hasRefresh = results.some((r) => r && r._refreshPromise);
+                        if (hasRefresh) {
+                            result.refreshPromise = Promise.all(
+                                results.map((r) => r._refreshPromise || Promise.resolve(r.data))
+                            ).then((allData) => {
+                                const itemsByFreshQuery = [];
+                                allData.forEach((data) => {
+                                    if (data?.Items) itemsByFreshQuery.push(data.Items);
+                                    else if (Array.isArray(data)) itemsByFreshQuery.push(data);
+                                });
+                                const mergedFresh = window.cardBuilder?.postProcessItemsByQuery
+                                    ? window.cardBuilder.postProcessItemsByQuery(sectionConfig, itemsByFreshQuery)
+                                    : itemsByFreshQuery.flat();
+                                return finish(postProcess(sectionConfig, mergedFresh));
+                            });
+                        }
+
+                        return finish(postProcess(sectionConfig, raw));
+                    }
+
+                    const queryResult = results[0];
+                    const raw = typeof queryResult.ensureData === 'function'
+                        ? await queryResult.ensureData()
+                        : await queryResult.dataPromise;
+
+                    if (queryResult._refreshPromise) {
+                        result.refreshPromise = queryResult._refreshPromise.then((fresh) =>
+                            finish(postProcess(sectionConfig, fresh))
+                        );
+                    }
+
+                    return finish(postProcess(sectionConfig, raw));
+                })();
             }
             return mappedDataPromise;
         };
 
-        const result = {
-            data: initialData,
-            isStale: queryResult.isStale === true,
-            isStalePromise: queryResult.isStalePromise,
-            ensureData
-        };
+        result.ensureData = ensureData;
         Object.defineProperty(result, 'dataPromise', {
             configurable: true,
             enumerable: true,
@@ -313,7 +394,9 @@
             }
         });
 
-        // Single query result
+        const loadSectionTimerEnd = performance.now();
+        LOG(`Section ${sectionConfig.id} progressive stub in ${(loadSectionTimerEnd - loadSectionTimerStart).toFixed(2)}ms`);
+
         return {
             config: sectionConfig,
             queryUrl: null,
@@ -417,7 +500,12 @@
     }
 
     async function getWatchlistUrl() {
-        return window.KefinTweaksUtils._watchlistUrl || '#/watchlist';
+        // Resolve it rather than read the cache: a section built before the
+        // watchlist script has run would otherwise get #/watchlist even where
+        // the Watchlist is a Custom Tabs tab (upstream PR #126).
+        return window.KefinTweaksUtils?.getWatchlistUrl
+            ? window.KefinTweaksUtils.getWatchlistUrl()
+            : (window.KefinTweaksUtils?._watchlistUrl || '#/watchlist');
     }
 
     /**
@@ -598,7 +686,8 @@
                     : 'getTopActors';
             return {
                 dataSource: `PeopleCache.${method}`,
-                queryOptions: { ItemType: itemType, Limit: 100 }
+                dataSourceOptions: { ItemType: itemType },
+                queryOptions: { Limit: 100 }
             };
         }
         if (discoveryType === 'Similar' || discoveryType === 'Watchlist') {
@@ -662,15 +751,17 @@
         if (!result) return [];
         if (Array.isArray(result)) return result;
         if (Array.isArray(result.Items)) return result.Items;
-        if (Array.isArray(result.data?.Items)) return result.data.Items;
         if (typeof result.ensureData === 'function') {
             const fresh = await result.ensureData();
+            if (Array.isArray(fresh)) return fresh;
             return fresh?.Items || [];
         }
         if (result.dataPromise) {
             const fresh = await result.dataPromise;
+            if (Array.isArray(fresh)) return fresh;
             return fresh?.Items || [];
         }
+        if (Array.isArray(result.data?.Items)) return result.data.Items;
         return [];
     }
 
@@ -682,12 +773,13 @@
             return [];
         }
 
-        if (window.LibraryCache?.sectionDependsOnIncompleteCache?.({
+        if ((await window.LibraryCache?.sectionDependsOnIncompleteCache?.({
             discoverySourceQuery: sourceQuery,
             queries: []
-        }) === true) {
+        })) === true) {
             LOG(`Discovery section ${config.id}: skipping pool fetch — incomplete library cache`);
-            return [];
+            // null = incomplete cache (do not permanently exclude template)
+            return null;
         }
 
         const cfg = Config();
@@ -697,13 +789,19 @@
         const built = ApiHelper.buildQueryFromSection(sourceQuery, userId, serverUrl, false);
 
         if (typeof built === 'object' && built.dataSource) {
-            const result = await ApiHelper.fetchFromDataSource(built.dataSource, built.options || {}, false);
+            const result = await ApiHelper.fetchFromDataSource(
+                built.dataSource,
+                built.options || {},
+                false,
+                built.dataSourceOptions
+            );
             return unwrapQueryItems(result);
         }
 
         if (typeof built !== 'string') return [];
-        const result = await ApiHelper.getQuery(built, { useCache: true, ttl });
-        return unwrapQueryItems(result);
+        const stub = ApiHelper.getQuery(built, { useCache: true, ttl });
+        const raw = typeof stub.ensureData === 'function' ? await stub.ensureData() : await stub;
+        return unwrapQueryItems(raw);
     }
 
     function shuffleArray(arr) {
@@ -812,7 +910,12 @@
         }
 
         let pool = await fetchDiscoveryPool(config);
-        if (!pool.length) return null;
+        // Incomplete library cache — skip this attempt without excluding the template
+        if (pool == null) return null;
+        if (!pool.length) {
+            markEmptyDiscoverySourceTemplate(config);
+            return null;
+        }
 
         // "Recently watched" means recently, carried over from the fork. The pool
         // query only sorts by DatePlayed, so on a library with little recent activity
@@ -944,8 +1047,8 @@
      * @param {number} [options.stubOrder] - Stable order from progressive stub
      */
     async function buildDiscoverySectionInstance(template, options = {}) {
-        if (window.LibraryCache?.sectionDependsOnIncompleteCache?.(template) === true) {
-            LOG(`Skipping discovery instance ${template?.id}: depends on incomplete library cache`);
+        if (!(await isSectionCacheReady(template))) {
+            LOG(`Skipping discovery ${template?.id}: dependent library cache not complete`);
             return null;
         }
 
@@ -955,6 +1058,7 @@
         const instanceConfig = {
             ...template,
             id: options.stubId || `${template.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            discoveryTemplateId: template.id,
             type: 'discovery',
         };
         if (options.stubOrder != null) {
@@ -1219,11 +1323,9 @@
      * Progressive discovery: return a stub config + lazy-loading result immediately.
      * Concrete resolve + load runs on first ensureData / dataPromise / isStalePromise access.
      */
-    function buildDiscoverySectionPromise(template, options = {}) {
-        if (window.LibraryCache?.sectionDependsOnIncompleteCache?.(template) === true) {
-            LOG(`Skipping discovery stub ${template?.id}: depends on incomplete library cache`);
-            return null;
-        }
+    async function buildDiscoverySectionPromise(template, options = {}) {
+        // Incomplete library cache: still return a progressive stub; loadConcrete /
+        // loadSectionForRendering ensureData waits until caches are ready.
 
         const pairSpotlight = options.pairSpotlight !== false;
         const order = options.order;
@@ -1232,6 +1334,7 @@
         const config = {
             ...template,
             id: uniqueId,
+            discoveryTemplateId: template.id,
             type: 'discovery',
             discoveryPending: true,
             order: order != null ? order : template.order,
@@ -1305,7 +1408,10 @@
         resolveViewMoreUrl,
         getDiscoverySettings,
         getDiscoveryState: () => discoveryState,
-        resetDiscoveryDedupe
+        resetDiscoveryDedupe,
+        getDiscoveryTemplateExclusionKey,
+        markEmptyDiscoverySourceTemplate,
+        isEmptyDiscoverySourceTemplate
     };
 
     LOG('sectionHelper ready');

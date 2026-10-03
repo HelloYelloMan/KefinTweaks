@@ -7,29 +7,30 @@
 }
 
 .docspinner {
-    contain: layout style size;
-    top: 1em;
-    right: calc(1em + 7px);
-    left: unset;
-    position: fixed;
-    width: 3em;
-    height: 3em;
-    z-index: 9999999;
-    margin: 0;
-    pointer-events: none;
+	contain: layout style size;
+	top: 1em;
+	right: calc(1em + 7px);
+	left: unset;
+	position: fixed;
+	width: 3em;
+	height: 3em;
+	z-index: 9999999;
+	margin: 0;
+	pointer-events: none;
 }
 
-:root{
-    --appBarHeight: 5em;
+:root {
+	--appBarHeight: 5em;
 }
 
 .series-episodes-section {
-    grid-column: 1 / 5;
+	grid-column: 1 / 5;
 }
 
-.detailSection:has(.series-episodes-section)>#listChildrenCollapsible {
-    grid-column: 1 / 5;
-}
+/* .detailSection:has(.series-episodes-section) > #listChildrenCollapsible {
+	grid-column: 1 / 5;
+} */
+
 
 /* ---- Jellyfin 12 ------------------------------------------------------------
    Each rule below is scoped so it cannot match 10.11's markup. */
@@ -114,4 +115,19 @@
 	.layout-mobile .padded-bottom-page:has(> .alphaPicker-fixed-right) > .itemsContainer.vertical-wrap > .card {
 		--effectiveWidth: calc(100vw - var(--padding)*2 - var(--sidePadding)*2 - 1.25em);
 	}
+}
+
+.skinHeader
+	.headerTabs.sectionTabs
+	.emby-tabs-slider
+	> .emby-tab-button.kefin-custom-menu-top-link[data-kefin-custom-menu-top-link^="Watchlist||"]::before {
+	content: "bookmark";
+}
+
+.spotlight-section-title.headerTabs.sectionTabs,
+.spotlight-section .headerTabs.sectionTabs,
+.spotlight-nav-container.headerTabs.sectionTabs {
+  background-color: transparent;
+  border-radius: unset;
+  backdrop-filter: none;
 }

@@ -45,7 +45,7 @@
         return flattened;
     }
 
-    const SECTION_PREF_FIELD_COUNT = 20;
+    const SECTION_PREF_FIELD_COUNT = 21;
     const DEFAULT_PINNED_LIST_NAME = 'Pinned';
     const PINNED_LIST_ID_PREFIX = 'pinned-list-';
     const PINNED_PARENT_ID_PREFIX = 'pinned-parent-';
@@ -174,7 +174,25 @@
         // Field 19: useGaplessCards
         if (parts[19] === 'true') result.useGaplessCards = true;
         else if (parts[19] === 'false') result.useGaplessCards = false;
+        // Field 20: renderMode Normal|Spotlight|Random
+        if (parts[20] !== '') {
+            const renderMode = normalizeRenderMode(parts[20]);
+            if (renderMode) result.renderMode = renderMode;
+        }
         return result;
+    }
+
+    const RENDER_MODES = ['Normal', 'Spotlight', 'Random'];
+
+    function normalizeRenderMode(value) {
+        if (value == null || value === '') return null;
+        const lower = String(value).trim().toLowerCase();
+        return RENDER_MODES.find(mode => mode.toLowerCase() === lower) || null;
+    }
+
+    function resolveRenderMode(section) {
+        return normalizeRenderMode(section?.renderMode)
+            || (section?.spotlight === true ? 'Spotlight' : 'Normal');
     }
 
     function normalizeItemsLayout(value) {
@@ -183,15 +201,21 @@
     }
 
     function appendBoolPrefField(fields, value, serverValue) {
-        const normalized = value === true;
-        const serverNormalized = serverValue === true;
-        fields.push(normalized === serverNormalized ? '' : (normalized ? 'true' : 'false'));
+        // Persist defined bools even when equal to server default so user choice survives reload.
+        if (value === undefined) {
+            fields.push('');
+            return;
+        }
+        fields.push(value === true ? 'true' : 'false');
     }
 
     function appendPrefField(fields, value, serverValue) {
-        const normalized = value == null ? '' : String(value);
-        const serverNormalized = serverValue == null ? '' : String(serverValue);
-        fields.push(normalized !== '' && normalized !== serverNormalized ? normalized : '');
+        // Persist defined overrides even when equal to server default so user choice survives reload.
+        if (value == null || value === '') {
+            fields.push('');
+            return;
+        }
+        fields.push(String(value));
     }
 
     function isCustomSectionForPref(section) {
@@ -438,6 +462,11 @@
         appendPrefField(fields, overrides.borderColor, serverDefaults.borderColor);
         appendPrefField(fields, overrides.cardTitleColor, serverDefaults.cardTitleColor);
         appendBoolPrefField(fields, overrides.useGaplessCards, serverDefaults.useGaplessCards);
+        appendPrefField(
+            fields,
+            normalizeRenderMode(overrides.renderMode),
+            normalizeRenderMode(serverDefaults.renderMode) || 'Normal'
+        );
         return fields.join(';');
     }
 
@@ -919,12 +948,33 @@
         };
     }
 
+    function resolveSpotlightPresentationLocal(options = {}) {
+        if (typeof window !== 'undefined' && window.cardBuilder?.resolveSpotlightPresentation) {
+            return window.cardBuilder.resolveSpotlightPresentation({
+                ...options,
+                capForViewport: false
+            });
+        }
+        const fullScreen = options.fullScreen === true;
+        const layout = options.spotlightLayout ?? (fullScreen ? 'Borderless' : 'Border');
+        const size = options.spotlightSize ?? (fullScreen ? 'full' : 'normal');
+        let tileCount = options.tileCount;
+        if (tileCount == null || tileCount < 1 || tileCount > 3) {
+            tileCount = size === 'full' ? 1 : size === 'large' ? 2 : 3;
+        }
+        tileCount = Math.max(1, Math.min(3, Math.floor(tileCount)));
+        return { layout, size, tileCount };
+    }
+
     function getServerSectionDefaults(section) {
         if (!section) return {};
-        const isSpotlight = section.renderMode === 'Spotlight' || section.spotlight === true;
         const spotlight = section.spotlightConfig || {};
+        const resolved = resolveSpotlightPresentationLocal(spotlight);
+        const id = String(section.id || '');
+        const isPinned = id.startsWith(PINNED_LIST_ID_PREFIX) || id.startsWith(PINNED_PARENT_ID_PREFIX);
         return {
-            order: section.order ?? 0,
+            renderMode: resolveRenderMode(section),
+            order: isPinned ? PINNED_DEFAULT_ORDER : (section.order ?? 0),
             ttl: section.ttl,
             cardFormat: section.cardFormat,
             animationEnabled: spotlight.panAnimation !== false,
@@ -934,9 +984,9 @@
             cardTitlePosition: section.cardTitlePosition || '',
             borderStyle: section.borderStyle || '',
             borderColor: section.borderColor || '',
-            spotlightLayout: spotlight.spotlightLayout ?? 'Border',
-            spotlightSize: spotlight.spotlightSize ?? 'normal',
-            spotlightTileCount: parseInt(spotlight.tileCount, 10) || 1,
+            spotlightLayout: resolved.layout,
+            spotlightSize: resolved.size,
+            spotlightTileCount: resolved.tileCount,
             itemsLayout: 'row',
             useGaplessCards: false,
             cardTitleCapitalization: section.cardTitleCapitalization || 'normal',
@@ -970,6 +1020,10 @@
                 serverById.get(section.id) || serverById.get(storedId) || section
             );
             if (pref.enabled !== undefined) next.enabled = pref.enabled;
+            if (pref.renderMode !== undefined) {
+                next.renderMode = pref.renderMode;
+                next.spotlight = pref.renderMode === 'Spotlight';
+            }
             if (pref.order !== undefined) next.order = pref.order;
             if (pref.ttl !== undefined) next.ttl = pref.ttl;
             if (pref.cardFormat !== undefined) next.cardFormat = pref.cardFormat;
@@ -1485,11 +1539,13 @@
                 return pref?.id && getPrefDedupeKey(pref) === storedId;
             });
             const existing = parseSectionPrefString(existingRaw) || {};
+            const serverDefaults = section._userPrefDefaults
+                || getServerSectionDefaults(serverSection);
             return serializeSectionPref(
                 storedId,
                 section.enabled !== false,
                 { ...existing, order: section.order },
-                getServerSectionDefaults(serverSection)
+                serverDefaults
             );
         });
         return sanitizeHomeScreenSections({
@@ -1828,7 +1884,7 @@
                     const modalId = 'kefin-user-homescreen-restore-defaults';
                     const content = '<p class="listItemBodyText">Restoring the default Home Screen Settings will override your existing settings. Are you sure you want to proceed?</p>';
                     const footer = `
-                        <button type="button" class="emby-button" onclick="window.ModalSystem.close('${modalId}')">Cancel</button>
+                        <button type="button" class="emby-button button-cancel button-flat" onclick="window.ModalSystem.close('${modalId}')">Cancel</button>
                         <button type="button" class="emby-button raised button-submit" id="kefin-restore-defaults-confirm">Proceed</button>
                     `;
                     window.ModalSystem.create({
@@ -2031,6 +2087,8 @@
         saveKefinTweaksSectionState,
         createEmptySectionState,
         normalizeItemsLayout,
+        normalizeRenderMode,
+        resolveRenderMode,
         DEFAULT_PINNED_LIST_NAME,
         PINNED_DEFAULT_ORDER,
         homeScreenToLegacyArray,

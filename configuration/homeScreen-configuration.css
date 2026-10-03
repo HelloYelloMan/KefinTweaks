@@ -74,9 +74,18 @@
 	padding-right: 1em;
 }
 
-[data-modal-id="kefin-homescreen-config-main"] div#section-content {
+[data-modal-id="kefin-homescreen-config-main"] div#section-content,
+[data-modal-id="kefin-homescreen-config-main"] div#global-settings-content,
+[data-modal-id="kefin-homescreen-config-main"] #home-screen-benchmark-root {
 	max-height: calc(90vh - 19em);
 	overflow: auto;
+	scrollbar-width: none;
+}
+
+[data-modal-id="kefin-homescreen-config-main"] div#global-settings-content > *:last-child,
+[data-modal-id="kefin-homescreen-config-main"] #home-screen-benchmark-root > *:last-child,
+[data-modal-id="kefin-homescreen-config-main"] #section-content > div > *:last-child {
+	margin-bottom: 4em !important;
 }
 
 div#order-sections-container .editable-group-name {
@@ -169,7 +178,7 @@ span.listItemBodyText.secondary.seasonal-tag {
 	white-space: nowrap;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 899px) {
 	[data-modal-id="kefin-homescreen-config-main"] .hsc-split-pane {
 		grid-template-columns: 1fr;
 		gap: 1em;
@@ -315,13 +324,19 @@ span.listItemBodyText.secondary.seasonal-tag {
 	align-items: end;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 899px) {
 	[data-modal-id="kefin-homescreen-config-main"] #global-settings-content .hsae-field-grid-4 {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
 	[data-modal-id="kefin-homescreen-config-main"] #global-settings-content .hsc-settings-grid-3 {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.hsc-config-toolbar button > span:nth-child(2) {
+		display: none;
+	}
+	.hsc-config-toolbar button > span {
+		margin: 0 !important;
 	}
 }
 
@@ -341,4 +356,37 @@ span.listItemBodyText.secondary.seasonal-tag {
 
 [data-modal-id="kefin-homescreen-config-main"] .hsc-settings-grid .hsc-settings-span-2 .kefin-toggle-card {
 	flex: 1;
+}
+
+[data-modal-id="kefin-homescreen-config-main"] .kefin-settings-input-card {
+	align-items: center;
+}
+
+[data-modal-id="kefin-homescreen-config-main"] .kefin-settings-input-card-control {
+	flex-shrink: 0;
+	width: 7.5em;
+}
+
+[data-modal-id="kefin-homescreen-config-main"] .kefin-settings-input-card-control .emby-input {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.section-row-actions .btnSectionConfigure {
+	display: none;
+}
+
+.dialogContainer[data-modal-id="kefin-homescreen-config-main"] .formDialogHeader + div > div {
+	padding: 1.25em 1.5em;
+	height: calc(100% - 2.5em);
+}
+.dialogContainer[data-modal-id="kefin-homescreen-config-main"] .formDialogHeader + div {
+	padding: 0 !important;
+	overflow-y: hidden !important;
+}
+.dialogContainer[data-modal-id="kefin-homescreen-config-main"] .formDialogHeader + div > div > div #section-content > div {
+	padding-bottom: 4em;
+}
+.config-tab-nav button[data-tab="order"] {
+	display: none;
 }

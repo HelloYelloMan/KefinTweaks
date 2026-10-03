@@ -642,28 +642,60 @@
         return chart;
     }
 
+    function getSeriesWatchedRuntimeTicks(progress) {
+        if (!progress) return 0;
+        const source = Array.isArray(progress.episodes) && progress.episodes.length
+            ? progress.episodes
+            : (progress.playEvents || []);
+        if (source.length) {
+            let totalTicks = 0;
+            source.forEach((ep) => {
+                const key = ep?.UserData?.LastPlayedDate || ep?.LastPlayedDate;
+                const played = ep?.UserData ? ep.UserData.Played === true : !!key;
+                if (!played) return;
+                totalTicks += Number(ep.RunTimeTicks) || 0;
+            });
+            return totalTicks;
+        }
+        if (typeof progress.watchedRuntime === 'number' && progress.watchedRuntime > 0) {
+            return Math.round(progress.watchedRuntime * 10000000);
+        }
+        return 0;
+    }
+
     function calculateSummary(progressData, movies) {
         const list = progressData || [];
         const seriesStarted = list.length;
         const seriesWatched = list.filter((p) => p.percentage === 100).length;
         const episodesWatched = list.reduce((total, p) => total + (p.watchedCount || 0), 0);
         const moviesWatched = (movies || []).length;
+
+        let totalTicks = 0;
+        (movies || []).forEach((movie) => {
+            totalTicks += Number(movie.RunTimeTicks) || 0;
+        });
+        list.forEach((progress) => {
+            totalTicks += getSeriesWatchedRuntimeTicks(progress);
+        });
+        const hoursWatched = Math.round(totalTicks / 10000000 / 3600);
+
         const topShows = list
             .map((progress) => ({
                 name: progress.series?.Name || 'Unknown',
                 episodesWatched: progress.watchedCount || 0,
                 totalEpisodes: progress.totalEpisodes || 0,
                 percentage: progress.percentage || 0,
-                seriesId: progress.series?.Id
+                seriesId: progress.series?.Id,
+                watchedRuntimeTicks: getSeriesWatchedRuntimeTicks(progress)
             }))
             .sort((a, b) => {
-                const percentageDiff = b.percentage - a.percentage;
-                if (percentageDiff !== 0) return percentageDiff;
-                return b.totalEpisodes - a.totalEpisodes;
+                const tickDiff = b.watchedRuntimeTicks - a.watchedRuntimeTicks;
+                if (tickDiff !== 0) return tickDiff;
+                return (b.episodesWatched || 0) - (a.episodesWatched || 0);
             })
             .slice(0, 5);
 
-        return { seriesStarted, seriesWatched, episodesWatched, moviesWatched, topShows };
+        return { seriesStarted, seriesWatched, episodesWatched, moviesWatched, hoursWatched, topShows };
     }
 
     function updateSummaryCards(root, stats) {
@@ -675,6 +707,7 @@
         setText('stat-series-watched', stats.seriesWatched);
         setText('stat-episodes-watched', stats.episodesWatched);
         setText('stat-movies-watched', stats.moviesWatched);
+        setText('stat-hours-watched', stats.hoursWatched);
 
         const topShowsList = root.querySelector('#top-shows-list') || document.getElementById('top-shows-list');
         if (!topShowsList) return;
@@ -686,11 +719,12 @@
             const rank = index + 1;
             const rankClass = rank <= 3 ? ` rank-${rank}` : '';
             const episodesText = show.episodesWatched === 1 ? 'episode' : 'episodes';
+            const timeLabel = formatHours(show.watchedRuntimeTicks || 0);
             return `
                 <div class="top-show-item${rankClass}">
                     <div class="show-rank">${rank}</div>
                     <div class="top-show-name" title="${escapeHtml(show.name)}">${escapeHtml(show.name)}</div>
-                    <div class="top-show-episodes">${show.episodesWatched} of ${show.totalEpisodes} ${episodesText} (${show.percentage}%)</div>
+                    <div class="top-show-episodes">${timeLabel} · ${show.episodesWatched} of ${show.totalEpisodes} ${episodesText} (${show.percentage}%)</div>
                 </div>
             `;
         }).join('');
@@ -967,7 +1001,7 @@
         renderFavoritesList(root, computeFavoriteRecents(progressList, movieList));
 
         resizeCharts();
-        LOG(`Statistics updated: ${summary.seriesStarted} started, ${summary.seriesWatched} watched, ${summary.episodesWatched} episodes, ${summary.moviesWatched} movies`);
+        LOG(`Statistics updated: ${summary.seriesStarted} started, ${summary.seriesWatched} watched, ${summary.episodesWatched} episodes, ${summary.moviesWatched} movies, ${summary.hoursWatched} hours`);
     }
 
     function resizeCharts() {

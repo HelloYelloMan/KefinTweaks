@@ -142,9 +142,6 @@
                 <div class="listItemContent">
                     <div class="listItemBodyText" style="margin-bottom: 0.35em; font-weight: 500;">${escapeHtml(title)}</div>
                     <div class="listItemBodyText secondary" style="margin-bottom: 0.5em; font-size: 0.9em;">${escapeHtml(hint)}</div>
-                    <div class="listItemBodyText secondary" style="margin-bottom: 0.75em; font-size: 0.85em;">
-                        None = sources with no matching terms in this list. It cannot be edited or deleted, but you can change its priority.
-                    </div>
                     <div class="kefin-vp-term-list" data-list="${escapeHtml(listKey)}">
                         ${terms.map((term, i) => buildTermRowHTML(term, i, listKey)).join('')}
                     </div>
@@ -172,7 +169,7 @@
                 align-items: start;
                 height: calc(100% - 40px);
             }
-            @media (max-width: 900px) {
+            @media (max-width: 899px) {
                 .kefin-vp-lists-grid {
                     grid-template-columns: 1fr;
                 }
@@ -180,12 +177,7 @@
             [data-name="kefin-modal-content"]:has(.kefin-vp-lists-grid) > div {
                 height: 100% !important;
             }
-
-            [data-name="kefin-modal-content"]:has(.kefin-vp-lists-grid) > div > div {
-                height: 100%;
-            }
             .listItem.kefin-vp-list-section {
-                height: calc(100% - 1.5em);
                 align-items: start;
             }
             .kefin-vp-label-order-card {
@@ -283,13 +275,13 @@
                 <div class="kefin-vp-lists-grid">
                     ${buildListSectionHTML(
                         'Version Terms',
-                        'Resolution / quality labels (e.g. 4k, 1080p). Order is priority.',
+                        'Resolution / quality labels (e.g. 4k, 1080p).',
                         'versions',
                         config.versions
                     )}
                     ${buildListSectionHTML(
                         'Edition Terms',
-                        'Edition labels (e.g. Theatrical, Director\'s Cut). Order is priority.',
+                        'Edition labels (e.g. Theatrical, Director\'s Cut).',
                         'editions',
                         config.editions
                     )}
@@ -451,7 +443,7 @@
                 <button class="emby-button raised block button-submit" id="save-versionpreferences-config-btn">Save</button>
             `;
 
-            const modalInstance = window.ModalSystem.create({
+            window.ModalSystem.create({
                 id: MODAL_ID,
                 title: 'Item Version Preferences',
                 content,
@@ -459,6 +451,9 @@
                 closeOnBackdrop: true,
                 closeOnEscape: true,
                 showCloseButton: true,
+                dialogStyle: window.innerWidth >= 900
+                    ? { maxWidth: '90vw', width: '1400px', height: '90vh' }
+                    : undefined,
                 onOpen: (modal) => {
                     const saveBtn = modal.dialogFooter.querySelector('#save-versionpreferences-config-btn');
                     saveBtn?.addEventListener('click', async () => {
@@ -475,12 +470,6 @@
                     });
                 }
             });
-
-            if (window.innerWidth >= 900) {
-                modalInstance.dialog.style.maxWidth = '90vw';
-                modalInstance.dialog.style.width = '1400px';
-                modalInstance.dialog.style.height = '90vh';
-            }
 
             LOG('Version Preferences configuration modal opened');
         } catch (error) {

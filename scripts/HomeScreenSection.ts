@@ -5,6 +5,7 @@ interface HomeScreenSection {
 	caption?: string;
 	enabled: boolean;
 	order: number;
+	category?: string; // Stable category id (custom sections); runtime may force discovery/pinned
 
 	// Display Options
 	cardFormat?: "Poster" | "Thumb" | "Backdrop" | "Random";
@@ -31,6 +32,7 @@ interface HomeScreenSection {
 	cardTitleFontSize?: "small" | "normal" | "large";
 	userConfigurable?: boolean; // Whether users can toggle/reorder this section
 	useGaplessCards?: boolean; // When true, remove gaps between cards (row or grid)
+	useParentCard?: boolean; // When true, use the parent item will be rendered as the card image and link
 
 	// Loads items from an external URL and loads matches from that list from your Jellyfin library
 	// Currently supports: mdblist.com only
@@ -90,10 +92,16 @@ interface Query {
 	_sourceType?: "jellyfin" | "cache" | "static";
 	path?: string; // Custom endpoint path (e.g., '/Shows/NextUp', '/Shows/Upcoming')
 	dataSource?: string; // Cache/custom data source (e.g., 'MoviesCache.getImdbTop250Movies')
+	/** Args passed to the cache method (e.g. ItemType, MinCount) — not post-processing */
+	dataSourceOptions?: {
+		ItemType?: string;
+		MinCount?: number;
+		[key: string]: any;
+	};
 	minAge?: number; // Minimum age in days
 	maxAge?: number; // Maximum age in days
 	queryOptions?: {
-		// Query parameters for /Items or custom endpoints
+		// Query parameters for /Items or custom endpoints / Client Cache post-processing
 		Ids?: string[];
 		IncludeItemTypes?: string[];
 		SearchTerm?: string;
@@ -145,7 +153,7 @@ interface SpotlightConfig {
 // Used for the customPrefs.kefinTweaks.homeScreen property
 // All values are arrays of semi-colon separated strings
 interface KefinHomeScreen {
-	sections: Array<string>; // id;enabled;order;ttl;cardFormat;animationEnabled;hideName;hideCardTitles;cardTitlePosition;borderStyle;spotlightLayout;spotlightSize;spotlightTileCount;itemsLayout(row|grid; legacy true→grid);cardTitleCapitalization;cardTitleFontFamily;cardTitleFontSize;borderColor;cardTitleColor;useGaplessCards
+	sections: Array<string>; // id;enabled;order;ttl;cardFormat;animationEnabled;hideName;hideCardTitles;cardTitlePosition;borderStyle;spotlightLayout;spotlightSize;spotlightTileCount;itemsLayout(row|grid; legacy true→grid);cardTitleCapitalization;cardTitleFontFamily;cardTitleFontSize;borderColor;cardTitleColor;useGaplessCards;renderMode(Normal|Spotlight|Random)
 	pinnedLists: Array<string>; // name;id1;id2;id3;...
 	pinnedParents: Array<string>; // name;id;type
 }
@@ -191,4 +199,6 @@ interface KefinHomeScreenSectionUserConfig {
 	cardTitleCapitalization?: string;
 	cardTitleFontFamily?: string;
 	cardTitleFontSize?: string;
+	/** User override of the section's render mode. */
+	renderMode?: "Normal" | "Spotlight" | "Random";
 }

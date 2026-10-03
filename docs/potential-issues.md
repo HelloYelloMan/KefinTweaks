@@ -117,10 +117,11 @@ current bar.
 - **Baked registry and Blink detection**: `html.kefin-blink` is set by injector.js,
   which on the baked path runs after cardBuilder has already built its lazy-image
   observer with the non-Blink margin.
-- **KefinTweaks CSS depends on elegantfinHaspatch**: `body.kefin-home-active` and
-  `kefin-borderless-spotlight` are only maintained by elegantfin-haspatch.js.
-  Disable that feature and seasonal backgrounds and the Borderless spotlight
-  silently stop.
+- **KefinTweaks CSS depends on elegantfinHaspatch**: `kefin-borderless-spotlight`
+  is only maintained by elegantfin-haspatch.js. Disable that feature and the
+  Borderless spotlight silently stops. (Seasonal backgrounds used to depend on its
+  `body.kefin-home-active` too; since the 2026-10-03 merge they key on upstream's
+  `html[data-active-page="home"]`, which utils.js sets on every navigation.)
 - **Poster Aspect, Resume/Next Up with series images**: with "use episode images"
   off, the card shows the series thumb but gets the episode still's ratio class.
 - **Grid filler cards** copy the first card's `par-NN` and can wrap onto an

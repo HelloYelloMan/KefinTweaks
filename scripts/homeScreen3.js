@@ -8,6 +8,8 @@
 
     // Configuration
     const PRE_FETCH_DISCOVERY_DATA = false; // If true, fetches first discovery group immediately. If false, waits for scroll/click.
+    /** Max sections resolved/rendered per discovery group (infinite/chevron pages). */
+    const DISCOVERY_SECTIONS_PER_GROUP = 12;
 
     // Dependencies
     const ApiHelper = window.apiHelper;
@@ -63,6 +65,8 @@
         // a group and breaks at every infinite-scroll boundary, which is exactly
         // where two spotlights end up back to back.
         lastDiscoveryEndedWithSpotlight: false,
+        /** Unresolved section configs left after capping a discovery group render. */
+        discoveryGroupRemainder: [],
         discoverySectionOrder: 100000000,
         discoverySectionsRemain: true,
         ensuringDiscoveryBuffer: false,
@@ -83,7 +87,8 @@
         kefinContinueWatching: false,
         kefinLatestMedia: false,
         jellyfinOrders: {},
-        homePaintedEventFired: false
+        homePaintedEventFired: false,
+        isRenderingHome: false
     };
 
     async function fetchDisplayPreferences() {
@@ -98,11 +103,6 @@
     }
     state.getDisplayPrefernces = fetchDisplayPreferences;
 
-    const performanceTimer = {
-        loadTimeStart: null,
-        loadTimeEnd: null,
-    };
-
     // Cache used to support re-rendering our sections after Jellyfin overwrites the container
     const sectionCache = {
         renderedSections: [],      // Array of section configs + results
@@ -112,29 +112,30 @@
         pendingJellyfinSectionObservers: []
     };
 
-    // Basic performance metrics for measuring initial and recovery renders
-    const performanceMetrics = {
-        initialRenderStart: null,
-        initialRenderEnd: null,
-        jellyfinDetected: null,
-        recoveryRenderEnd: null
-    };
-
-    // Create loading indicator element
+    // Create loading indicator as next sibling of the sections container (outside flex column)
     function createDiscoveryLoadingIndicator(container) {
-        let loadingDiv = document.querySelector('.homePage:not(.hide) #discovery-loading-indicator')
-            || document.querySelector('.libraryPage:not(.hide) #discovery-loading-indicator');
-        if (loadingDiv) {
-            return loadingDiv;
-        }
-
         // Prefer the provided container, but fall back to the standard sections container
         if (!container) {
             container = document.querySelector('.homePage:not(.hide) #homeTab .sections')
                 || document.querySelector('.libraryPage:not(.hide) .homeSectionsContainer');
         }
 
-        if (!container) {
+        let loadingDiv = document.querySelector('.homePage:not(.hide) #discovery-loading-indicator')
+            || document.querySelector('.libraryPage:not(.hide) #discovery-loading-indicator');
+
+        if (loadingDiv) {
+            if (container && loadingDiv.previousElementSibling !== container) {
+                // Place as next sibling of the sections container
+                if (container.nextSibling) {
+                    container.parentNode.insertBefore(loadingDiv, container.nextSibling);
+                } else if (container.parentNode) {
+                    container.parentNode.appendChild(loadingDiv);
+                }
+            }
+            return loadingDiv;
+        }
+
+        if (!container || !container.parentNode) {
             WARN('Discovery loading indicator: sections container not found');
             return null;
         }
@@ -142,15 +143,22 @@
         loadingDiv = document.createElement('div');
         loadingDiv.className = 'discovery-loading-indicator';
         loadingDiv.id = 'discovery-loading-indicator';
-        loadingDiv.style.order = '1000000000';
         loadingDiv.innerHTML = `
             <div class="spinner"></div>
         `;
 
-        container.appendChild(loadingDiv);
-        LOG('Created discovery loading indicator inside sections container');
+        if (container.nextSibling) {
+            container.parentNode.insertBefore(loadingDiv, container.nextSibling);
+        } else {
+            container.parentNode.appendChild(loadingDiv);
+        }
+        LOG('Created discovery loading indicator as sibling of sections container');
         
         return loadingDiv;
+    }
+
+    function removeDiscoveryLoadingIndicator() {
+        document.querySelectorAll('#discovery-loading-indicator').forEach((el) => el.remove());
     }
 
     function getDiscoveryHomePageEl() {
@@ -239,6 +247,7 @@
     function markDiscoveryExhausted() {
         state.discoverySectionsRemain = false;
         state.discoveryBuffer = null;
+        state.discoveryGroupRemainder = [];
         removeDiscoveryScrollListeners();
         setDiscoveryPageAttrs({ ready: true, infinite: false, exhausted: true });
         const loadingIndicator = createDiscoveryLoadingIndicator(
@@ -275,51 +284,44 @@
         return homeSectionsContainer;
     }
 
-    // Observe the home sections container so we can react when Jellyfin renders
-    function observeContainerMutations(container, onJellyfinRender) {
-        if (!container || typeof MutationObserver === 'undefined') {
-            return null;
+    const HOME_SECTIONS_SELECTOR = '.homePage:not(.hide) #homeTab.is-active .sections';
+    let homeSectionsReadyObserver = null;
+
+    function disconnectHomeSectionsReadyObserver() {
+        if (!homeSectionsReadyObserver) return;
+        homeSectionsReadyObserver.disconnect();
+        homeSectionsReadyObserver = null;
+        LOG('Disconnected home sections ready observer');
+    }
+
+    function connectHomeSectionsReadyObserver() {
+        if (homeSectionsReadyObserver) {
+            LOG('Home sections ready observer already connected');
+            return;
         }
 
-        const observer = new MutationObserver((mutations) => {
-            for (const mutation of mutations) {
-                // Check if .homeSectionsContainer class was added
-                if (mutation.type === 'attributes' &&
-                    mutation.attributeName === 'class' &&
-                    container.classList.contains('homeSectionsContainer')) {
+        const existing = document.querySelector(HOME_SECTIONS_SELECTOR);
+        if (existing) {
+            LOG('Home sections container already present; enhancing');
+            enhanceHomeScreen();
+            return;
+        }
 
-                    LOG('Jellyfin rendered homeSectionsContainer, re-rendering custom sections');
-                    sectionCache.jellyfinHasRendered = true;
-                    performanceMetrics.jellyfinDetected = performance.now();
-                    observer.disconnect();
-                    if (typeof onJellyfinRender === 'function') {
-                        onJellyfinRender();
-                    }
-                    break;
-                }
+        if (typeof MutationObserver === 'undefined') {
+            WARN('MutationObserver unavailable; cannot wait for home sections container');
+            return;
+        }
 
-                // Check for childList changes (innerHTML overwrite before class is applied)
-                if (mutation.type === 'childList' &&
-                    !sectionCache.jellyfinHasRendered) {
-
-                    const hasKefinSections = Array.from(container.children)
-                        .some(el => el.dataset && el.dataset.sectionId);
-
-                    if (!hasKefinSections && sectionCache.renderedSections.length > 0) {
-                        LOG('Home sections container content cleared; awaiting Jellyfin homeSectionsContainer class.');
-                        // We intentionally keep observing for the class change.
-                    }
-                }
-            }
+        homeSectionsReadyObserver = new MutationObserver(() => {
+            if (!document.querySelector(HOME_SECTIONS_SELECTOR)) return;
+            LOG('Home sections container appeared; enhancing');
+            enhanceHomeScreen();
         });
-
-        observer.observe(container, {
+        homeSectionsReadyObserver.observe(document.documentElement, {
             childList: true,
-            attributes: true,
-            attributeFilter: ['class']
+            subtree: true
         });
-
-        return observer;
+        LOG('Connected home sections ready observer');
     }
 
     /**
@@ -432,7 +434,10 @@
             document.body.dataset.seasonalAnimations = 'true';
 
             // Add the animation script to the head
-            const animation = seasonalThemes[activeSeasonalThemeGroup.id]?.animation;
+            const theme = seasonalThemes[activeSeasonalThemeGroup.id] || {};
+            const animation = theme.animation;
+            document.body.dataset.seasonalShape = theme.shape || 'snowflake';
+            document.body.dataset.seasonalAnimationStyle = theme.animationStyle || 'fall';
             if (animation) {
                 const animationScript = document.querySelector(`script[src*="${animation}.js"]`);
                 if (!animationScript) {
@@ -444,88 +449,32 @@
             }
         }
     }
-
-    let userDataListenerRegistered = false;
-    let userDataSectionConfigs = {};
-
-    async function handleUserDataChanged(event, nextupSectionConfig, continueWatchingSectionConfig, continueWatchingAndNextUpSectionConfig) {
-        LOG('UserDataChanged event received:', event);
-        const userData = event.Data?.UserDataList?.[0];
-        const parentItemUserData = event.Data?.UserDataList?.[1];
-
-        if (parentItemUserData?.Key?.includes('MusicAlbum')) {
-            return;
-        }
-
-        if (userData?.ItemId) {
-            LOG(`Detected UserDataChanged for item: ${userData.ItemId}, Played: ${userData.Played}`);
-            
-            // Invalidate cache for Next Up section
-            if (nextupSectionConfig && nextupSectionConfig.enabled && nextupSectionConfig.queries) {
-                for (const query of nextupSectionConfig.queries) {
-                    if (query.path || !query.dataSource) {
-                        const queryUrl = ApiHelper.buildQueryFromSection(query, ApiClient.getCurrentUserId(), ApiClient.serverAddress(), nextupSectionConfig.renderMode === 'Spotlight', { sectionType: nextupSectionConfig.type });
-                        if (queryUrl && typeof queryUrl === 'string') {
-                            ApiHelper.invalidateCache(queryUrl);
-                        }
-                    }
-                }
-            }
-
-            // Invalidate cache for Continue Watching section
-            if (continueWatchingSectionConfig && continueWatchingSectionConfig.enabled && continueWatchingSectionConfig.queries) {
-                for (const query of continueWatchingSectionConfig.queries) {
-                    if (query.path || !query.dataSource) {
-                        const queryUrl = ApiHelper.buildQueryFromSection(query, ApiClient.getCurrentUserId(), ApiClient.serverAddress(), continueWatchingSectionConfig.renderMode === 'Spotlight', { sectionType: continueWatchingSectionConfig.type });
-                        if (queryUrl && typeof queryUrl === 'string') {
-                            ApiHelper.invalidateCache(queryUrl);
-                        }
-                    }
-                }
-            }
-
-            // Invalidate cache for Continue Watching and Next Up section
-            if (continueWatchingAndNextUpSectionConfig && continueWatchingAndNextUpSectionConfig.enabled && continueWatchingAndNextUpSectionConfig.queries) {
-                for (const query of continueWatchingAndNextUpSectionConfig.queries) {
-                    if (query.path || !query.dataSource) {
-                        const queryUrl = ApiHelper.buildQueryFromSection(query, ApiClient.getCurrentUserId(), ApiClient.serverAddress(), continueWatchingAndNextUpSectionConfig.renderMode === 'Spotlight', { sectionType: continueWatchingAndNextUpSectionConfig.type });
-                        if (queryUrl && typeof queryUrl === 'string') {
-                            ApiHelper.invalidateCache(queryUrl);
-                        }
-                    }
-                }
-            }
-        }
-    }
+    
 
     /**
      * Main Entry Point
      */
     async function enhanceHomeScreen() {
-        LOG('Login detected, continuing with home screen initialization');
         LOG('Initializing Home Screen v3...');
-        performanceTimer.loadTimeStart = performance.now();
-        performanceMetrics.initialRenderStart = performance.now();
 
-        // Reset cache/metrics for a new initialization cycle
+        mountCreateSectionButton();
+        // Defer mountCategoryRail until pinned availability is known (avoids first-load tab jump)
+        syncHomeScreenChromeVisibility();
+
+        // Reset cache for a new initialization cycle
         sectionCache.renderedSections = [];
         sectionCache.fragmentCache = null;
         sectionCache.isInitialRender = true;
         sectionCache.jellyfinHasRendered = false;
-        performanceMetrics.initialRenderEnd = null;
-        performanceMetrics.jellyfinDetected = null;
-        performanceMetrics.recoveryRenderEnd = null;
-
-        // Run migration if needed (check for legacy homeScreen config)
-        if (window.migrateHomeScreenConfig) {
-            await window.migrateHomeScreenConfig();
-        }
         
-        const container = document.querySelector('.homePage:not(.hide) #homeTab .sections');
+        const container = document.querySelector(HOME_SECTIONS_SELECTOR);
         if (!container) {
             LOG('Home sections container not found');
+            connectHomeSectionsReadyObserver();
             return;
         }
+
+        disconnectHomeSectionsReadyObserver();
 
         // Create Kefin home sections container as a sibling of the Jellyfin sections container
 /*         let kefinHomeSectionsContainer = document.querySelector('.homePage:not(.hide) #homeTab .kefinHomeSectionsContainer');
@@ -540,24 +489,30 @@
             }
         } */
 
-        // If we've already initialized and Jellyfin has completed its render, avoid re-running
-        if (container.dataset.kefinHomeScreen) {
+        // If Home-category sections already exist, avoid re-running full init.
+        // Discovery-only remounts (e.g. back to Discover) must not skip home render.
+        if (hasHomeCategorySections(container)) {
             LOG('Home screen already initialized and Jellyfin has rendered');
+            try {
+                const kefinTweaksHomeSections = container.querySelectorAll('[data-section-id]');
+                updatePinnedCategoryAvailability(
+                    Array.from(kefinTweaksHomeSections).map((el) => ({
+                        id: el.dataset.sectionId,
+                        category: el.dataset.category
+                    })),
+                    null
+                );
+                refreshHomeCategoryChrome();
+            } catch (err) {
+                ERR('Failed to sync home category chrome for existing home:', err);
+            }
             return;
         }
 
-        let performanceStartTime = performance.now();
-        
         // Fetch display preferences
         //state.userDisplayPreferences = await fetchDisplayPreferences();
-        
-        let performanceEndTime = performance.now();
-        let performanceDuration = performanceEndTime - performanceStartTime;
-        LOG(`Home Screen v3 Fetch display preferences initialization time: ${performanceDuration.toFixed(2)}ms`);
 
         // Load user preferences and apply filtering/ordering
-        performanceStartTime = performance.now();
-
         const userHomeConfig = window.KefinUserHomeScreenConfig;
         let filteredHomeSections;
         let homeScreen;
@@ -587,9 +542,9 @@
             filteredHomeSections = filteredHomeSections.filter(section => section.enabled !== false);
         }
 
-        performanceEndTime = performance.now();
-        performanceDuration = performanceEndTime - performanceStartTime;
-        LOG(`Home Screen v3 Load user home screen sections initialization time: ${performanceDuration.toFixed(2)}ms`);
+        updatePinnedCategoryAvailability(filteredHomeSections, homeScreen);
+        mountCategoryRail();
+        syncHomeScreenChromeVisibility();
 
         const nextupSectionConfig = filteredHomeSections.find(s => s.id === 'nextUp');
         const continueWatchingSectionConfig = filteredHomeSections.find(s => s.id === 'continueWatching');
@@ -598,25 +553,6 @@
         state.kefinNextUp = nextupSectionConfig?.enabled === true || continueWatchingAndNextUpSectionConfig?.enabled === true;
         state.kefinContinueWatching = continueWatchingSectionConfig?.enabled === true || continueWatchingAndNextUpSectionConfig?.enabled === true;
         state.kefinLatestMedia = recentlyAddedSectionConfig?.enabled === true;
-
-        // Setup event listener for UserDataChanged. Registered once; each load only
-        // refreshes the section configs it reads. On Jellyfin 12 the apiclient never
-        // opens its own socket, so its 'userdatachanged' event never fires and the
-        // message has to come through websocketHelper (ApiClient.subscribe).
-        userDataSectionConfigs = { nextupSectionConfig, continueWatchingSectionConfig, continueWatchingAndNextUpSectionConfig };
-        if (!userDataListenerRegistered) {
-            const onUserDataChanged = (event) => {
-                const c = userDataSectionConfigs;
-                handleUserDataChanged(event, c.nextupSectionConfig, c.continueWatchingSectionConfig, c.continueWatchingAndNextUpSectionConfig);
-            };
-            if (window.websocketHelper?.listen) {
-                window.websocketHelper.listen('UserDataChanged', onUserDataChanged);
-                userDataListenerRegistered = true;
-            } else if (window.ApiClient && window.ApiClient.addEventListener) {
-                window.ApiClient.addEventListener('userdatachanged', onUserDataChanged);
-                userDataListenerRegistered = true;
-            }
-        }
 
         // Set up mutation observer BEFORE rendering, so we can react when Jellyfin renders home sections
 /*         const handleJellyfinRender = async () => {
@@ -649,11 +585,6 @@
                     observeSectionUntilChildrenThenClone(sectionEl, kefinHome);
                 }
             });
-
-            performanceMetrics.recoveryRenderEnd = performance.now();
-            if (performanceMetrics.jellyfinDetected) {
-                LOG(`Home Screen v3 Jellyfin section mirroring duration: ${(performanceMetrics.recoveryRenderEnd - performanceMetrics.jellyfinDetected).toFixed(2)}ms`);
-            }
         }; */
 
         //let containerForRender = container;
@@ -667,20 +598,17 @@
         //containerForRender.dataset.kefinHomeScreen = 'true';
 
         // Initial render directly into Kefin container (no waiting for Jellyfin)
-        performanceStartTime = performance.now();
         LOG('Rendering Standard/Seasonal Sections (initial render)...');
         await renderHomeSections(filteredHomeSections, container, false);
-        performanceEndTime = performance.now();
-        performanceDuration = performanceEndTime - performanceStartTime;
-        LOG(`Home Screen v3 Render home sections (initial) initialization time: ${performanceDuration.toFixed(2)}ms`);
 
-        performanceMetrics.initialRenderEnd = performanceEndTime;
-
-        performanceTimer.loadTimeEnd = performance.now();
-        LOG(`Home Screen v3 load time initialization: ${(performanceTimer.loadTimeEnd - performanceTimer.loadTimeStart).toFixed(2)}ms`);
-        
         LOG('Initializing Discovery Sections...');
         setupDiscoveryInteraction(container);
+
+        try {
+            refreshHomeCategoryChrome();
+        } catch (err) {
+            ERR('Failed to refresh home category chrome after home render:', err);
+        }
 
         /* // If Jellyfin hasn't rendered after 5 seconds, assume it won't and clean up the observer
         setTimeout(() => {
@@ -707,13 +635,7 @@
      * Now reads from all 4 groups: HOME, SEASONAL, DISCOVERY, CUSTOM
      */
     async function mergeHomeSectionConfigs(defaultSections) {
-
-        const performanceStartTime = performance.now();
         const kefinSections = await window.KefinHomeScreen.getSections();
-        const performanceEndTime = performance.now();
-        const performanceDuration = performanceEndTime - performanceStartTime;
-        LOG(`Home Screen v3 Get kefin home screen config initialization time: ${performanceDuration.toFixed(2)}ms`);
-
         return kefinSections.enabledHomeSections;
 
         // Return all enabled sections from HOME_SECTION_GROUPS
@@ -969,14 +891,7 @@
             return section;
         });
 
-        const isInSeasonalPeriod = (startDate, endDate) => {
-            const currentDate = new Date();
-            const start = new Date(startDate);
-            const end = new Date(endDate);
-            start.setFullYear(currentDate.getFullYear());
-            end.setFullYear(currentDate.getFullYear());
-            return currentDate >= start && currentDate <= end;
-        };
+        const isInSeasonalPeriodLocal = (startDate, endDate) => isInSeasonalPeriod(startDate, endDate);
 
         const customGroups = homeScreenConfig?.CUSTOM_SECTION_GROUPS
             || window.KefinTweaksConfig?.homeScreenConfig?.CUSTOM_SECTION_GROUPS
@@ -985,7 +900,7 @@
         const customDiscoverySections = typeof collect === 'function'
             ? collect(customGroups, {
                 isSectionActive: (s) => s.enabled === true,
-                isInSeasonalPeriod
+                isInSeasonalPeriod: isInSeasonalPeriodLocal
             })
             : [];
 
@@ -1223,110 +1138,106 @@
             return;
         }
 
-        // Skip if we've already rendered into this container for this cycle and we're not explicitly re-using the cache
-        if (container.dataset.sectionsRendered && !useCache) return;
-
-        // Check if children with [data-section-id] are present
-        const children = container.children;
-        const hasSections = Array.from(children).some(child => child.dataset && child.dataset.sectionId);
-        if (hasSections) {
-            LOG('Sections already rendered, skipping');
+        if (state.isRenderingHome) {
+            LOG('Home render already in progress, skipping');
             return;
         }
 
-        container.dataset.sectionsRendered = 'true';
-
-        const sectionsToRender = [];
-
-        if (useCache && sectionCache.renderedSections.length > 0) {
-            LOG('Re-rendering home sections from cache');
-            sectionsToRender.push(...sectionCache.renderedSections);
-        } else {
-            const sortedSections = [...sections].sort((a, b) => (a.order || 99) - (b.order || 99));
-            const sectionPromises = [];
-
-            let performanceStartTime = performance.now();
-            let performanceEndTime;
-            let performanceDuration;
-
-            const performanceTimes = [];
-
-            for (const sectionConfig of sortedSections) {
-                const loopStartTime = performance.now();
-                if (sectionConfig.enabled === false) {
-                    LOG(`Skipping disabled section: ${sectionConfig.id}`);
-                    continue;
-                }
-                
-                if (sectionConfig.startDate && sectionConfig.endDate) {
-                    if (!isInSeasonalPeriod(sectionConfig.startDate, sectionConfig.endDate)) {
-                        LOG(`Skipping seasonal section (out of date): ${sectionConfig.id}`);
-                        continue;
-                    }
-                }
-
-                const existingSection = container.querySelector(`[data-section-id="${sectionConfig.id}"]`);
-
-                if (existingSection) {
-                    LOG(`Section already rendered: ${sectionConfig.id}`);
-                    continue;
-                }
-                
-                sectionPromises.push(loadSectionForRendering(sectionConfig));
-
-                const loopEndTime = performance.now();
-                const loopDuration = loopEndTime - loopStartTime;
-                performanceTimes.push(loopDuration);
-                LOG(`Section ${sectionConfig.id} initialization time: ${loopDuration.toFixed(2)}ms`);
+        state.isRenderingHome = true;
+        try {
+            // Only skip when Home-category (none) sections already exist — discovery-only DOM must still render home
+            if (hasHomeCategorySections(container)) {
+                LOG('Sections already rendered, skipping');
+                return;
             }
 
-            performanceEndTime = performance.now();
-            performanceDuration = performanceEndTime - performanceStartTime;
-            LOG(`Render home sections configs loaded initialization time: ${performanceDuration.toFixed(2)}ms`);
+            container.dataset.sectionsRendered = 'true';
+            applyActiveHomeCategory(homeChromeActiveCategory || 'none');
+            syncHomeScreenChromeVisibility();
 
-            LOG(`Total performance time: ${performanceTimes.reduce((a, b) => a + b, 0).toFixed(2)}ms`);
+            const sectionsToRender = [];
 
-            performanceStartTime = performance.now();
+            if (useCache && sectionCache.renderedSections.length > 0) {
+                LOG('Re-rendering home sections from cache');
+                sectionsToRender.push(...sectionCache.renderedSections);
+            } else {
+                const sortedSections = [...sections].sort((a, b) => {
+                    const orderA = (a.order !== undefined && a.order !== null) ? a.order : 99;
+                    const orderB = (b.order !== undefined && b.order !== null) ? b.order : 99;
+                    return orderA - orderB;
+                });
 
-            // Resolve all section promises
-            let sectionResults = await Promise.all(sectionPromises);
-            sectionResults = sectionResults.filter(result => result !== null);
-            sectionsToRender.push(...sectionResults);
+                const sectionPromises = [];
 
-            performanceEndTime = performance.now();
-            performanceDuration = performanceEndTime - performanceStartTime;
-            LOG(`Home Screen v3 Resolve all section promises initialization time: ${performanceDuration.toFixed(2)}ms`);
+                for (const sectionConfig of sortedSections) {
+                    if (sectionConfig.enabled === false) {
+                        LOG(`Skipping disabled section: ${sectionConfig.id}`);
+                        continue;
+                    }
 
-            // Cache the rendered sections for potential re-render after Jellyfin overwrites the container
-            sectionCache.renderedSections = [...sectionsToRender];
-        }
+                    if (sectionConfig.startDate && sectionConfig.endDate) {
+                        if (!isInSeasonalPeriod(sectionConfig.startDate, sectionConfig.endDate)) {
+                            LOG(`Skipping seasonal section (out of date): ${sectionConfig.id}`);
+                            continue;
+                        }
+                    }
 
-        const homeConfig = await window.KefinHomeScreen.getConfig();
-        const showStaleDataBeforeRefresh = homeConfig?.HOME_SETTINGS?.showStaleDataBeforeRefresh === true;
+                    const sectionIdAttr = (typeof CSS !== 'undefined' && typeof CSS.escape === 'function')
+                        ? CSS.escape(String(sectionConfig.id))
+                        : String(sectionConfig.id).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                    const existingSection = container.querySelector(`[data-section-id="${sectionIdAttr}"]`);
 
-        const targetContainer = container;
+                    if (existingSection) {
+                        LOG(`Section already rendered: ${sectionConfig.id}`);
+                        continue;
+                    }
 
-        const renderStartTime = performance.now();
-        await window.cardBuilder.renderProgressiveSections(targetContainer, sectionsToRender, {
-            waitForContainerClass: 'homeSectionsContainer',
-            enhanceOnVisible: true,
-            showStaleDataBeforeRefresh
-        });
-        const renderEndTime = performance.now();
-        const renderDuration = renderEndTime - renderStartTime;
-        LOG(`Home Screen v3 Render progressive sections initialization time: ${renderDuration.toFixed(2)}ms`);
+                    sectionPromises.push(loadSectionForRendering(sectionConfig));
+                }
 
-        // Allow deferred library-cache crawls to start (movies/series/people scheduleBootstrap)
-        if (!state.homePaintedEventFired) {
-            state.homePaintedEventFired = true;
-            try {
-                document.dispatchEvent(new CustomEvent('kefinTweaksHomePainted'));
-            } catch (_) { /* ignore */ }
-        }
+                // Resolve all section promises
+                let sectionResults = await Promise.all(sectionPromises);
+                sectionResults = sectionResults.filter(result => result !== null);
+                sectionsToRender.push(...sectionResults);
 
-        // Check if target container is homeSectionsContainer
-        if (!targetContainer.classList.contains('homeSectionsContainer')) {
-            targetContainer.dataset.sectionsPrerendered = 'true';
+                // Cache the rendered sections for potential re-render after Jellyfin overwrites the container
+                sectionCache.renderedSections = [...sectionsToRender];
+            }
+
+            const homeConfig = await window.KefinHomeScreen.getConfig();
+            const showStaleDataBeforeRefresh = homeConfig?.HOME_SETTINGS?.showStaleDataBeforeRefresh === true;
+
+            const targetContainer = container;
+
+            if (hasHomeCategorySections(container)) {
+                LOG('Sections already rendered, skipping');
+                return;
+            }
+
+            await window.cardBuilder.renderProgressiveSections(targetContainer, sectionsToRender, {
+                waitForContainerClass: 'homeSectionsContainer',
+                showStaleDataBeforeRefresh
+            });
+
+            // If MediaBar plugin is in use, call LayoutSync.update() to update the layout
+            if (typeof LayoutSync !== 'undefined' && LayoutSync && typeof LayoutSync.update === 'function') {
+                LayoutSync.update();
+            }
+
+            // Allow deferred library-cache crawls to start (movies/series/people scheduleBootstrap)
+            if (!state.homePaintedEventFired) {
+                state.homePaintedEventFired = true;
+                try {
+                    document.dispatchEvent(new CustomEvent('kefinTweaksHomePainted'));
+                } catch (_) { /* ignore */ }
+            }
+
+            // Check if target container is homeSectionsContainer
+            if (!targetContainer.classList.contains('homeSectionsContainer')) {
+                targetContainer.dataset.sectionsPrerendered = 'true';
+            }
+        } finally {
+            state.isRenderingHome = false;
         }
     }
 
@@ -1361,12 +1272,17 @@
         }
 
         state.discoveryMode = null;
+        state.discoveryGroupRemainder = [];
     }
 
     /**
      * Ensures discovery buffer is populated (pre-fetches next group)
      */
     async function ensureDiscoveryBuffer() {
+        if (!isDiscoveryAllowedForActiveCategory()) {
+            LOG('Discovery buffer skipped: active category does not allow discovery');
+            return state.discoveryBuffer;
+        }
         if (state.ensuringDiscoveryBuffer) {
             LOG('Already ensuring discovery buffer...');
 
@@ -1389,11 +1305,18 @@
 
             LOG('Fetching next discovery group data...');
 
-            const groupSections = await generateDiscoveryGroup();
+            let groupSections;
+            if (Array.isArray(state.discoveryGroupRemainder) && state.discoveryGroupRemainder.length > 0) {
+                groupSections = state.discoveryGroupRemainder.splice(0, DISCOVERY_SECTIONS_PER_GROUP);
+                LOG(`Draining discovery remainder (${groupSections.length} sections, ${state.discoveryGroupRemainder.length} left)...`);
+            } else {
+                groupSections = await generateDiscoveryGroup();
+            }
 
             if (!groupSections || groupSections.length === 0) {
                 LOG('No more discovery sections available for buffer.');
                 state.discoveryBuffer = [];
+                state.discoveryGroupRemainder = [];
                 state.discoverySectionsRemain = false;
                 return state.discoveryBuffer;
             }
@@ -1402,7 +1325,7 @@
                 const isDynamic = !!(sectionConfig.discoveryType || sectionConfig.source === 'Dynamic');
                 if (isDynamic) {
                     // Sync stub + lazy resolve; do not await ensureData here
-                    return window.sectionHelper.buildDiscoverySectionPromise(sectionConfig, {
+                    return await window.sectionHelper.buildDiscoverySectionPromise(sectionConfig, {
                         order: sectionConfig.order,
                         pairSpotlight: true
                     });
@@ -1414,7 +1337,10 @@
             state.discoveryBuffer = state.discoveryBuffer.filter(result => result !== null);
 
             if (!state.discoveryBuffer.length) {
-                state.discoverySectionsRemain = false;
+                // Only exhaust when this chunk failed AND nothing remains to try next
+                if (!state.discoveryGroupRemainder?.length) {
+                    state.discoverySectionsRemain = false;
+                }
             }
 
             return state.discoveryBuffer;
@@ -1451,6 +1377,7 @@
         window.sectionHelper?.getDiscoveryState?.()?.renderedDiscoveryIds?.customDiscoverySections?.clear?.();
         state.discoverySectionsRemain = true;
         state.discoveryNeedsMoreScroll = false;
+        state.discoveryGroupRemainder = [];
 
         if (PRE_FETCH_DISCOVERY_DATA) {
             ensureDiscoveryBuffer();
@@ -1477,6 +1404,11 @@
         const container = document.querySelector('.libraryPage:not(.hide) .homeSectionsContainer');
         if (!container) return;
 
+        if (!isDiscoveryAllowedForActiveCategory()) {
+            LOG('Discovery render skipped: active category does not allow discovery');
+            return;
+        }
+
         // Single-flight: set synchronously before any await
         if (state.isRenderingDiscovery) return;
         if (state.discoverySectionsRemain === false) return;
@@ -1487,6 +1419,11 @@
         container.dataset.loadingDiscovery = 'true';
         container.classList.add('loading-discovery');
         showDiscoveryLoadingIndicator();
+
+        // Chevron mode: nudge scroll so newly appended sections start entering the viewport
+        if (state.discoveryMode === 'chevron') {
+            window.scrollBy({ top: 100, behavior: 'smooth' });
+        }
 
         try {
             await new Promise(resolve => requestAnimationFrame(resolve));
@@ -1513,30 +1450,35 @@
 
             const config = await window.KefinHomeScreen.getConfig();
             const revealSectionsSequentially = config.DISCOVERY_SETTINGS?.fadeInSections === true;
+
+            // Sibling spinner stays outside the flex column — no insertBefore parking
+            createDiscoveryLoadingIndicator(container);
+
             await window.cardBuilder.renderProgressiveSections(container, bufferedSections, {
                 revealSectionsSequentially,
                 enhanceOnVisible: true,
                 showStaleDataBeforeRefresh: config.HOME_SETTINGS?.showStaleDataBeforeRefresh === true
             });
 
+            createDiscoveryLoadingIndicator(container);
+
             container.dataset.loadingDiscovery = 'false';
             container.classList.remove('loading-discovery');
-            
-            state.discoveryGroupIndex++;
+
+            // Advance page/group only after the current logical group is fully drained
+            if (!state.discoveryGroupRemainder?.length) {
+                state.discoveryGroupIndex++;
+            }
 
             state.discoveryBuffer = null;
             if (PRE_FETCH_DISCOVERY_DATA) {
                 ensureDiscoveryBuffer();
             }
 
-            // Chevron mode: nudge scroll so newly appended sections start entering the viewport
-            if (state.discoveryMode === 'chevron') {
-                window.scrollBy({ top: 100, behavior: 'smooth' });
-            }
-
         } catch (e) {
             ERR('Error rendering discovery group:', e);
             state.discoveryBuffer = null;
+            createDiscoveryLoadingIndicator(container);
         } finally {
             state.isRenderingDiscovery = false;
             state.discoveryLoadEndedAt = performance.now();
@@ -1640,6 +1582,7 @@
         // Collect enabled templates unresolved — progressive resolve happens in ensureDiscoveryBuffer
         for (const template of discoveryTemplates) {
             if (template.enabled === false) continue;
+            if (window.sectionHelper?.isEmptyDiscoverySourceTemplate?.(template)) continue;
             selectedConfigs.push(template);
         }
 
@@ -1710,6 +1653,8 @@
             ? isSpotlightSection(selectedConfigs[selectedConfigs.length - 1])
             : state.lastDiscoveryEndedWithSpotlight;
 
+        // Order + tag the full logical group, then cap what we resolve this pass.
+        // Leftovers are drained on subsequent ensureDiscoveryBuffer calls.
         selectedConfigs.forEach((section) => {
             section.order = state.discoverySectionOrder++;
             // Mark discovery render set so section roots get data-discovery-section
@@ -1717,9 +1662,12 @@
             section.discoverySection = true;
         });
 
-        //localCache.set('discoveryBuffer', selectedConfigs);
+        const capped = selectedConfigs.slice(0, DISCOVERY_SECTIONS_PER_GROUP);
+        state.discoveryGroupRemainder = selectedConfigs.slice(DISCOVERY_SECTIONS_PER_GROUP);
 
-        return selectedConfigs;
+        //localCache.set('discoveryBuffer', capped);
+
+        return capped;
     }
 
     function setupInfiniteScroll(container) {
@@ -1881,14 +1829,43 @@
     }
 
     function isInSeasonalPeriod(start, end) {
+        if (typeof window.KefinHomeScreen?.isInSeasonalPeriod === 'function'
+            && window.KefinHomeScreen.isInSeasonalPeriod !== isInSeasonalPeriod) {
+            return window.KefinHomeScreen.isInSeasonalPeriod(start, end);
+        }
+        if (start == null || end == null || start === '' || end === '') return false;
+        const parseMonthDay = (value) => {
+            const parts = String(value).trim().split(/[-/.]/).map((p) => parseInt(p, 10));
+            if (parts.length < 2 || parts.some((n) => !Number.isFinite(n))) return null;
+            let month;
+            let day;
+            if (parts.length >= 3 && parts[0] > 31) {
+                month = parts[1];
+                day = parts[2];
+            } else {
+                month = parts[0];
+                day = parts[1];
+            }
+            if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+            return { month, day };
+        };
+        const startMd = parseMonthDay(start);
+        const endMd = parseMonthDay(end);
+        if (!startMd || !endMd) return false;
+
         const now = new Date();
-        const currentYear = now.getFullYear();
-        const startDate = new Date(`${start}-${currentYear}`);
+        const year = now.getFullYear();
+        const startDate = new Date(year, startMd.month - 1, startMd.day, 0, 0, 0, 0);
+        let endDate = new Date(year, endMd.month - 1, endMd.day, 23, 59, 59, 999);
+        if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return false;
 
-        let endDate = new Date(`${end}-${currentYear}`);
-        if (endDate < startDate) endDate.setFullYear(currentYear + 1);
-        else if (endDate > startDate) endDate.setFullYear(currentYear);
-
+        if (endDate < startDate) {
+            if (now >= startDate) {
+                endDate.setFullYear(year + 1);
+            } else {
+                startDate.setFullYear(year - 1);
+            }
+        }
         return now >= startDate && now <= endDate;
     }
 
@@ -1947,32 +1924,551 @@
         await enhanceHomeScreen();
     }
 
+    const HOME_CHROME_CREATE_ID = 'kefin-home-create-section-btn';
+    const HOME_CHROME_CATEGORY_RAIL_ID = 'kefin-home-category-rail';
+    const HOME_CHROME_CATEGORY_STYLE_ID = 'kefin-home-category-filter-styles';
+    const HOME_CHROME_CLASSIC_RAIL_CLASSES = 'skinHeader skinHeader-withBackground emby-tabs-slider emby-tab-button';
+    const HOME_CHROME_MODERN_RAIL_CLASSES = 'MuiPaper-root MuiPaper-elevation MuiPaper-elevation1 MuiAppBar-root MuiAppBar-colorDefault MuiAppBar-positionFixed mui-fixed';
+    let homeChromeActiveCategory = 'none';
+    let homeChromeCreateMounted = false;
+    let homeChromeCreateMounting = false;
+    let homeChromeCategoryMounted = false;
+    let homeChromeHasPinnedContent = false;
+    let homeChromeVisibilityObserver = null;
+    let homeChromeRailScrollBound = false;
+    let homeChromeRailLastY = 0;
+    const HOME_CHROME_RAIL_SCROLL_DELTA = 8;
+    const HOME_CHROME_RAIL_MOBILE_MQ = '(max-width: 899px)';
+
+    function isHomeCategoryRailMobile() {
+        return typeof window.matchMedia === 'function'
+            ? window.matchMedia(HOME_CHROME_RAIL_MOBILE_MQ).matches
+            : window.innerWidth < 900;
+    }
+
+    function setHomeCategoryRailScrollHidden(hidden) {
+        const rail = document.getElementById(HOME_CHROME_CATEGORY_RAIL_ID);
+        if (!rail) return;
+        rail.classList.toggle('is-scroll-hidden', !!hidden);
+    }
+
+    function clearHomeCategoryRailScrollHidden() {
+        setHomeCategoryRailScrollHidden(false);
+    }
+
+    function handleHomeCategoryRailScroll() {
+        const rail = document.getElementById(HOME_CHROME_CATEGORY_RAIL_ID);
+        if (!rail || rail.classList.contains('hide') || !isHomeCategoryRailMobile()) {
+            clearHomeCategoryRailScrollHidden();
+            return;
+        }
+        const y = window.pageYOffset || document.documentElement.scrollTop || 0;
+        if (y <= HOME_CHROME_RAIL_SCROLL_DELTA) {
+            clearHomeCategoryRailScrollHidden();
+            homeChromeRailLastY = y;
+            return;
+        }
+        const delta = y - homeChromeRailLastY;
+        if (Math.abs(delta) < HOME_CHROME_RAIL_SCROLL_DELTA) return;
+        if (delta > 0) {
+            setHomeCategoryRailScrollHidden(true);
+        } else {
+            setHomeCategoryRailScrollHidden(false);
+        }
+        homeChromeRailLastY = y;
+    }
+
+    function syncHomeCategoryRailScrollListener() {
+        const rail = document.getElementById(HOME_CHROME_CATEGORY_RAIL_ID);
+        const showFilters = getHomeSettings().showCategoryFilters !== false;
+        const shouldListen = !!(rail && !rail.classList.contains('hide') && isHomePageVisible() && showFilters && isHomeCategoryRailMobile());
+        if (shouldListen) {
+            if (!homeChromeRailScrollBound) {
+                homeChromeRailLastY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                window.addEventListener('scroll', handleHomeCategoryRailScroll, { passive: true });
+                window.addEventListener('resize', syncHomeCategoryRailScrollListener, { passive: true });
+                homeChromeRailScrollBound = true;
+            }
+            if (!isHomeCategoryRailMobile()) clearHomeCategoryRailScrollHidden();
+            return;
+        }
+        if (homeChromeRailScrollBound) {
+            window.removeEventListener('scroll', handleHomeCategoryRailScroll);
+            window.removeEventListener('resize', syncHomeCategoryRailScrollListener);
+            homeChromeRailScrollBound = false;
+        }
+        clearHomeCategoryRailScrollHidden();
+    }
+
+    function getHomeSettings() {
+        return window.KefinTweaksConfig?.homeScreenConfig?.HOME_SETTINGS
+            || window.KefinHomeConfig2?.HOME_SETTINGS
+            || {};
+    }
+
+    function getConfiguredCategories() {
+        const defaults = window.KefinHomeConfig2?.HOME_SETTINGS?.categories || [];
+        const configured = getHomeSettings().categories;
+        if (Array.isArray(configured) && configured.length) return configured;
+        return defaults;
+    }
+
+    function sectionIsPinnedCategory(section) {
+        const id = String(section?.id || '');
+        return id.startsWith('pinned-list-')
+            || id.startsWith('pinned-parent-')
+            || section?.category === 'pinned';
+    }
+
+    function updatePinnedCategoryAvailability(sections, homeScreen) {
+        const fromSections = (sections || []).some(s => sectionIsPinnedCategory(s) && s.enabled !== false);
+        homeChromeHasPinnedContent = fromSections;
+    }
+
+    function getRailCategories() {
+        return getConfiguredCategories().filter((cat) => {
+            if (cat?.id === 'pinned') return homeChromeHasPinnedContent;
+            return true;
+        });
+    }
+
+    function isModernUIChrome() {
+        return !!document.querySelector('main.MuiBox-root') || localStorage.getItem('layout')?.length === 0;
+    }
+
+    function getCategoryRailNativeClasses() {
+        const base = 'kefin-home-chrome kefin-home-category-rail';
+        if (isModernUIChrome()) {
+            return `${base} ${HOME_CHROME_MODERN_RAIL_CLASSES}`;
+        }
+        return `${base} ${HOME_CHROME_CLASSIC_RAIL_CLASSES}`;
+    }
+
+    function isHomePageVisible() {
+        const active = document.documentElement.getAttribute('data-active-page');
+        if (active !== null) {
+            return active === 'home';
+        }
+        return !!document.querySelector('.homePage:not(.hide) #homeTab.is-active');
+    }
+
+    function syncHomeScreenChromeVisibility() {
+        const onHome = isHomePageVisible();
+        const createBtn = document.getElementById(HOME_CHROME_CREATE_ID);
+        if (createBtn) {
+            createBtn.classList.toggle('hide', !onHome);
+            createBtn.setAttribute('aria-hidden', onHome ? 'false' : 'true');
+        }
+        const showFilters = getHomeSettings().showCategoryFilters !== false;
+        const rail = document.getElementById(HOME_CHROME_CATEGORY_RAIL_ID);
+        if (rail) {
+            const visible = onHome && showFilters;
+            rail.classList.toggle('hide', !visible);
+            rail.setAttribute('aria-hidden', visible ? 'false' : 'true');
+            if (!visible) clearHomeCategoryRailScrollHidden();
+        }
+        if (onHome) {
+            applyActiveHomeCategory(homeChromeActiveCategory || 'none');
+        }
+        syncHomeCategoryRailScrollListener();
+    }
+
+    function ensureHomeChromeVisibilityObserver() {
+        if (homeChromeVisibilityObserver) return;
+        homeChromeVisibilityObserver = new MutationObserver(() => syncHomeScreenChromeVisibility());
+        homeChromeVisibilityObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class']
+        });
+    }
+
+    async function mountCreateSectionButton() {
+        const existingNodes = document.querySelectorAll(`#${HOME_CHROME_CREATE_ID}`);
+        if (existingNodes.length > 1) {
+            existingNodes.forEach((el, idx) => {
+                if (idx > 0) el.remove();
+            });
+        }
+        if (homeChromeCreateMounted || homeChromeCreateMounting || document.getElementById(HOME_CHROME_CREATE_ID)) {
+            homeChromeCreateMounted = !!document.getElementById(HOME_CHROME_CREATE_ID);
+            return;
+        }
+        if (getHomeSettings().showCreateSectionButtonOnHome !== true) return;
+
+        homeChromeCreateMounting = true;
+        try {
+            let isAdmin = false;
+            try {
+                isAdmin = !!(await window.apiHelper?.isAdmin?.());
+            } catch {
+                return;
+            }
+            if (!isAdmin) return;
+
+            // Re-check after await — another caller may have mounted meanwhile
+            if (document.getElementById(HOME_CHROME_CREATE_ID)) {
+                homeChromeCreateMounted = true;
+                return;
+            }
+
+            const wrap = document.createElement('div');
+            wrap.id = HOME_CHROME_CREATE_ID;
+            wrap.className = 'kefin-home-chrome kefin-home-create-section';
+            wrap.classList.toggle('hide', !isHomePageVisible());
+            wrap.setAttribute('aria-hidden', isHomePageVisible() ? 'false' : 'true');
+            wrap.innerHTML = `
+                <button type="button" class="paper-icon-button-light emby-button kefin-home-create-section-btn" title="Create Section" aria-label="Create Section">
+                    <span class="material-icons" aria-hidden="true">add_circle</span>
+                </button>
+            `;
+            wrap.querySelector('button')?.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                try {
+                    window.KefinHomeScreen?.openNewCustomSection?.({ refreshHomeOnSave: true });
+                } catch (err) {
+                    ERR('Failed to open create section from home:', err);
+                }
+            });
+            document.body.appendChild(wrap);
+            homeChromeCreateMounted = true;
+        } finally {
+            homeChromeCreateMounting = false;
+        }
+    }
+
+    function buildCategoryFilterStyles(categories) {
+        const rules = [];
+        rules.push(`
+.homeSectionsContainer[data-render-categories-separately="true"][data-category="none"] > [data-section-id]:not([data-category="none"]) {
+    display: none !important;
+}
+`);
+        (categories || []).forEach((cat) => {
+            const id = String(cat?.id || '').trim();
+            if (!id || id === 'none') return;
+            const safe = CSS.escape(id);
+            rules.push(`
+.homeSectionsContainer[data-category="${safe}"] > [data-section-id]:not([data-category="${safe}"]) {
+    display: none !important;
+}
+`);
+        });
+        return rules.join('\n');
+    }
+
+    function ensureCategoryFilterStyles() {
+        let styleEl = document.getElementById(HOME_CHROME_CATEGORY_STYLE_ID);
+        if (!styleEl) {
+            styleEl = document.createElement('style');
+            styleEl.id = HOME_CHROME_CATEGORY_STYLE_ID;
+            document.head.appendChild(styleEl);
+        }
+        styleEl.textContent = buildCategoryFilterStyles(getConfiguredCategories());
+    }
+
+    /**
+     * True when at least one Kefin Home-category section (data-category="none") is in the DOM.
+     * Discovery-only remounts must not count as "home already rendered".
+     * @param {ParentNode|null|undefined} root
+     * @returns {boolean}
+     */
+    function hasHomeCategorySections(root) {
+        const scope = root || document.querySelector('.homePage:not(.hide) #homeTab .homeSectionsContainer');
+        if (!scope) return false;
+        return !!scope.querySelector('[data-section-id][data-category="none"]');
+    }
+
+    /**
+     * Before category CSS hides other sections: pick the target-category section to scroll to.
+     * Last match that has reached the viewport (top <= viewport bottom); if all are still below, use the first.
+     * @param {HTMLElement} container
+     * @param {string} categoryId
+     * @returns {HTMLElement|null}
+     */
+    function pickHomeCategoryScrollTarget(container, categoryId) {
+        if (!container || !categoryId) return null;
+        const safe = typeof CSS !== 'undefined' && CSS.escape
+            ? CSS.escape(categoryId)
+            : String(categoryId).replace(/"/g, '\\"');
+        const matches = Array.from(
+            container.querySelectorAll(`[data-section-id][data-category="${safe}"]`)
+        );
+        if (!matches.length) return null;
+
+        const viewportBottom = window.innerHeight || document.documentElement.clientHeight || 0;
+        let lastSeen = null;
+        for (let i = 0; i < matches.length; i++) {
+            const rect = matches[i].getBoundingClientRect();
+            if (rect.top <= viewportBottom) lastSeen = matches[i];
+            else break;
+        }
+        return lastSeen || matches[0];
+    }
+
+    function scrollHomeSectionToStart(el) {
+        if (!el) return;
+        try {
+            el.scrollIntoView({ block: 'start', behavior: 'instant' });
+        } catch (_) {
+            try {
+                el.scrollIntoView({ block: 'start', behavior: 'auto' });
+            } catch (__) {
+                el.scrollIntoView(true);
+            }
+        }
+    }
+
+    function applyActiveHomeCategory(categoryId) {
+        const categories = getRailCategories();
+        const next = categories.some((c) => c.id === categoryId) ? categoryId : 'none';
+        const prev = homeChromeActiveCategory || 'none';
+        const categoryChanged = prev !== next;
+        const separate = getHomeSettings().renderCategoriesSeparately === true;
+
+        const visibleContainer = document.querySelector(
+            '.libraryPage:not(.hide) .homeSectionsContainer, .homePage:not(.hide) .homeSectionsContainer'
+        );
+
+        homeChromeActiveCategory = next;
+
+        document.querySelectorAll('.homeSectionsContainer').forEach((container) => {
+            container.dataset.category = next;
+            container.dataset.renderCategoriesSeparately = separate ? 'true' : 'false';
+        });
+
+        const rail = document.getElementById(HOME_CHROME_CATEGORY_RAIL_ID);
+        if (rail) {
+            rail.querySelectorAll('.kefin-home-category-item').forEach((item) => {
+                const active = item.dataset.categoryId === next;
+                item.classList.toggle('is-active', active);
+                const btn = item.querySelector('.kefin-home-category-btn');
+                if (!btn) return;
+                btn.classList.toggle('is-active', active);
+                btn.classList.toggle('emby-tab-button-active', active);
+                btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
+        }
+
+        // Always scroll to the top of the screen, regardless of categoryChanged or visibleContainer
+        if (categoryChanged && visibleContainer) {
+            requestAnimationFrame(() => {
+                window.scrollTo({ top: 0, behavior: 'instant' });
+            });
+        }
+
+
+        if (next === 'discovery' && isDiscoveryAllowedForActiveCategory()) {
+            const container = visibleContainer;
+            if (container) {
+                const hasDiscovery = !!(
+                    container.querySelector('[data-discovery-section="true"], [data-category="discovery"]')
+                );
+                if (!hasDiscovery) {
+                    try {
+                        renderNextDiscoveryGroup();
+                    } catch (err) {
+                        ERR('Failed to bootstrap discovery group for Discover category:', err);
+                    }
+                }
+            }
+        }
+    }
+
+    function isDiscoveryAllowedForActiveCategory() {
+        const separate = getHomeSettings().renderCategoriesSeparately === true;
+        const active = homeChromeActiveCategory || 'none';
+        if (separate) return active === 'discovery';
+        return active === 'none' || active === 'discovery';
+    }
+
+    function mountCategoryRail() {
+        if (getHomeSettings().showCategoryFilters === false) {
+            const existing = document.getElementById(HOME_CHROME_CATEGORY_RAIL_ID);
+            if (existing) existing.remove();
+            homeChromeCategoryMounted = false;
+            ensureCategoryFilterStyles();
+            homeChromeActiveCategory = 'none';
+            applyActiveHomeCategory('none');
+            syncHomeCategoryRailScrollListener();
+            return;
+        }
+
+        if (homeChromeCategoryMounted && document.getElementById(HOME_CHROME_CATEGORY_RAIL_ID)) {
+            ensureCategoryFilterStyles();
+            applyActiveHomeCategory(homeChromeActiveCategory || 'none');
+            return;
+        }
+
+        const categories = getRailCategories();
+        ensureCategoryFilterStyles();
+
+        const desiredCategory = categories.some((c) => c.id === homeChromeActiveCategory)
+            ? homeChromeActiveCategory
+            : 'none';
+
+        const outer = document.createElement('div');
+        outer.id = HOME_CHROME_CATEGORY_RAIL_ID;
+        outer.className = 'sectionTabs';
+        outer.classList.toggle('hide', !isHomePageVisible());
+        outer.setAttribute('role', 'toolbar');
+        outer.setAttribute('aria-label', 'Home categories');
+        outer.setAttribute('aria-hidden', isHomePageVisible() ? 'false' : 'true');
+
+        const inner = document.createElement('div');
+        inner.className = getCategoryRailNativeClasses();
+        inner.innerHTML = categories.map((cat) => {
+            const id = escapeHtmlChrome(cat.id);
+            const rawName = typeof cat.name === 'string' ? cat.name.trim() : '';
+            const name = escapeHtmlChrome(rawName || cat.id);
+            const icon = escapeHtmlChrome(cat.icon || 'label');
+            const active = desiredCategory === cat.id;
+            const labelHtml = rawName
+                ? `<span class="kefin-home-category-btn-label">${escapeHtmlChrome(rawName)}</span>`
+                : '';
+            return `
+                <div class="kefin-home-category-item${active ? ' is-active' : ''}" data-category-id="${id}">
+                    <button type="button"
+                        class="paper-icon-button-light emby-button kefin-home-category-btn${active ? ' is-active emby-tab-button-active' : ''}"
+                        data-category-id="${id}"
+                        title="${name}"
+                        aria-label="${name}"
+                        aria-pressed="${active ? 'true' : 'false'}">
+                        <span class="material-icons emby-button-foreground ${icon}" aria-hidden="true"></span>
+                    </button>
+                    ${labelHtml}
+                </div>
+            `;
+        }).join('');
+
+        outer.appendChild(inner);
+        outer.addEventListener('click', (e) => {
+            const item = e.target.closest('.kefin-home-category-item');
+            const btn = item?.querySelector('.kefin-home-category-btn') || e.target.closest('.kefin-home-category-btn');
+            if (!btn) return;
+            e.preventDefault();
+            e.stopPropagation();
+            applyActiveHomeCategory(btn.dataset.categoryId || item?.dataset.categoryId || 'none');
+            btn.blur();
+        });
+
+        document.body.appendChild(outer);
+        homeChromeCategoryMounted = true;
+        applyActiveHomeCategory(desiredCategory);
+        syncHomeCategoryRailScrollListener();
+    }
+
+    function getMountedRailCategoryIds() {
+        const rail = document.getElementById(HOME_CHROME_CATEGORY_RAIL_ID);
+        if (!rail) return null;
+        return Array.from(rail.querySelectorAll('.kefin-home-category-btn'))
+            .map((btn) => btn.dataset.categoryId);
+    }
+
+    function refreshHomeCategoryChrome() {
+        ensureCategoryFilterStyles();
+        const desired = getRailCategories().map((c) => String(c?.id || ''));
+        const mounted = getMountedRailCategoryIds();
+        const same = Array.isArray(mounted)
+            && mounted.length === desired.length
+            && mounted.every((id, i) => id === desired[i]);
+
+        if (!same) {
+            const rail = document.getElementById(HOME_CHROME_CATEGORY_RAIL_ID);
+            if (rail) rail.remove();
+            homeChromeCategoryMounted = false;
+            mountCategoryRail();
+        } else {
+            applyActiveHomeCategory(homeChromeActiveCategory || 'none');
+        }
+        syncHomeScreenChromeVisibility();
+    }
+
+    function escapeHtmlChrome(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    async function initHomeScreenChrome() {
+        ensureHomeChromeVisibilityObserver();
+        await mountCreateSectionButton();
+        mountCategoryRail();
+        syncHomeScreenChromeVisibility();
+    }
+
     window.homeScreen3 = {
         init: enhanceHomeScreen,
         refreshHomeSections,
         resolveDiscoverySection: buildDiscoverySectionInstance,
-        sectionHelper: () => window.sectionHelper
+        sectionHelper: () => window.sectionHelper,
+        getActiveHomeCategory: () => homeChromeActiveCategory || 'none',
+        isDiscoveryAllowedForActiveCategory,
+        refreshHomeCategoryChrome
     };
 
     //enhanceHomeScreen();
+    connectHomeSectionsReadyObserver();
+    //initHomeScreenChrome();
+
+    // Serialize home-view work: latest-wins pending + one drain at a time
+    let homeViewPending = undefined; // undefined = empty; else { type, hash? }
+    let homeViewDrain = Promise.resolve();
+
+    function enqueueHomeViewJob(job) {
+        if (!job || !job.type) return homeViewDrain;
+        // Chrome must not overwrite a pending home job (enhance already syncs chrome)
+        if (job.type === 'chrome' && homeViewPending?.type === 'home') {
+            return homeViewDrain;
+        }
+        homeViewPending = job;
+        homeViewDrain = homeViewDrain
+            .then(async () => {
+                if (homeViewPending === undefined) return;
+                const next = homeViewPending;
+                homeViewPending = undefined;
+
+                if (next.type === 'chrome') {
+                    syncHomeScreenChromeVisibility();
+                    return;
+                }
+
+                if (next.type === 'home') {
+                    const hash = typeof next.hash === 'string' ? next.hash : '';
+                    const hashParams = hash.includes('?') ? hash.split('?')[1] : '';
+                    const urlParams = new URLSearchParams(hashParams);
+                    const currentTab = urlParams.get('tab');
+                    const currentTabIndex = currentTab ? parseInt(currentTab, 10) : 0;
+
+                    if (currentTabIndex !== 0) {
+                        syncHomeScreenChromeVisibility();
+                        return;
+                    }
+
+                    void manageBodyClasses().catch((err) => {
+                        ERR('manageBodyClasses failed:', err);
+                    });
+                    await enhanceHomeScreen();
+                    syncHomeScreenChromeVisibility();
+                }
+            })
+            .catch((err) => {
+                ERR('Home view queue failed:', err);
+            });
+        return homeViewDrain;
+    }
 
     if (window.KefinTweaksUtils && typeof window.KefinTweaksUtils.onViewPage === 'function') {
+        window.KefinTweaksUtils.onViewPage(() => {
+            enqueueHomeViewJob({ type: 'chrome' });
+        }, { pages: [] });
+
         window.KefinTweaksUtils.onViewPage((view, element, hash) => {
-            // Get selected tab from hash
-            const hashParams = hash.includes('?') ? hash.split('?')[1] :     '';
-            const urlParams = new URLSearchParams(hashParams);
-            const currentTab = urlParams.get('tab');
-            const currentTabIndex = currentTab ? parseInt(currentTab, 10) : 0;
-
-            // If the tab isn't 0, don't render the home screen
-            if (currentTabIndex !== 0) {
-                return;
-            }
-
-            try { 
-                manageBodyClasses();
-                enhanceHomeScreen();
-            } catch (err) { ERR('Home screen page change handler failed:', err); }
+            enqueueHomeViewJob({ type: 'home', hash: hash || '' });
         }, { pages: ['home', 'home.html'] });
     }
 
