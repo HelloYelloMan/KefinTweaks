@@ -994,14 +994,19 @@
             }
             
             // Extract item ID
-            if (!item || !item.Id || (item.Type !== 'Series' && item.Type !== 'Season' && item.Type !== 'Episode')) {
+            if (!item || !item.Id) {
                 clearBreadcrumbs();
                 hideBreadcrumbs();
                 return;
             }
             
-            // An unsupported type only gets a trail if an override gives it one
-            const targetStructure = CONFIG.supportedTypes.includes(item.Type)
+            // Upstream builds its own trail only for series, seasons and
+            // episodes (2941297). Any other type still gets one when an override
+            // supplies it -- Virtual Specials does for its collections. Upstream's
+            // type check used to return before this, so after the 2026-10-03
+            // merge a virtual special's page had no breadcrumbs at all.
+            const ownTrail = item.Type === 'Series' || item.Type === 'Season' || item.Type === 'Episode';
+            const targetStructure = ownTrail
                 ? await getTargetBreadcrumbStructure(item)
                 : { elements: await applyOverrides(item, []), item: item };
             if (!targetStructure.elements.length) {
