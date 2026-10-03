@@ -116,10 +116,6 @@
         const sections = Array.from(collectionItems.querySelectorAll(':scope > .verticalSection'))
             .filter((section) => section.querySelector('.collectionItemsContainer > .card[data-id]'));
         if (!sections.length) return;
-        // A one-item collection is left alone: hideOneItemCollectionRow.css
-        // hides its section by matching it as .collectionItems' only child,
-        // which an inserted row would no longer be.
-        if (collectionItems.querySelectorAll('.collectionItemsContainer > .card[data-id]').length === 1) return;
 
         const pending = sections.filter((section) => {
             const row = section.nextElementSibling;

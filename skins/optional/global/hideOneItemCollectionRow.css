@@ -9,7 +9,8 @@
  * CSS ALONE. Whether a collection holds one item is visible inside
  * .collectionItems itself: jellyfin-web gives it one .verticalSection per item
  * type, so a one-item collection has exactly one section holding exactly one
- * card. A :has() on that one element decides it as the row is inserted, before
+ * card (still there, hidden, when Collection Sections As Rows has replaced it
+ * with a row). A :has() on that one element decides it as the row is inserted, before
  * it is drawn, with no script and no request. A collection of one film and one
  * episode has two sections, so it does not match.
  *
@@ -26,6 +27,11 @@
  * DOM during a navigation.
  */
 
-.itemDetailPage:not(.hide) .collectionItems:has(> .verticalSection:only-child > .itemsContainer > .card:only-child) > .verticalSection {
-    display: none;
+/* "One jellyfin-web section holding one card, and no second jellyfin-web
+ * section", rather than :only-child: the Collection Sections As Rows feature
+ * puts its row beside the (hidden) original section, so the section is no
+ * longer the only child. Both are hidden, the row with !important because it
+ * carries an inline display: block, as the season row it copies does. */
+.itemDetailPage:not(.hide) .collectionItems:has(> .verticalSection:not([data-kefin-section-row]) > .itemsContainer > .card:only-child):not(:has(> .verticalSection:not([data-kefin-section-row]) ~ .verticalSection:not([data-kefin-section-row]))) > .verticalSection {
+    display: none !important;
 }
