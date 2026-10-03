@@ -205,6 +205,14 @@
                 enabled: true
             },
             {
+                // Each type group on a collection page (Movies, Episodes...) on
+                // one line that scrolls sideways, instead of a wrapping grid.
+                // On by default, like the options above.
+                name: 'Collection Contents As A Row',
+                url: `${getKefinTweaksRoot()}skins/optional/global/collectionContentsRow.css`,
+                enabled: true
+            },
+            {
                 // The library list view is built without Jellyfin's `centered`
                 // class, so its grid packs left and the ragged leftover ends up
                 // on the right. Scoped to .vertical-wrap, which is the library,

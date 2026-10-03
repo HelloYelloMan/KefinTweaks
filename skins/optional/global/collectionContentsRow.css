@@ -1,0 +1,31 @@
+/* Collection Contents As A Row -- KefinTweaks global option
+ *
+ * A collection page lists its contents one group per type (Movies, Series,
+ * Episodes...), and jellyfin-web draws each group as a wrapping grid
+ * (.collectionItemsContainer.vertical-wrap). This keeps every group on one
+ * line that scrolls sideways, like the rows elsewhere in the app.
+ *
+ * .vertical-wrap is a wrapping flex container under every skin here -- none of
+ * them turn it into a CSS grid -- so stopping the wrap is the whole change. The
+ * cards keep the width the skin gives them in the grid; with the wrap off, the
+ * ones that no longer fit run on past the edge instead of onto a new line.
+ * flex-shrink: 0 stops the flex container squeezing them all into view instead.
+ *
+ * There are no scroll buttons: those are elements jellyfin-web builds for its
+ * own scrollers, and a stylesheet cannot add them. The scrollbar stays visible
+ * so a mouse can still drag the row.
+ *
+ * Scoped to the visible detail page because jellyfin-web keeps the previous view
+ * in the DOM during a navigation. A collection holding one item has its row
+ * hidden by the Virtual Specials Tweaks option, which is unaffected.
+ */
+
+.itemDetailPage:not(.hide) .collectionItemsContainer.vertical-wrap {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.itemDetailPage:not(.hide) .collectionItemsContainer.vertical-wrap > .card {
+    flex-shrink: 0;
+}
