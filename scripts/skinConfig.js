@@ -176,10 +176,10 @@
                 enabled: true
             },
             {
-                // Needs body.kefin-collection-single, set by the Virtual Specials
-                // Tweaks feature; inert without it, hence the name. See the
-                // header of the stylesheet for why the condition is not
-                // expressed as :has().
+                // Hides the contents row of a one-item collection on its own
+                // (a :has() on .collectionItems); the count and Shuffle need
+                // body.kefin-collection-single from the Virtual Specials
+                // feature. See the header of the stylesheet for why.
                 name: 'Virtual Specials Tweaks',
                 url: `${getKefinTweaksRoot()}skins/optional/global/collectionSingleItem.css`,
                 enabled: false

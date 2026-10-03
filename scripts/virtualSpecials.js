@@ -877,6 +877,15 @@
 
                 if (!item || item.Type !== 'BoxSet' || !item.Id) return;
 
+                // The single-item marker, from the count the item already carries.
+                // It used to wait for the children fetch below, and stopAll() above
+                // clears it on every details view event -- jellyfin-web can fire
+                // more than one for a single navigation -- so the count and the
+                // Shuffle button showed until that request came back, or for good
+                // when a later event cleared it. Set here, in the same task as the
+                // clear, there is no gap. The children fetch still confirms it.
+                if (typeof item.ChildCount === 'number') setSingleItemMarker(item.ChildCount === 1);
+
                 const token = viewToken;
                 // stopAll() only runs when another details page opens, so leaving
                 // for Home or a library must also count, or the art retries would
@@ -905,7 +914,7 @@
                 const children = await fetchChildren(item.Id);
                 if (!alive()) return;
 
-                setSingleItemMarker(children.length === 1);
+                if (children.length) setSingleItemMarker(children.length === 1);
 
                 // --- artwork, resolved fresh ---------------------------------
                 resolveArtwork(item, children).then(art => {

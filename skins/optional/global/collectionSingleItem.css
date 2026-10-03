@@ -13,33 +13,35 @@
  * item", which is still the useful thing to do from here -- and with the row
  * hidden it becomes the only way to start playback from this page.
  *
- * The condition is carried by body.kefin-collection-single, set by the
- * "Virtual Specials Tweaks" feature (scripts/virtualSpecials.js) from the
- * collection's child count. Expressing it in CSS instead would take a
- * page-level :has() -- the count and the shuffle button are outside the items
- * container, so the subject has to be an ancestor of the whole detail page --
- * and that is the selector shape elegantfin-haspatch.js exists to eliminate: a
- * registered :has() pays style-invalidation cost on every DOM mutation under
- * its subject, where a check from JS is a one-time match with no registration.
+ * The heading and the row need nothing but this stylesheet. Whether a
+ * collection holds one item is visible inside .collectionItems itself -- one
+ * group, holding one card -- so a :has() on that one element decides it, as
+ * jellyfin-web inserts the row and before it is drawn. It used to wait for
+ * body.kefin-collection-single like the rest, which arrives only after
+ * virtualSpecials.js has the item, and a later view event could clear it; on a
+ * cold start in the app the row stayed visible.
  *
- * So this stylesheet does nothing on its own, and the option is named to say
- * so. The marker used to be set in elegantfin-haspatch.js, which works but is
- * not in the Feature Configuration list -- meaning the dependency could not be
- * seen or managed from the UI. Reading the child count from the item is also
- * better than matching `:only-child` in the DOM: it is authoritative and it is
- * known before the row renders, so the row never appears and then vanishes.
+ * The count and the shuffle button still read body.kefin-collection-single,
+ * set by the Virtual Specials feature (scripts/virtualSpecials.js) from the
+ * collection's ChildCount. Doing those in CSS would take a page-level :has() --
+ * they are outside .collectionItems, so the subject has to be an ancestor of
+ * the whole detail page -- and that is the selector shape elegantfin-haspatch.js
+ * exists to eliminate: a registered :has() pays style-invalidation cost on every
+ * DOM mutation under its subject. The one above is cheap because its subject is
+ * .collectionItems, a small subtree that changes only when the row is built.
  */
 
 /* Every rule is scoped to the VISIBLE detail page. Jellyfin keeps the outgoing
  * view in the DOM during a navigation, so for a moment two .itemDetailPage
  * elements exist at once -- measured mid-transition, a document-wide query saw
  * the cards of both. The marker is computed from the visible page alone, so
- * unscoped rules would apply that page's answer to its predecessor as well and
- * could collapse a row mid-animation. */
+ * unscoped marker rules would apply that page's answer to its predecessor as
+ * well and could collapse a row mid-animation. */
 
 /* The heading and the one-card row. .collectionItems holds one .verticalSection
- * per item type; a single-item collection has exactly one of each. */
-body.kefin-collection-single .itemDetailPage:not(.hide) .collectionItems > .verticalSection {
+ * per item type; a single-item collection has exactly one of each. A collection
+ * of one film and one episode has two sections, so it does not match. */
+.itemDetailPage:not(.hide) .collectionItems:has(> .verticalSection:only-child > .itemsContainer > .card:only-child) > .verticalSection {
     display: none;
 }
 
