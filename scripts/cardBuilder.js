@@ -8,10 +8,9 @@
 
     /**
      * True on Chromium-based engines. injector.js sets the matching class on <html>
-     * before any skin loads, so this is reliable from the first render. Two card-path
-     * optimisations below are Blink-only, because the costs they address -- serialised
-     * style recalculation delaying IntersectionObserver callbacks, and a speculative
-     * Image() being given Low network priority -- do not exist in Gecko.
+     * before any skin loads, so this is reliable from the first render. Used for the
+     * lazy loader's fetchPriority, because the cost it addresses -- a speculative
+     * Image() being given Low network priority -- does not exist in Gecko.
      */
     function isBlink() {
         if (typeof window.KefinTweaksIsBlink === 'boolean') return window.KefinTweaksIsBlink;
@@ -7821,18 +7820,10 @@
     }
 
     function createLazyImageObserver(root) {
-        // Deeper margin on Blink desktop: IntersectionObserver callbacks are
-        // delivered during the rendering lifecycle, so a busy main thread
-        // delays them and with them the start of every image request. A home
-        // scroll traced at 92.6% main-thread busy showed gaps of up to 600ms
-        // between consecutive image requests. Gecko recalculates style in
-        // parallel and has no such stall, so it keeps upstream's margin, as do
-        // the per-scroller observers a phone uses.
-        const rootMargin = !root && isBlink() && !isMobileLayout() ? '2000px' : '50%';
         return new IntersectionObserver(handleLazyImageIntersection, {
             root: root || null,
             threshold: 0,
-            rootMargin,
+            rootMargin: '50%',
         });
     }
 

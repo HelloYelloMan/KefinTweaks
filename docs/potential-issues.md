@@ -114,9 +114,6 @@ current bar.
 - **Optional includes load in completion order** (`skinManager.js` ~914/928): each
   include is inserted when its cache-token HEAD returns. A quick on/off toggle can
   insert a sheet after it was disabled.
-- **Baked registry and Blink detection**: `html.kefin-blink` is set by injector.js,
-  which on the baked path runs after cardBuilder has already built its lazy-image
-  observer with the non-Blink margin.
 - **KefinTweaks CSS depends on elegantfinHaspatch**: `kefin-borderless-spotlight`
   is only maintained by elegantfin-haspatch.js. Disable that feature and the
   Borderless spotlight silently stops. (Seasonal backgrounds used to depend on its

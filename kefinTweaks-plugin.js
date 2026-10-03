@@ -1773,14 +1773,6 @@ window.KefinTweaksConfig = ${JSON.stringify(config, null, 2)};`;
 	display: none;
 }
 
-/* .skinHeader:not(.osdHeader) is load-bearing: .pageTitle is a single element
-   Jellyfin reuses for every view, including the playback OSD, so without it
-   the player loses its series and episode title. utils.js (ensureCustomPageStyles)
-   carries the same rule and replaces this block once it loads. */
-#reactRoot:not(.kefin-custom-page-active) .skinHeader:not(.osdHeader) .pageTitle {
-	display: none !important;
-}
-
 #reactRoot:not(.kefin-custom-page-active) #fallbackPage:not([data-kefin-fallback-ready]) > * {
 	display: none;
 }

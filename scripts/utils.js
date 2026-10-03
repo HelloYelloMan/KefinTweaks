@@ -2735,21 +2735,6 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
 	display: none;
 }
 
-/* Suppress the header title on everything except a custom page.
- *
- * .skinHeader:not(.osdHeader) matters: .pageTitle is ONE element that Jellyfin
- * reuses for every view -- setTitle() does
- * document.querySelector('.pageTitle') once and caches it -- and the video
- * player sets its series/episode title through that same element. Without the
- * qualifier this rule hid the title on the playback OSD too, since no custom
- * page is visible while something is playing. osdHeader is the class Jellyfin
- * puts on .skinHeader during playback (pauseScreen.js keys on it as well).
- * The same rule is in kefinTweaks-plugin.js's early copy of this block.
- */
-#reactRoot:not(.kefin-custom-page-active) .skinHeader:not(.osdHeader) .pageTitle {
-    display: none !important;
-}
-
 #reactRoot:not(.kefin-custom-page-active) #fallbackPage:not([data-kefin-fallback-ready]) > * {
 	display: none;
 }
