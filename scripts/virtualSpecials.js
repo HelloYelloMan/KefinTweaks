@@ -315,6 +315,23 @@
         episodes.forEach(e => {
             if (!series.has(e.SeriesId)) series.set(e.SeriesId, { Id: e.SeriesId, Name: e.SeriesName });
         });
+        // Named from the series items themselves, as breadcrumbs.js names the
+        // series on its own trails. An episode's SeriesName is a copy that is
+        // not always refreshed: Aria: The Animation's specials still carry
+        // "Aria", so this crumb read "Aria" while the series page's said
+        // "Aria: The Animation".
+        try {
+            const result = await ApiClient.getItems(ApiClient.getCurrentUserId(), {
+                Ids: [...series.keys()].join(','),
+                EnableImageTypes: 'None',
+                EnableUserData: false
+            });
+            (result?.Items || []).forEach(s => {
+                if (series.has(s.Id) && s.Name) series.get(s.Id).Name = s.Name;
+            });
+        } catch (e) {
+            WARN('Could not read the series names; using the episodes\' copies:', e);
+        }
         const list = [...series.values()];
         const seriesCrumb = list.length === 1
             ? { text: list[0].Name, url: detailsUrl(list[0].Id), clickable: true }
