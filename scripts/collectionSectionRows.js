@@ -229,7 +229,13 @@
             },
             {
                 pages: ['details'],
-                triggerOnSameHash: false
+                // true, unlike virtualSpecials.js: this script can register
+                // after the first view of a page has been announced (it waits
+                // for cardBuilder, which loads late), and with false the call
+                // made on registration is dropped as a repeat of that hash, so
+                // a page opened directly was never handled. A repeat is
+                // harmless here: apply() finds its work already done.
+                triggerOnSameHash: true
             }
         );
 
