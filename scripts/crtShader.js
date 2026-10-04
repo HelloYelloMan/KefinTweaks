@@ -110,9 +110,11 @@
     let enabled = readPref(STORAGE_KEY, '0') === '1';
     let profileName = readPref(PROFILE_KEY, DEFAULT_PROFILE);
     let engineName = readPref(ENGINE_KEY, DEFAULT_ENGINE);
-    // 'composite': Jellyfin renders subtitles as usual and they are blended
-    // into the frame before the chain. 'burn': the server burns them in.
-    let subtitleMode = readPref(SUBTITLE_MODE_KEY, 'composite') === 'burn' ? 'burn' : 'composite';
+    // 'burn': the server burns them in (the default). 'composite': Jellyfin
+    // renders subtitles as usual and they are blended into the frame before
+    // the chain. Compositing read as choppier line changes on 2026-10-03, so
+    // burn-in is the default while the two are compared.
+    let subtitleMode = readPref(SUBTITLE_MODE_KEY, 'burn') === 'composite' ? 'composite' : 'burn';
 
     function notify(message) {
         window.KefinTweaksToaster?.toast?.(message);
@@ -1253,9 +1255,9 @@ void main() {
     // mpv puts subtitles INTO the picture (retro-base's vf=sub), so they go
     // through the tube. The web player draws them as layers over the video,
     // which the CRT canvas covers. Two ways to get them into the frame:
-    // compositing them in the browser (the default -- see SUBTITLES 2 of 2),
-    // or, with subtitle mode 'burn', having the server burn them in with
-    // libass, the renderer mpv uses. This section is the second.
+    // having the server burn them in with libass, the renderer mpv uses (the
+    // default, this section), or compositing them in the browser (subtitle
+    // mode 'composite' -- see SUBTITLES 2 of 2).
     //
     // HOW, without touching any setting. Jellyfin's own "Burn subtitles: All"
     // is a localStorage value (appSettings 'subtitleburnin'), and writing it
@@ -2578,7 +2580,7 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
             if (video) autocrop.reset(currentItemKey(), video.videoWidth, video.videoHeight, performance.now() / 1000, !!burnIn.lastBurned);
         },
         clearCrop() { autocrop.clear(); },
-        // 'composite' (default) or 'burn'. The render loop renegotiates the
+        // 'burn' (default) or 'composite'. The render loop renegotiates the
         // stream when the current delivery does not match.
         setSubtitleMode(mode) {
             if (mode !== 'composite' && mode !== 'burn') throw new Error("subtitle mode is 'composite' or 'burn'");
