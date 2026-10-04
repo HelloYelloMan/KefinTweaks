@@ -918,10 +918,16 @@ vec4 kt_delinearize(vec4 color) {
     //   mask_triad_size_desired  phosphor triad width in OUTPUT pixels, i.e.
     //                            panel pixels (3 for super, 4 for kurozumi:
     //                            1280 / 960 triads across a 4K panel). Scaled
-    //                            by panel lines / 2160, so any panel holds the
-    //                            same number of triads across its width. Never
-    //                            below crt-royale's mask_min_allowed_triad_size
-    //                            of 2 -- a 1080p panel cannot resolve finer.
+    //                            by panel lines / 2160, so any panel holds
+    //                            about the same number of triads across its
+    //                            width -- ROUNDED to a whole pixel and never
+    //                            below 3. crt-royale's resized mask is only
+    //                            clean at whole-pixel triads: kurozumi's
+    //                            aperture grille at 4 x 1440/2160 = 2.67 px
+    //                            showed uneven scanline banding on a 1440p
+    //                            phone, and at 2 px both masks alias into dark
+    //                            bands (measured 2026-10-04). So 1440p gets 3,
+    //                            as does anything smaller.
     //                            Pixel-sized triads are right WITHIN a panel:
     //                            a smaller window is a smaller TV, with fewer.
     //   persist_tick_ms          milliseconds per OUTPUT run, 4.167 at 240 Hz:
@@ -935,7 +941,7 @@ vec4 kt_delinearize(vec4 color) {
     const DISPLAY_REF_LINES = 2160;
     const DISPLAY_REF_HZ = 240;
     const DISPLAY_PARAMS = {
-        mask_triad_size_desired: (base, d) => Math.max(2, base * d.panelLines / DISPLAY_REF_LINES),
+        mask_triad_size_desired: (base, d) => Math.max(3, Math.round(base * d.panelLines / DISPLAY_REF_LINES)),
         // Within 1% of the tuned 240 Hz, the tuned value exactly.
         persist_tick_ms: (base, d) => (d.refreshMs && Math.abs(1000 / d.refreshMs - DISPLAY_REF_HZ) > 0.01 * DISPLAY_REF_HZ ? d.refreshMs : base)
     };
@@ -2494,12 +2500,17 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
     // The panel the window is on, in device pixels, and its refresh period.
     // screen.* follows the window to another monitor, and devicePixelRatio
     // turns its CSS size into real pixels (fractional scaling included).
+    // "Lines" is the SHORTER side: a phone held for fullscreen video is
+    // landscape, but may report its screen in portrait (3120 tall on a
+    // 1440x3120 panel), which would size the triads for a 3120-line panel.
     let lastDisplayKey = '';
     function currentDisplay() {
         const dpr = window.devicePixelRatio || 1;
+        const w = Math.round((window.screen?.width || 3840) * dpr);
+        const h = Math.round((window.screen?.height || 2160) * dpr);
         return {
-            panelLines: Math.round((window.screen?.height || 2160) * dpr),
-            panelWidth: Math.round((window.screen?.width || 3840) * dpr),
+            panelLines: Math.min(w, h),
+            panelWidth: Math.max(w, h),
             refreshMs: clock.periodMs || 0
         };
     }
