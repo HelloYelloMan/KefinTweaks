@@ -215,6 +215,28 @@
 .tro-tile-num { left: 0.25rem; top: 0.2rem; font-family: ui-monospace, monospace; }
 .tro-tile-provider { right: 0.25rem; bottom: 0.2rem; }
 
+/* trace.moe's mark: a frame of this episode, another episode's, or no close match. */
+.tro-tile-check {
+    position: absolute;
+    right: 0.25rem;
+    top: 0.2rem;
+    font-size: clamp(0.65rem, 0.55vw, 1.05rem);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    padding: 0 0.3rem;
+    border-radius: 3px;
+    color: #fff;
+    background: rgba(107, 114, 128, 0.9);
+}
+
+.tro-tile-check[data-check="found"] {
+    background: var(--tro-ok);
+}
+
+.tro-tile-check[data-check="other"] {
+    background: var(--tro-bad);
+}
+
 /* The review: every episode of the round with the picture it will get. */
 .tro-review-grid {
     display: grid;

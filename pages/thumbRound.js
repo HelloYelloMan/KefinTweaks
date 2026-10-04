@@ -11,6 +11,14 @@
 // places it from there. A picture saved straight onto an episode would be put
 // back by the pipeline's archive guard, so nothing here touches an item's
 // images itself.
+//
+// Each still, and the picture the episode has now, is checked against the
+// pipeline's trace.moe as its episode comes up: a mark on the tile says whether
+// it is a frame of this episode, of another one, or matched nothing closely --
+// which is also what a still from a different master of the right frame gets,
+// so it is not shown as wrong. Only the episode on screen and the next one
+// are asked about, since trace.moe takes 100 requests a minute and the
+// pipeline's validations share them.
 
 (function () {
     'use strict';
@@ -52,6 +60,8 @@
         errors: {},     // itemId -> message
         stills: {},     // itemId -> Promise<{stills, note}>
         resolved: {},   // itemId -> {stills, note}
+        checks: {},     // itemId -> trace.moe's answer, see the plugin's Game/Check
+        checking: {},   // itemId -> true while asking
         played: [],     // season ids this session
         writing: false,
         armed: null,
@@ -135,6 +145,43 @@
         return (still.provider || 'Still') + size;
     }
 
+    // Seconds into the episode, as m:ss or h:mm:ss.
+    function clock(t) {
+        const s = Math.round(t || 0);
+        const pad = (n) => String(n).padStart(2, '0');
+        const h = Math.floor(s / 3600);
+        const m = Math.floor(s / 60) % 60;
+        return (h ? `${h}:${pad(m)}` : `${m}`) + `:${pad(s % 60)}`;
+    }
+
+    // trace.moe's answer for a still of an episode, or for its current
+    // picture when `still` is null.
+    function verdict(e, still) {
+        const c = e && S.checks[e.id];
+        if (!c) return null;
+        return still ? (c.stills?.[still.url] || null) : (c.current || null);
+    }
+
+    function checkText(v) {
+        if (!v) return '';
+        if (v.found) return `In episode at ${clock(v.at)}`;
+        if (v.other) return `From ${v.other}`;
+        return v.at == null ? 'No close match'
+            : `No close match · best ${Math.round(v.similarity * 100)}% at ${clock(v.at)}`;
+    }
+
+    function checkBadge(v) {
+        if (v.found) return '✓ ' + clock(v.at);
+        return v.other ? '✗ ' + v.other : '?';
+    }
+
+    // The middle picture's label: what it is, and trace.moe's answer for it.
+    function shownLabel(e, shown) {
+        const check = checkText(verdict(e, shown || null));
+        const label = shown ? stillLabel(shown) : 'Current';
+        return check ? `${label} · ${check}` : label;
+    }
+
     // The middle's width, and every tile's position and size, from the stage
     // as it is now. Right takes the odd numbers and left the even, row by row
     // from the top, so 1 is nearest the top right. A phone lays it all out in
@@ -216,10 +263,49 @@
         return S.stills[e.id];
     }
 
+    // Asks once per episode, and again only for the stills trace.moe's
+    // limiter turned away, after the wait it named.
+    async function checkFor(e) {
+        const list = e && S.resolved[e.id]?.stills;
+        if (!list?.length || S.checking[e.id]) return;
+        const had = S.checks[e.id];
+        const todo = had ? list.filter((st) => !had.stills[st.url]) : list;
+        if (had && (!had.indexed || !todo.length)) return;
+        const round = S.round;
+        S.checking[e.id] = true;
+        if (e === ep()) render();
+        let data = null;
+        try {
+            data = await api('AnimePipeline/Game/Check', null, {
+                method: 'POST',
+                body: JSON.stringify({
+                    itemId: e.id,
+                    stills: todo.map((st) => ({ url: st.url, preview_url: st.preview_url })),
+                }),
+            });
+        } catch (err) {
+            LOG('Check failed', err);
+        }
+        delete S.checking[e.id];
+        if (S.round !== round) return;
+        if (data) {
+            S.checks[e.id] = {
+                indexed: data.indexed,
+                current: data.current || had?.current || null,
+                stills: Object.assign({}, had?.stills, data.stills),
+            };
+            if (data.retry_after && todo.some((st) => !data.stills?.[st.url])) {
+                setTimeout(() => { if (S.round === round) checkFor(e); }, data.retry_after * 1000 + 250);
+            }
+        }
+        if (e === ep() && !S.reviewing) render();
+    }
+
     async function newRound() {
         Object.assign(S, {
             round: null, i: 0, reviewing: false, hover: null, picks: {}, kept: {},
-            written: {}, recorded: {}, errors: {}, stills: {}, resolved: {}, armed: null,
+            written: {}, recorded: {}, errors: {}, stills: {}, resolved: {}, checks: {}, checking: {},
+            armed: null,
         });
         setStatus('Loading…');
         render();
@@ -254,8 +340,10 @@
         setTimeout(() => { delete centre.dataset.leaving; }, 120);
         render();
         // The next episode's stills, so they are there when it is.
-        stillsFor(S.round.episodes[S.i + 1]);
-        stillsFor(ep()).then(() => render());
+        const after = S.round.episodes[S.i + 1];
+        stillsFor(after)?.then(() => checkFor(after));
+        const e = ep();
+        stillsFor(e).then(() => { render(); checkFor(e); });
     }
 
     function next() { go(S.i + 1); }
@@ -407,13 +495,16 @@
 
         const shown = S.hover || S.picks[e.id];
         showInMiddle(shown);
-        $('tro-shown-label').textContent = shown ? stillLabel(shown) : 'Current';
+        $('tro-shown-label').textContent = shownLabel(e, shown);
         if (S.picks[e.id]) $('tro-shown').dataset.picked = '';
         else delete $('tro-shown').dataset.picked;
 
         const got = S.resolved[e.id];
+        const check = S.checks[e.id];
         $('tro-note').textContent = S.errors[e.id]
-            || (!got ? 'Fetching stills…' : (got.stills.length ? '' : (got.note || 'No stills')));
+            || (!got ? 'Fetching stills…' : !got.stills.length ? (got.note || 'No stills')
+                : S.checking[e.id] && !check ? 'Checking stills with trace.moe…'
+                : check && !check.indexed ? 'trace.moe has not indexed this episode' : '');
 
         const tiles = $('tro-tiles');
         tiles.textContent = '';
@@ -422,12 +513,20 @@
             const b = document.createElement('button');
             b.type = 'button';
             b.className = 'tro-tile';
-            b.title = stillLabel(still);
+            const v = verdict(e, still);
+            b.title = v ? `${stillLabel(still)} · ${checkText(v)}` : stillLabel(still);
             if (S.picks[e.id] === still) b.dataset.picked = '';
             b.innerHTML = '<img alt="" loading="lazy"><span class="tro-tile-num"></span><span class="tro-tile-provider"></span>';
             b.querySelector('img').src = stillUrl(still);
             b.querySelector('.tro-tile-num').textContent = String(k + 1);
             b.querySelector('.tro-tile-provider').textContent = still.provider || '';
+            if (v) {
+                const mark = document.createElement('span');
+                mark.className = 'tro-tile-check';
+                mark.dataset.check = v.found ? 'found' : v.other ? 'other' : 'none';
+                mark.textContent = checkBadge(v);
+                b.appendChild(mark);
+            }
             // On pointer MOVEMENT, not entry: after a step the next episode's
             // tiles are drawn under a pointer that has not moved, and the
             // middle should show that episode's own picture until it does.
@@ -447,7 +546,7 @@
         if (!e || S.reviewing) return;
         const shown = S.hover || S.picks[e.id];
         showInMiddle(shown);
-        $('tro-shown-label').textContent = shown ? stillLabel(shown) : 'Current';
+        $('tro-shown-label').textContent = shownLabel(e, shown);
     }
 
     // The review's cards: the column count that makes them largest while the
