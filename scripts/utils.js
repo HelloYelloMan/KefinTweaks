@@ -777,12 +777,28 @@
      * load, which can be after the divider exists, so the divider is moved when
      * it is not right after More; moving only when misplaced keeps this from
      * feeding the observer that calls it. */
+    /* The last of Jellyfin's own items in the bar, which the divider follows.
+     * Normally that is the overflow ("More") button, which UserViewNav renders
+     * after Favourites and the library buttons. The Libraries menu option moves
+     * that button in front of Favourites, so Favourites is last; whichever of
+     * the two comes later in the bar wins. */
+    function findLastNativeTopNavItem(stack) {
+        const more = findNativeTopNavMoreButton(stack);
+        const favourites = Array.from(stack.querySelectorAll(':scope > a')).find((a) =>
+            !a.hasAttribute('data-kefin-custom-menu-top-link')
+            && /home\?tab=1(?:&|$)/.test(a.getAttribute('href') || ''));
+        if (more && favourites) {
+            return (more.compareDocumentPosition(favourites) & Node.DOCUMENT_POSITION_FOLLOWING) ? favourites : more;
+        }
+        return more || favourites || null;
+    }
+
     function ensureTopNavDivider(stack) {
         let divider = stack.querySelector('[data-kefin-custom-menu-top-divider]');
         if (divider) {
-            const nativeMore = findNativeTopNavMoreButton(stack);
-            if (nativeMore && nativeMore.nextElementSibling !== divider) {
-                nativeMore.insertAdjacentElement('afterend', divider);
+            const lastNative = findLastNativeTopNavItem(stack);
+            if (lastNative && lastNative.nextElementSibling !== divider) {
+                lastNative.insertAdjacentElement('afterend', divider);
             }
             return divider;
         }
@@ -797,7 +813,7 @@
             a => !a.hasAttribute('data-kefin-custom-menu-top-link')
                 && !a.hasAttribute('data-kefin-custom-menu-more')
         );
-        const lastNative = findNativeTopNavMoreButton(stack) || anchors[anchors.length - 1];
+        const lastNative = findLastNativeTopNavItem(stack) || anchors[anchors.length - 1];
         if (lastNative) {
             lastNative.insertAdjacentElement('afterend', divider);
         } else {
@@ -2402,30 +2418,48 @@ button[data-kefin-custom-menu-more] .MuiSvgIcon-root {
         return response.json();
     }
 
-    /* Libraries in More: the modern top bar shows no library buttons, and every
-     * library is in its More menu.
+    /* Libraries menu: the modern top bar shows no library buttons, and every
+     * library is in a "Libraries" dropdown placed before Favourites.
      *
-     * jellyfin-web 12.1's UserViewNav (chunk 78701) picks how many libraries get
-     * a button with `return v?8:y?5:3` -- 8 from the xl breakpoint, 5 from lg, 3
-     * below -- and lists the rest under More. It counts only libraries, while
-     * Favourites, our Watchlist and Custom Tabs' home tabs share the row, so at
-     * 1024-1536px the row outgrows the bar under every skin. Zero sends every
-     * library to More; the menu, its icons and the current-library highlight
-     * are Jellyfin's own. The search string occurs once in that chunk.
+     * Two File Transformation rules on jellyfin-web 12.1's UserViewNav (chunk
+     * 78701), sharing one pattern so they run in one pipeline:
      *
-     * It is a File Transformation rule, which lives in that plugin's config, so
-     * it is set here, where every save of our config passes (Save, Import,
-     * Reset), and switching the setting off takes the rule out again. Nothing
-     * runs on page load. The pattern names one chunk -- see posterAspect.js for
-     * why a pattern matching every chunk breaks other plugins. A jellyfin-web
-     * upgrade that renumbers the chunk or renames v/y stops the rule matching,
-     * and the bar quietly goes back to Jellyfin's counts. */
-    const LIBRARIES_IN_MORE_RULE = {
-        Id: '3f9b6c2e-71a4-4d58-b0e3-9c5a2d8f1e47',
-        FilenamePattern: String.raw`78701\.[0-9a-f]+\.chunk\.js`,
-        SearchText: 'return v?8:y?5:3',
-        ReplaceText: 'return 0'
-    };
+     *   1. COUNT. UserViewNav picks how many libraries get a button with
+     *      `return v?8:y?5:3` -- 8 from the xl breakpoint, 5 from lg, 3 below --
+     *      and lists the rest in its overflow menu. It counts only libraries,
+     *      while Favourites, our Watchlist and Custom Tabs' home tabs share the
+     *      row, so at 1024-1536px the row outgrew the bar under every skin.
+     *      Zero sends every library to the menu; the menu, its icons and the
+     *      current-library highlight are Jellyfin's own.
+     *   2. ORDER AND LABEL. The component returns [Favourites, library buttons,
+     *      overflow button + menu]. The rule reorders that to [overflow,
+     *      Favourites, library buttons] and labels the button with
+     *      HeaderLibraries ("Libraries") instead of ButtonMore. The SearchText
+     *      is the whole return statement, verbatim; it occurs once and the
+     *      patched chunk parses.
+     *
+     * They live in that plugin's config, so they are set here, where every save
+     * of our config passes (Save, Import, Reset), and switching the setting off
+     * takes them out again. Nothing runs on page load. The pattern names one
+     * chunk -- see posterAspect.js for why a pattern matching every chunk breaks
+     * other plugins. A jellyfin-web upgrade that renumbers the chunk or renames
+     * its minified variables stops the rules matching, and the bar quietly goes
+     * back to Jellyfin's own layout. */
+    const LIBRARIES_MENU_PATTERN = String.raw`78701\.[0-9a-f]+\.chunk\.js`;
+    const LIBRARIES_MENU_RULES = [
+        {
+            Id: '3f9b6c2e-71a4-4d58-b0e3-9c5a2d8f1e47',
+            FilenamePattern: LIBRARIES_MENU_PATTERN,
+            SearchText: 'return v?8:y?5:3',
+            ReplaceText: 'return 0'
+        },
+        {
+            Id: 'a4c7e2d9-3b16-4f85-9e0a-7d2b5c8f1e63',
+            FilenamePattern: LIBRARIES_MENU_PATTERN,
+            SearchText: "return S?null:(0,l.jsxs)(l.Fragment,{children:[(0,l.jsx)(I.A,{variant:\"text\",color:(null==q?void 0:q.Id)===U.Id?\"primary\":\"inherit\",startIcon:(0,l.jsx)(k.A,{}),component:A.N_,to:\"/home?tab=1\",children:O.Ay.translate(U.Name)}),null==N?void 0:N.map((function(e){return\"url\"in e?(0,l.jsx)(I.A,{variant:\"text\",color:\"inherit\",startIcon:(0,l.jsx)(F.A,{children:e.icon||\"link\"}),component:\"a\",href:e.url,target:\"_blank\",rel:\"noopener noreferrer\",children:e.name},e.name):(0,l.jsx)(I.A,{variant:\"text\",color:e.Id===(null==q?void 0:q.Id)?\"primary\":\"inherit\",startIcon:(0,l.jsx)(K,{item:e}),component:A.N_,to:h.appRouter.getRouteUrl(e,{context:e.CollectionType}).substring(1),children:e.Name},e.Id)})),R&&R.length>0&&(0,l.jsxs)(l.Fragment,{children:[(0,l.jsx)(I.A,{variant:\"text\",color:\"inherit\",endIcon:(0,l.jsx)(P.A,{}),\"aria-controls\":se,\"aria-haspopup\":\"true\",onClick:M,children:O.Ay.translate(\"ButtonMore\")}),(0,l.jsx)(ae,{anchorEl:T,id:se,open:E,onMenuClose:z,userViews:R,selectedId:null==q?void 0:q.Id})]})]})}",
+            ReplaceText: "return S?null:(0,l.jsxs)(l.Fragment,{children:[R&&R.length>0&&(0,l.jsxs)(l.Fragment,{children:[(0,l.jsx)(I.A,{variant:\"text\",color:\"inherit\",endIcon:(0,l.jsx)(P.A,{}),\"aria-controls\":se,\"aria-haspopup\":\"true\",onClick:M,children:O.Ay.translate(\"HeaderLibraries\")}),(0,l.jsx)(ae,{anchorEl:T,id:se,open:E,onMenuClose:z,userViews:R,selectedId:null==q?void 0:q.Id})]}),(0,l.jsx)(I.A,{variant:\"text\",color:(null==q?void 0:q.Id)===U.Id?\"primary\":\"inherit\",startIcon:(0,l.jsx)(k.A,{}),component:A.N_,to:\"/home?tab=1\",children:O.Ay.translate(U.Name)}),null==N?void 0:N.map((function(e){return\"url\"in e?(0,l.jsx)(I.A,{variant:\"text\",color:\"inherit\",startIcon:(0,l.jsx)(F.A,{children:e.icon||\"link\"}),component:\"a\",href:e.url,target:\"_blank\",rel:\"noopener noreferrer\",children:e.name},e.name):(0,l.jsx)(I.A,{variant:\"text\",color:e.Id===(null==q?void 0:q.Id)?\"primary\":\"inherit\",startIcon:(0,l.jsx)(K,{item:e}),component:A.N_,to:h.appRouter.getRouteUrl(e,{context:e.CollectionType}).substring(1),children:e.Name},e.Id)}))]})}"
+        }
+    ];
 
     async function applyLibrariesInMore(on) {
         try {
@@ -2437,21 +2471,22 @@ button[data-kefin-custom-menu-more] .MuiSvgIcon-root {
             const cfg = await getPluginConfiguration(id);
             const list = Array.isArray(cfg?.Transformations) ? cfg.Transformations : [];
             const norm = (x) => String(x || '').replace(/-/g, '').toLowerCase();
-            const isOurs = (t) => t && norm(t.Id) === norm(LIBRARIES_IN_MORE_RULE.Id);
+            const isOurs = (t) => t && LIBRARIES_MENU_RULES.some((r) => norm(t.Id) === norm(r.Id));
             const current = list.filter(isOurs);
-            const inPlace = current.length === 1
-                && current[0].FilenamePattern === LIBRARIES_IN_MORE_RULE.FilenamePattern
-                && current[0].SearchText === LIBRARIES_IN_MORE_RULE.SearchText
-                && current[0].ReplaceText === LIBRARIES_IN_MORE_RULE.ReplaceText;
+            const inPlace = current.length === LIBRARIES_MENU_RULES.length
+                && LIBRARIES_MENU_RULES.every((r) => current.some((t) => norm(t.Id) === norm(r.Id)
+                    && t.FilenamePattern === r.FilenamePattern
+                    && t.SearchText === r.SearchText
+                    && t.ReplaceText === r.ReplaceText));
             if (on ? inPlace : current.length === 0) return;
             const rest = list.filter((t) => !isOurs(t));
             await ApiClient.updatePluginConfiguration(id, {
                 ...cfg,
-                Transformations: on ? rest.concat({ ...LIBRARIES_IN_MORE_RULE }) : rest
+                Transformations: on ? rest.concat(LIBRARIES_MENU_RULES.map((r) => ({ ...r }))) : rest
             });
-            LOG(on ? 'Libraries in More rule registered.' : 'Libraries in More rule removed.');
+            LOG(on ? 'Libraries menu rules registered.' : 'Libraries menu rules removed.');
         } catch (err) {
-            ERR('Could not update the Libraries in More rule:', err);
+            ERR('Could not update the Libraries menu rules:', err);
         }
     }
 
