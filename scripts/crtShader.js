@@ -889,6 +889,34 @@ vec4 kt_delinearize(vec4 color) {
         return { source: lines.join('\n'), binds };
     }
 
+    // ----------------------------------------------------------------------
+    //  Display-dependent parameters
+    // ----------------------------------------------------------------------
+    // retro.conf is tuned on a 3840x2160, 240 Hz panel, and two parameters
+    // carry that panel in their units:
+    //
+    //   mask_triad_size_desired  phosphor triad width in OUTPUT pixels, i.e.
+    //                            panel pixels (3 for super, 4 for kurozumi:
+    //                            1280 / 960 triads across a 4K panel). Scaled
+    //                            by panel lines / 2160, so any panel holds the
+    //                            same number of triads across its width. Never
+    //                            below crt-royale's mask_min_allowed_triad_size
+    //                            of 2 -- a 1080p panel cannot resolve finer.
+    //                            Pixel-sized triads are right WITHIN a panel:
+    //                            a smaller window is a smaller TV, with fewer.
+    //   persist_tick_ms          milliseconds per OUTPUT run, 4.167 at 240 Hz:
+    //                            the measured refresh period.
+    //
+    // Both are CONSTANT in the shader, i.e. baked into each compiled pass, so
+    // they are promoted to uniforms here: a value that follows the display
+    // cannot be compiled in. tools/build-crt-shaders.mjs generates the same
+    // uniforms, since it runs this generator.
+    const DISPLAY_REF_LINES = 2160;
+    const DISPLAY_PARAMS = {
+        mask_triad_size_desired: (base, d) => Math.max(2, base * d.panelLines / DISPLAY_REF_LINES),
+        persist_tick_ms: (base, d) => d.refreshMs || base
+    };
+
     // Everything that does not need a GL context: profile, parsed files,
     // parameter values and each pass's generated source.
     async function loadMpvProfile(profileKey, target = 'es') {
@@ -915,6 +943,15 @@ vec4 kt_delinearize(vec4 color) {
                 file.values[p.name] = p.value;
             }
         }
+        // The tuned value is kept as the base the display scaling works from.
+        for (const file of files) {
+            for (const p of file.params) {
+                if (!DISPLAY_PARAMS[p.name]) continue;
+                p.base = p.value;
+                if (p.mode === 'constant') p.mode = 'dynamic';
+            }
+        }
+
         const inert = Object.keys(profile.opts).filter((k) => !declared.has(k));
         if (inert.length) LOG(`[${profileKey}] opts no loaded shader declares (inert in mpv too): ${inert.join(', ')}`);
 
@@ -1162,6 +1199,16 @@ vec4 kt_delinearize(vec4 color) {
                 for (const file of files) if (name in file.values) file.values[name] = value;
             },
 
+            // Re-derive the display-dependent parameters from their tuned base.
+            setDisplay(display) {
+                for (const file of files) {
+                    for (const p of file.params) {
+                        const rule = DISPLAY_PARAMS[p.name];
+                        if (rule) file.values[p.name] = rule(p.base, display);
+                    }
+                }
+            },
+
             // One field: the MAIN chain on the current source frame.
             runMain(source, outW, outH) {
                 const sizes = { src: [source.w, source.h], out: [outW, outH] };
@@ -1228,6 +1275,7 @@ void main() {
             passCount: 1,
             outputActive: false,
             setHostParam() {},
+            setDisplay() {},
             runMain(source, outW, outH, field) { pending = { source, outW, outH, field }; },
             present(canvasW, canvasH) {
                 if (!pending) return;
@@ -2285,7 +2333,7 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
         rafId = requestAnimationFrame(tick);
 
         const field = clock.tick(now);
-        if (clock.periodMs) pipeline.setHostParam('persist_tick_ms', clock.periodMs);
+        updateDisplay();
         checkSubtitleDelivery(now);
 
         // HAVE_CURRENT_DATA: there is a frame to upload.
@@ -2395,6 +2443,7 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
         lastObjectFit = null;
         srcW = srcH = 0;            // force a texImage2D for the new element
         clock.reset(performance.now());
+        lastDisplayKey = '';
 
         resizeObserver = new ResizeObserver(() => { layoutDirty = true; });
         resizeObserver.observe(video);
@@ -2409,6 +2458,29 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
 
     function onVideoResize() {
         layoutDirty = true;
+    }
+
+    // The panel the window is on, in device pixels, and its refresh period.
+    // screen.* follows the window to another monitor, and devicePixelRatio
+    // turns its CSS size into real pixels (fractional scaling included).
+    let lastDisplayKey = '';
+    function currentDisplay() {
+        const dpr = window.devicePixelRatio || 1;
+        return {
+            panelLines: Math.round((window.screen?.height || 2160) * dpr),
+            panelWidth: Math.round((window.screen?.width || 3840) * dpr),
+            refreshMs: clock.periodMs || 0
+        };
+    }
+
+    function updateDisplay() {
+        const d = currentDisplay();
+        const key = `${d.panelWidth}x${d.panelLines}@${d.refreshMs.toFixed(2)}`;
+        if (key === lastDisplayKey) return;
+        const panelChanged = !lastDisplayKey.startsWith(`${d.panelWidth}x${d.panelLines}@`);
+        lastDisplayKey = key;
+        pipeline.setDisplay(d);
+        if (panelChanged) LOG(`Panel ${d.panelWidth}x${d.panelLines}: phosphor triads scaled by ${(d.panelLines / DISPLAY_REF_LINES).toFixed(3)} from the 2160-line tuning`);
     }
 
     function stop() {
@@ -2601,6 +2673,7 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
             canvas: canvas ? `${canvas.width}x${canvas.height}` : null,
             source: srcW ? `${srcW}x${srcH}` : null,
             refreshHz: clock.periodMs ? +(1000 / clock.periodMs).toFixed(2) : null,
+            panel: lastDisplayKey.split('@')[0] || null,
             fieldsLockedTo: clock.locked || null,
             outputStageActive: pipeline ? !!pipeline.outputActive : null,
             subtitleMode,
