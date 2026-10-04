@@ -1244,6 +1244,148 @@ void main() {
     }
 
     // ======================================================================
+    //  SUBTITLES: server burn-in, requested per stream, never stored
+    // ======================================================================
+    // mpv puts subtitles INTO the picture (retro-base's vf=sub), so they go
+    // through the tube. The web player draws them as layers over the video,
+    // which the CRT canvas covers. So while CRT is enabled, the server burns
+    // them in -- with libass, the renderer mpv uses.
+    //
+    // HOW, without touching any setting. Jellyfin's own "Burn subtitles: All"
+    // is a localStorage value (appSettings 'subtitleburnin'), and writing it
+    // would outlive the session. Instead, every PlaybackInfo request leaving
+    // this page while CRT is enabled has its device profile's SubtitleProfiles
+    // emptied in flight: a client that can render no subtitle format is one
+    // the server must burn them in for. It is the exact effect of that
+    // setting -- browserDeviceProfile.js builds the same empty list for
+    // 'all' -- held only in this page's memory. Nothing is written, so
+    // closing the browser mid-stream leaves nothing behind.
+    //
+    // Requests go through the SDK's axios (XHR) on Jellyfin 12 and the
+    // legacy apiclient's fetch on 10.11, so both are wrapped.
+    //
+    // SWITCHING MID-STREAM. A stream already negotiated keeps its delivery
+    // until it is renegotiated. Jellyfin renegotiates in place -- same
+    // position, same tracks, through changeStream() -- when this session is
+    // told to set its audio track to the one it has: Firefox, Zen and Chrome
+    // cannot switch audio tracks in the element, so the web player always
+    // takes that path. The command is sent to our own session through the
+    // server's remote-control API, which is what delivers it to the player.
+
+    const burnIn = {
+        lastBurned: null,       // did the last PlaybackInfo we sent ask for burn-in?
+        renegotiating: false,
+        lastCheck: 0
+    };
+
+    const PLAYBACK_INFO_RE = /\/Items\/[^/?#]+\/PlaybackInfo(?:[?#]|$)/i;
+
+    function rewritePlaybackInfo(body) {
+        if (!enabled || typeof body !== 'string') {
+            burnIn.lastBurned = false;
+            return body;
+        }
+        try {
+            const dto = JSON.parse(body);
+            if (!dto || !dto.DeviceProfile) {
+                burnIn.lastBurned = false;
+                return body;
+            }
+            dto.DeviceProfile.SubtitleProfiles = [];
+            dto.AlwaysBurnInSubtitleWhenTranscoding = true;
+            burnIn.lastBurned = true;
+            LOG('CRT is on: asked the server to burn in subtitles for this stream');
+            return JSON.stringify(dto);
+        } catch (e) {
+            burnIn.lastBurned = false;
+            return body;
+        }
+    }
+
+    function installPlaybackInfoHook() {
+        if (window.__kefinCrtHooked || typeof XMLHttpRequest === 'undefined') return;   // not a browser (the build tool)
+        window.__kefinCrtHooked = true;
+
+        const xhrOpen = XMLHttpRequest.prototype.open;
+        const xhrSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+            this.__kefinCrtPlaybackInfo = /^post$/i.test(method) && PLAYBACK_INFO_RE.test(String(url));
+            return xhrOpen.call(this, method, url, ...rest);
+        };
+        XMLHttpRequest.prototype.send = function (body) {
+            return xhrSend.call(this, this.__kefinCrtPlaybackInfo ? rewritePlaybackInfo(body) : body);
+        };
+
+        const origFetch = window.fetch;
+        window.fetch = function (input, init) {
+            const url = typeof input === 'string' ? input : (input && input.url) || '';
+            if (init && /^post$/i.test(init.method || '') && PLAYBACK_INFO_RE.test(url)) {
+                init = Object.assign({}, init, { body: rewritePlaybackInfo(init.body) });
+            }
+            return origFetch.call(this, input, init);
+        };
+    }
+
+    // Is the web player drawing subtitles itself right now? Then they are
+    // under the canvas and the stream needs burn-in.
+    function clientSubtitlesShowing() {
+        if (!video) return false;
+        if (Array.from(video.textTracks || []).some((t) => t.mode === 'showing')) return true;
+        const container = video.parentNode;
+        if (!container) return false;
+        if (container.querySelector('.videoSubtitlesInner, .videoSecondarySubtitlesInner')) return true;
+        // libass (ASS/SSA) and libbitsub (PGS) draw into canvases of their own.
+        return !!container.querySelector('canvas:not(.kefinCrtCanvas)');
+    }
+
+    async function ownSession() {
+        const api = window.ApiClient;
+        if (!api || typeof api.getSessions !== 'function') return null;
+        const sessions = await api.getSessions({ deviceId: api.deviceId() });
+        return (sessions || []).find((s) => s.NowPlayingItem) || null;
+    }
+
+    // Re-negotiates the current stream in place, so a change of CRT state
+    // reaches the server's subtitle delivery. Only when subtitles are on.
+    async function renegotiateStream(reason) {
+        if (burnIn.renegotiating) return;
+        burnIn.renegotiating = true;
+        try {
+            const api = window.ApiClient;
+            const session = await ownSession();
+            const state = session?.PlayState || {};
+            if (!session || state.SubtitleStreamIndex == null || state.SubtitleStreamIndex < 0) return;
+            if (state.AudioStreamIndex == null) {
+                WARN('Cannot renegotiate the stream: it has no audio track to re-select');
+                return;
+            }
+            LOG(`Renegotiating the stream (${reason})`);
+            await api.ajax({
+                type: 'POST',
+                url: api.getUrl(`Sessions/${session.Id}/Command`),
+                data: JSON.stringify({ Name: 'SetAudioStreamIndex', Arguments: { Index: String(state.AudioStreamIndex) } }),
+                contentType: 'application/json'
+            });
+        } catch (err) {
+            WARN('Could not renegotiate the stream:', err);
+        } finally {
+            // Leave time for the new PlaybackInfo to go out before checking again.
+            setTimeout(() => { burnIn.renegotiating = false; }, 5000);
+        }
+    }
+
+    // Called from the render loop about once a second while CRT runs: a
+    // subtitle track switched on mid-stream arrives as a client layer, under
+    // the canvas, until the stream is renegotiated with burn-in.
+    function checkSubtitleDelivery(now) {
+        if (now - burnIn.lastCheck < 1000) return;
+        burnIn.lastCheck = now;
+        if (!burnIn.lastBurned && clientSubtitlesShowing()) renegotiateStream('subtitles are showing client-side under the CRT layer');
+    }
+
+    installPlaybackInfoHook();
+
+    // ======================================================================
     //  HOST: canvas, video, render loop
     // ======================================================================
 
@@ -1425,6 +1567,7 @@ void main() {
 
         const field = clock.tick(now);
         if (clock.periodMs) pipeline.setHostParam('persist_tick_ms', clock.periodMs);
+        checkSubtitleDelivery(now);
 
         // HAVE_CURRENT_DATA: there is a frame to upload.
         if (video.readyState < 2 || !video.videoWidth) return;
@@ -1547,11 +1690,16 @@ void main() {
     }
 
     function setEnabled(value) {
+        const wasBurning = burnIn.lastBurned && !!findVideo();
         enabled = value;
         writePref(STORAGE_KEY, value ? '1' : '0');
         if (value) start();
         else stop();
         updateButtons();
+        // Turning on is handled by the render loop once the layer is up (it
+        // sees the client subtitles). Turning off has no loop left to do it,
+        // so hand the stream back to client-side subtitles now.
+        if (!value && wasBurning) renegotiateStream('CRT turned off; subtitles back to the web player');
     }
 
     // Switching engine or profile rebuilds on the running video.
@@ -1665,7 +1813,8 @@ void main() {
             source: srcW ? `${srcW}x${srcH}` : null,
             refreshHz: clock.periodMs ? +(1000 / clock.periodMs).toFixed(2) : null,
             fieldsLockedTo: clock.locked || null,
-            outputStageActive: pipeline ? !!pipeline.outputActive : null
+            outputStageActive: pipeline ? !!pipeline.outputActive : null,
+            subtitlesBurnedIn: burnIn.lastBurned
         }),
         // For tests: build a pipeline on any WebGL2 context.
         _createPipeline: (ctx, engine, profile) => (engine === 'fused' ? createFusedPipeline(ctx) : createMpvPipeline(ctx, profile || DEFAULT_PROFILE)),
