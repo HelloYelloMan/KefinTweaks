@@ -73,7 +73,9 @@
 // Native <track> cues are drawn by the video element itself, so they end up
 // under the canvas.
 //
-// The enabled state, engine and profile are per browser (localStorage).
+// CRT is OFF on every page load: on/off lives only in this page's memory,
+// so a refresh always starts disabled (it does carry from one video to the
+// next within the page). Engine and subtitle mode are per browser (localStorage).
 // Console: KefinTweaksCrt.status(), .setProfile(name), .setEngine('mpv'|'fused').
 
 (function () {
@@ -107,7 +109,10 @@
         try { localStorage.setItem(key, value); } catch (e) { /* private window */ }
     }
 
-    let enabled = readPref(STORAGE_KEY, '0') === '1';
+    // Never restored: every page load starts with CRT off. The key earlier
+    // versions stored is removed so nothing stale lingers.
+    let enabled = false;
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* private window */ }
     let profileName = readPref(PROFILE_KEY, DEFAULT_PROFILE);
     let engineName = readPref(ENGINE_KEY, DEFAULT_ENGINE);
     // 'burn': the server burns them in (the default). 'composite': Jellyfin
@@ -2530,7 +2535,6 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
     function setEnabled(value) {
         const wasBurning = burnIn.lastBurned && !!findVideo();
         enabled = value;
-        writePref(STORAGE_KEY, value ? '1' : '0');
         if (value) start();
         else stop();
         updateButtons();
