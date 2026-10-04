@@ -1354,8 +1354,16 @@ void main() {
     const burnIn = {
         lastBurned: null,       // did the last PlaybackInfo we sent ask for burn-in?
         renegotiating: false,
-        lastCheck: 0
+        lastCheck: 0,
+        offTimer: 0             // pending hand-back after CRT was turned off
     };
+
+    // How long CRT has to stay off before the stream is handed back to the
+    // web player's own subtitles. The button cycles kurozumi -> off -> super,
+    // so passing through off on the way to super must not restart the stream
+    // twice; the burned-in stream simply carries on if CRT comes back on in
+    // time.
+    const BURN_HANDBACK_DELAY_MS = 4000;
 
     const PLAYBACK_INFO_RE = /\/Items\/[^/?#]+\/PlaybackInfo(?:[?#]|$)/i;
 
@@ -2533,15 +2541,25 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
     }
 
     function setEnabled(value) {
-        const wasBurning = burnIn.lastBurned && !!findVideo();
+        const burningVideo = burnIn.lastBurned ? findVideo() : null;
         enabled = value;
         if (value) start();
         else stop();
         updateButtons();
         // Turning on is handled by the render loop once the layer is up (it
         // sees the client subtitles). Turning off has no loop left to do it,
-        // so hand the stream back to client-side subtitles now.
-        if (!value && wasBurning) renegotiateStream('CRT turned off; subtitles back to the web player');
+        // so hand the stream back to client-side subtitles -- after a grace
+        // period, cancelled if CRT comes back on first.
+        clearTimeout(burnIn.offTimer);
+        burnIn.offTimer = 0;
+        if (!value && burningVideo) {
+            burnIn.offTimer = setTimeout(() => {
+                burnIn.offTimer = 0;
+                // Still off, still the same video, and its stream still burned in.
+                if (enabled || !burnIn.lastBurned || findVideo() !== burningVideo) return;
+                renegotiateStream('CRT turned off; subtitles back to the web player');
+            }, BURN_HANDBACK_DELAY_MS);
+        }
     }
 
     // Switching engine or profile rebuilds on the running video.
