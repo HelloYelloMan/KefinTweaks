@@ -1480,7 +1480,10 @@ void main() {
             for (const sel of ['.videoSubtitlesInner', '.videoSecondarySubtitlesInner']) {
                 const el = container && container.querySelector(sel);
                 const text = el && el.innerText.trim();
-                if (text) out.push({ lines: text.split('\n'), italic: !!el.querySelector('i'), top: sel.includes('Secondary') });
+                if (text) {
+                    const italic = !!el.querySelector('i') && el.innerText.trim() === (el.querySelector('i').innerText || '').trim();
+                    out.push({ lines: text.split('\n').map((t) => ({ text: t, italic })), top: sel.includes('Secondary') });
+                }
             }
             if (out.length) return out;
             const showing = Array.from(v.textTracks || []).filter((t) => t.mode === 'showing');
@@ -1488,8 +1491,18 @@ void main() {
                 const cues = Array.from(t.activeCues || []);
                 if (!cues.length) return;
                 const raw = cues.map((c) => c.text || '').join('\n');
-                const lines = raw.split(/\n|<br\s*\/?>/i).map((l) => l.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')).filter((l) => l.trim());
-                if (lines.length) out.push({ lines, italic: /<i>/i.test(raw), top: i > 0 });
+                // Italics per line: a line is italic while an <i> is open,
+                // which can carry across a line break.
+                let open = false;
+                const lines = [];
+                for (const l of raw.split(/\n|<br\s*\/?>/i)) {
+                    const startsOpen = open;
+                    const tags = l.match(/<\/?i>/gi) || [];
+                    tags.forEach((t) => { open = !t.startsWith('</'); });
+                    const text = l.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ');
+                    if (text.trim()) lines.push({ text, italic: startsOpen || /^\s*<i>/i.test(l) });
+                }
+                if (lines.length) out.push({ lines, top: i > 0 });
             });
             return out;
         }
@@ -1509,7 +1522,7 @@ void main() {
         function drawText(src, W, H) {
             const k = H / MPV_SUB_STYLE.refHeight;
             const size = MPV_SUB_STYLE.fontSize * k;
-            g.font = `${src.italic ? 'italic ' : ''}${size}px sans-serif`;
+            const font = (italic) => `${italic ? 'italic ' : ''}${size}px sans-serif`;
             g.textAlign = 'center';
             g.textBaseline = 'alphabetic';
             g.lineJoin = 'round';
@@ -1517,15 +1530,19 @@ void main() {
             g.strokeStyle = '#000';
             g.fillStyle = '#fff';
             const maxWidth = W - 2 * MPV_SUB_STYLE.marginX * k;
-            const lines = src.lines.flatMap((l) => wrap(l, maxWidth));
+            const lines = src.lines.flatMap((l) => {
+                g.font = font(l.italic);
+                return wrap(l.text, maxWidth).map((text) => ({ text, italic: l.italic }));
+            });
             const step = size * MPV_SUB_STYLE.lineSpacing;
             const marginY = MPV_SUB_STYLE.marginY * k;
             lines.forEach((line, i) => {
                 const y = src.top
                     ? marginY + size * 0.95 + i * step
                     : H - marginY - size * 0.25 - (lines.length - 1 - i) * step;
-                g.strokeText(line, W / 2, y);
-                g.fillText(line, W / 2, y);
+                g.font = font(line.italic);
+                g.strokeText(line.text, W / 2, y);
+                g.fillText(line.text, W / 2, y);
             });
         }
 
