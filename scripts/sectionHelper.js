@@ -1371,12 +1371,14 @@
             return loadConcretePromise;
         };
 
+        let concreteRefreshPromise;
         const ensureData = async () => {
             const qr = await loadConcrete();
             if (!qr) return { Items: [] };
             const items = typeof qr.result?.ensureData === 'function'
                 ? await qr.result.ensureData()
                 : (qr.result?.dataPromise ?? qr.result?.data);
+            concreteRefreshPromise = qr.result?.refreshPromise;
             return items;
         };
 
@@ -1393,6 +1395,20 @@
             configurable: true,
             enumerable: true,
             get() { return ensureData(); }
+        });
+        /* The concrete row's stale-while-revalidate refresh. ensureData hands back
+         * the cached snapshot when it has expired, and the fresh response lands on
+         * the inner result's refreshPromise. Without passing it up, cardBuilder saw
+         * no refresh pending: it painted the snapshot -- which can be weeks old,
+         * from whenever this genre/studio/person row last came up -- and never
+         * applied the fresh data, so items deleted or re-id'd since (a Radarr
+         * upgrade renames the file, and Jellyfin gives it a new id) showed and
+         * opened a 404. The inner one is set before its ensureData resolves, so
+         * it is in place by the time cardBuilder reads it. */
+        Object.defineProperty(result, 'refreshPromise', {
+            configurable: true,
+            enumerable: true,
+            get() { return concreteRefreshPromise; }
         });
 
         return { config, result };
