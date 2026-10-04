@@ -147,7 +147,7 @@
     // ======================================================================
 
     function createFieldClock() {
-        const MEASURE = 90;        // deltas to measure (~0.4 s at 240 Hz)
+        const MEASURE = 240;       // deltas to measure (~1 s at 240 Hz)
         let lastNow = 0;
         let t0 = 0;
         let period = 0;            // refresh period, ms (tracked after the lock)
@@ -185,11 +185,22 @@
                     // Measuring: plain time meanwhile.
                     if (d > 0 && d < 100) samples.push(d);
                     if (samples.length >= MEASURE) {
-                        // Mean of the middle half: robust to jitter and to the
-                        // odd dropped frame.
+                        // Total time over refreshes counted, not a typical
+                        // interval: Firefox and Zen round rAF timestamps to
+                        // whole milliseconds, so at 240 Hz every interval
+                        // reads 4 or 5 ms and the median says 250 Hz. The
+                        // median only sizes a refresh for counting (so a
+                        // dropped frame counts as two); the period is the
+                        // elapsed time over that count, where the rounding
+                        // averages out.
                         const sorted = samples.slice().sort((a, b) => a - b);
-                        const mid = sorted.slice(MEASURE >> 2, MEASURE - (MEASURE >> 2));
-                        period = mid.reduce((a, b) => a + b, 0) / mid.length;
+                        const rough = sorted[sorted.length >> 1];
+                        let total = 0, count = 0;
+                        for (const s of samples) {
+                            total += s;
+                            count += Math.max(1, Math.round(s / rough));
+                        }
+                        period = total / count;
                         const ratio = (1000 / period) / FIELD_RATE;
                         const n = Math.round(ratio);
                         lockN = n >= 1 && Math.abs(ratio - n) < 0.015 * n ? n : 0;
@@ -221,7 +232,11 @@
                 const steps = Math.max(1, Math.round(d / period));
                 refreshes += steps;
                 timedMs += steps * period;
-                if (steps === 1 && Math.abs(d - period) < 0.2 * period) period += (d - period) * 0.01;
+                // Drift is tracked from single-refresh steps only, with no
+                // tighter gate: with Firefox's whole-millisecond timestamps a
+                // 4.165 ms refresh reads as 4 or 5, and gating out the 5s as
+                // outliers would walk the estimate down to 4.000 (250 Hz).
+                if (steps === 1) period += (d - period) * 0.005;
 
                 lastField = fieldBase + (lockN ? Math.floor(refreshes / lockN)
                                                : Math.floor(timedMs / 1000 * FIELD_RATE));
@@ -905,16 +920,19 @@ vec4 kt_delinearize(vec4 color) {
     //                            Pixel-sized triads are right WITHIN a panel:
     //                            a smaller window is a smaller TV, with fewer.
     //   persist_tick_ms          milliseconds per OUTPUT run, 4.167 at 240 Hz:
-    //                            the measured refresh period.
+    //                            the measured refresh period, except within 1%
+    //                            of 240 Hz, where the tuned value is used as is.
     //
     // Both are CONSTANT in the shader, i.e. baked into each compiled pass, so
     // they are promoted to uniforms here: a value that follows the display
     // cannot be compiled in. tools/build-crt-shaders.mjs generates the same
     // uniforms, since it runs this generator.
     const DISPLAY_REF_LINES = 2160;
+    const DISPLAY_REF_HZ = 240;
     const DISPLAY_PARAMS = {
         mask_triad_size_desired: (base, d) => Math.max(2, base * d.panelLines / DISPLAY_REF_LINES),
-        persist_tick_ms: (base, d) => d.refreshMs || base
+        // Within 1% of the tuned 240 Hz, the tuned value exactly.
+        persist_tick_ms: (base, d) => (d.refreshMs && Math.abs(1000 / d.refreshMs - DISPLAY_REF_HZ) > 0.01 * DISPLAY_REF_HZ ? d.refreshMs : base)
     };
 
     // Everything that does not need a GL context: profile, parsed files,
