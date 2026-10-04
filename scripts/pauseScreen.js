@@ -73,7 +73,7 @@
         CLEARART_RIGHT_OFFSET:  -1,    // vw from right edge (-1 = center instead)
 
         // ---- TIMING ----
-        PAUSE_DELAY_MS:      3000,     // ms before pause screen appears
+        PAUSE_DELAY_MS:      5000,     // ms paused with no input before pause screen appears
         ENDS_AT_REFRESH_MS:  30000,    // ms between "Ends at" refreshes while shown
 
         // ---- CACHE ----
@@ -124,6 +124,22 @@
         logo:      30,
         closeBtn:  40,
     };
+
+    // Per-user on/off switch, set from Settings -> Display. Kept in localStorage
+    // per user, like the skin and theme-media toggles on that page: a key in the
+    // server's CustomPrefs would be overwritten by jellyfin-web's own Save, which
+    // posts back the CustomPrefs it loaded at sign-in.
+    function userPrefKey() {
+        let uid = '';
+        try { uid = ApiClient.getCurrentUserId() || ''; } catch (e) { /* noop */ }
+        return 'kefinPauseScreen_enabled_' + uid;
+    }
+    function isEnabledForUser() {
+        try { return localStorage.getItem(userPrefKey()) !== 'false'; } catch (e) { return true; }
+    }
+    function setEnabledForUser(enabled) {
+        try { localStorage.setItem(userPrefKey(), enabled ? 'true' : 'false'); } catch (e) { /* noop */ }
+    }
 
     class JellyfinPauseScreen {
         constructor() {
@@ -643,8 +659,13 @@
         // --------------------------------------------------
 
         setupInteractionListeners() {
-            let lastMouseX = null;
-            let lastMouseY = null;
+            // Movement is measured from where the pointer was when it last
+            // counted as activity, not from the previous event. Browsers send
+            // one mousemove per frame, so at a high refresh rate consecutive
+            // events are a few pixels apart: a per-event threshold almost never
+            // tripped, and the pause screen came up under a moving mouse.
+            let anchorX = null;
+            let anchorY = null;
             const MOUSE_MOVE_THRESHOLD = 15;
 
             const resetTimer = () => {
@@ -673,17 +694,19 @@
                 if (!this.isPlayerActive()) return;
                 const x = e.clientX;
                 const y = e.clientY;
-                if (lastMouseX !== null && lastMouseY !== null) {
-                    if (Math.hypot(x - lastMouseX, y - lastMouseY) > MOUSE_MOVE_THRESHOLD) {
-                        if (e.target?.closest?.('.videoOsdBottom, .osdHeader, .videoOsdTop')) {
-                            this.clearPauseTimer();
-                        } else {
-                            resetTimer();
-                        }
-                    }
+                if (anchorX === null || anchorY === null) {
+                    anchorX = x;
+                    anchorY = y;
+                    return;
                 }
-                lastMouseX = x;
-                lastMouseY = y;
+                if (Math.hypot(x - anchorX, y - anchorY) <= MOUSE_MOVE_THRESHOLD) return;
+                anchorX = x;
+                anchorY = y;
+                if (e.target?.closest?.('.videoOsdBottom, .osdHeader, .videoOsdTop')) {
+                    this.clearPauseTimer();
+                } else {
+                    resetTimer();
+                }
             };
             document.addEventListener('mousemove', handleMouseMove, { passive: true });
             this.boundInteractionListeners.push({ event: 'mousemove', handler: handleMouseMove });
@@ -1020,6 +1043,7 @@
 
         showOverlay() {
             if (this._userDismissed) return;
+            if (!isEnabledForUser()) return;
             // Already up: re-showing would record the overlay itself as the focus
             // to restore on resume, and redo the artwork layout on every mouse move.
             if (this.overlay.getAttribute('aria-hidden') === 'false') return;
@@ -2103,6 +2127,87 @@
         }
     }
 
+    // ---- Settings -> Display: a "Show pause screen" checkbox for each user.
+    // Cloned from the page's own Blurhash row, the last one in its Display
+    // section, so it takes that page's styling: emby-checkbox rows on the
+    // legacy layout, React/MUI on Jellyfin 12's modern layout. ----
+    (function registerDisplaySetting() {
+        const ROW_CLASS = 'kefinPauseScreenSetting';
+        const HELP_ID = 'kefin-pause-screen-description';
+        const LABEL = 'Show pause screen';
+        const HELP = 'After playback has been paused for a few seconds, show the title, plot and artwork over the video.';
+
+        // A cloned MUI checkbox has no React behind it, so it has to draw its
+        // own box: these are MUI's CheckBox and CheckBoxOutlineBlank icons.
+        const MUI_ICONS = {
+            checked:   ['CheckBoxIcon', 'M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.11 0 2-.9 2-2V5c0-1.1-.89-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z'],
+            unchecked: ['CheckBoxOutlineBlankIcon', 'M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z']
+        };
+
+        function drawMuiBox(row, input) {
+            row.querySelector('.MuiCheckbox-root')?.classList.toggle('Mui-checked', input.checked);
+            const svg = row.querySelector('.MuiCheckbox-root svg');
+            const [testId, d] = MUI_ICONS[input.checked ? 'checked' : 'unchecked'];
+            svg?.setAttribute('data-testid', testId);
+            svg?.querySelector('path')?.setAttribute('d', d);
+        }
+
+        function addRow(scope) {
+            if (scope.querySelector('.' + ROW_CLASS)) return true;
+
+            const legacyInput = scope.querySelector('#chkBlurhash');
+            const modernHelp = scope.querySelector('#display-settings-blurhash-description');
+            const source = legacyInput ? legacyInput.closest('.checkboxContainer')
+                : modernHelp ? modernHelp.closest('.MuiFormControl-root') : null;
+            const isMui = !legacyInput;
+            if (!source) return false;
+
+            const row = source.cloneNode(true);
+            const input = row.querySelector('input[type="checkbox"]');
+            if (!input) return false;
+            row.classList.add(ROW_CLASS);
+            // No name, so neither page's own Save picks it up
+            input.removeAttribute('name');
+            input.id = 'chkKefinPauseScreen';
+            input.checked = isEnabledForUser();
+
+            const label = row.querySelector('.checkboxLabel, .MuiFormControlLabel-label')
+                || row.querySelector('label > span');
+            if (label) label.textContent = LABEL;
+            const help = row.querySelector('.fieldDescription, .MuiFormHelperText-root');
+            if (help) {
+                help.textContent = HELP;
+                help.id = HELP_ID;
+            }
+            row.querySelector('[aria-describedby]')?.setAttribute('aria-describedby', HELP_ID);
+
+            if (isMui) drawMuiBox(row, input);
+            input.addEventListener('change', () => {
+                setEnabledForUser(input.checked);
+                if (isMui) drawMuiBox(row, input);
+                LOG('pause screen ' + (input.checked ? 'enabled' : 'disabled') + ' for this user');
+            });
+
+            source.parentNode.insertBefore(row, source.nextSibling);
+            return true;
+        }
+
+        function onViewShow(e) {
+            if (!(window.location.hash || '').toLowerCase().includes('mypreferencesdisplay')) return;
+            const scope = e?.target instanceof Element ? e.target : document;
+            if (addRow(scope)) return;
+            // The legacy page fills in its rows after viewshow
+            const obs = new MutationObserver(() => {
+                if (addRow(scope)) obs.disconnect();
+            });
+            obs.observe(scope, { childList: true, subtree: true });
+            setTimeout(() => obs.disconnect(), 5000);
+        }
+
+        document.addEventListener('viewshow', onViewShow, true);
+        onViewShow(); // the page may already be open when this script loads
+    })();
+
     // ---- Feature configuration modal (the "Configure" button on the KefinTweaks
     // feature card). ModalSystem + KefinTweaksUtils.saveConfigToJavaScriptInjector.
     // Changes apply on next reload. ----
@@ -2144,7 +2249,7 @@
             return '<div style="max-width:800px;">'
                 + sectionHeader('Timing')
                 + numberRow('PAUSE_DELAY_MS', v('PAUSE_DELAY_MS'), 'Pause Delay (ms)',
-                    'How long playback must stay paused before the pause screen appears.', 0, 250)
+                    'How long playback must stay paused, with no mouse, touch or key input, before the pause screen appears.', 0, 250)
                 + numberRow('ENDS_AT_REFRESH_MS', v('ENDS_AT_REFRESH_MS'), '"Ends at" Refresh Interval (ms)',
                     'How often the "Ends at" clock time is refreshed while the overlay is open, so long pauses don\'t show a stale time.', 5000, 1000)
 
@@ -2228,7 +2333,7 @@
             };
 
             return Object.assign({}, base, {
-                PAUSE_DELAY_MS:         Math.max(0, num('PAUSE_DELAY_MS', 3000)),
+                PAUSE_DELAY_MS:         Math.max(0, num('PAUSE_DELAY_MS', 5000)),
                 ENDS_AT_REFRESH_MS:     Math.max(5000, num('ENDS_AT_REFRESH_MS', 30000)),
                 CONTENT_LEFT_EDGE:      text('CONTENT_LEFT_EDGE'),
                 PLOT_WIDTH:             text('PLOT_WIDTH'),
