@@ -1386,10 +1386,481 @@ void main() {
     installPlaybackInfoHook();
 
     // ======================================================================
+    //  AUTOCROP  (~/.config/mpv/scripts/autocrop-fast.lua, ported)
+    // ======================================================================
+    // mpv crops baked-in black bars before the chain (retro-base's @autocrop
+    // filter), so the tube is fitted to the PICTURE rather than to a 16:9
+    // frame with a film inside it. This is that script, with the same options
+    // and the same rules, and ffmpeg's cropdetect in place of the filter:
+    //
+    //   DETECT   a GPU pass marks every row and column of the frame as black
+    //            or not -- cropdetect's test exactly: the line's integer
+    //            average luma (limited range, so black is 16) above `limit`.
+    //            A few KB come back through a PBO and a fence, never a
+    //            stalling readPixels. Extents accumulate across frames, as
+    //            cropdetect does with reset=0, and the rectangle is rounded
+    //            the way cropdetect rounds it.
+    //   DECIDE   autocrop-fast's state machine: readings snapped to full
+    //            within min_crop, rejected below min_ratio, folded into a
+    //            candidate that only grows; committed once it has held still
+    //            for settle_time in wall AND playback time; detect_timeout
+    //            takes the newest sane reading; then watch_seconds of watching
+    //            for wider picture, re-committing on grow_threshold or on the
+    //            last tick.
+    //   APPLY    the crop is copied out of the frame before the chain, and the
+    //            canvas takes the cropped shape, so the tube hugs the picture.
+    //            A black matte covers the uncropped video underneath.
+    //
+    // ONE DIFFERENCE, forced by burn-in: mpv runs cropdetect BEFORE subtitles
+    // are burned in, because text in a letterbox bar reads as picture. Here
+    // the server burns them in, so the detector skips frames while a subtitle
+    // event is on screen, using the event times from Jellyfin's subtitle
+    // stream. Gated time does not count toward settling or the deadlines. For
+    // image subtitles (PGS), which have no event list, letterbox and pillarbox
+    // crops are made symmetric instead, so a subtitle can only make the crop
+    // smaller, never off-centre.
+    //
+    // A result is kept per item, so a stream renegotiation (CRT toggled with
+    // subtitles on) does not re-detect.
+
+    const AUTOCROP = {
+        limit: 24,              // cropdetect limit=24/255, in 8-bit luma
+        round: 2,
+        minRatio: 0.5,
+        minCrop: 16,
+        pollInterval: 0.05,     // s between detector readings
+        settleTime: 0.4,
+        detectTimeout: 8,
+        keepWatching: true,
+        watchSeconds: 15,
+        growThreshold: 4,
+        subtitleMargin: 0.25    // s either side of a subtitle event to skip
+    };
+
+    const FS_CROPDETECT = `#version 300 es
+precision highp float;
+precision highp int;
+uniform highp sampler2D kt_src;
+uniform ivec2 kt_size;
+uniform float kt_limit;
+out vec4 kt_out;
+// Limited-range luma, as cropdetect reads it from the Y plane: the browser
+// has expanded the video to full-range RGB, so map it back.
+float kt_y(vec3 c) { return 16.0 + 219.0 * dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+void main() {
+    int i = int(gl_FragCoord.x);
+    bool cols = int(gl_FragCoord.y) == 0;
+    int len = cols ? kt_size.y : kt_size.x;
+    if (i >= (cols ? kt_size.x : kt_size.y)) { kt_out = vec4(0.0); return; }
+    float total = 0.0;
+    for (int k = 0; k < len; k++) {
+        ivec2 p = cols ? ivec2(i, k) : ivec2(k, i);
+        total += floor(kt_y(texelFetch(kt_src, p, 0).rgb) + 0.5);
+    }
+    // cropdetect: checkline() returns total / len in integer arithmetic.
+    kt_out = vec4(floor(total / float(len)) > kt_limit ? 1.0 : 0.0, 0.0, 0.0, 1.0);
+}`;
+
+    const FS_CROP_COPY = `#version 300 es
+precision highp float;
+uniform highp sampler2D kt_src;
+uniform ivec2 kt_off;
+out vec4 kt_out;
+void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }`;
+
+    function createAutocrop() {
+        let ctx = null;          // GL objects, per context
+        const st = { key: null };
+
+        const rectEq = (a, b) => a && b && a.w === b.w && a.h === b.h && a.x === b.x && a.y === b.y;
+        const rectStr = (r) => `${r.w}x${r.h}+${r.x}+${r.y}`;
+
+        function align(r) {
+            if (AUTOCROP.round > 1) {
+                r.w = Math.min(Math.ceil(r.w / AUTOCROP.round) * AUTOCROP.round, st.sw);
+                r.h = Math.min(Math.ceil(r.h / AUTOCROP.round) * AUTOCROP.round, st.sh);
+            }
+            r.x = Math.max(0, Math.min(r.x, st.sw - r.w));
+            r.y = Math.max(0, Math.min(r.y, st.sh - r.h));
+            return r;
+        }
+
+        function rectUnion(a, b) {
+            if (!a) return b;
+            if (!b) return a;
+            const x1 = Math.min(a.x, b.x);
+            const y1 = Math.min(a.y, b.y);
+            return align({ x: x1, y: y1, w: Math.max(a.x + a.w, b.x + b.w) - x1, h: Math.max(a.y + a.h, b.y + b.h) - y1 });
+        }
+
+        const isFull = (r) => r && r.w >= st.sw && r.h >= st.sh;
+
+        function snapToFull(r) {
+            if (st.sw - r.w < AUTOCROP.minCrop) { r.w = st.sw; r.x = 0; }
+            if (st.sh - r.h < AUTOCROP.minCrop) { r.h = st.sh; r.y = 0; }
+            return r;
+        }
+
+        function isSane(r) {
+            if (r.w < st.sw * AUTOCROP.minRatio || r.h < st.sh * AUTOCROP.minRatio) return false;
+            return r.x >= 0 && r.y >= 0 && r.x + r.w <= st.sw && r.y + r.h <= st.sh;
+        }
+
+        // cropdetect's rectangle from the accumulated extents, rounded the
+        // way it rounds: shrink to a multiple of `round`, offset to even.
+        function readDetection() {
+            const d = st.det;
+            if (!d) return null;
+            let w = d.x2 - d.x1 + 1;
+            let h = d.y2 - d.y1 + 1;
+            if (w <= 0 || h <= 0) return null;
+            const round = AUTOCROP.round <= 1 ? 16 : (AUTOCROP.round % 2 ? AUTOCROP.round * 2 : AUTOCROP.round);
+            let shrink = w % round;
+            w -= shrink;
+            let x = (d.x1 + ((shrink >> 1) + 1)) & ~1;
+            shrink = h % round;
+            h -= shrink;
+            let y = (d.y1 + ((shrink >> 1) + 1)) & ~1;
+            let r = { x, y, w, h };
+            if (st.symmetric) {
+                const bx = Math.min(r.x, st.sw - (r.x + r.w));
+                const by = Math.min(r.y, st.sh - (r.y + r.h));
+                r = { x: bx, y: by, w: st.sw - 2 * bx, h: st.sh - 2 * by };
+            }
+            return snapToFull(r);
+        }
+
+        function noteReading(r, now, pt) {
+            r = rectUnion(st.cand, r);
+            if (rectEq(r, st.cand)) {
+                if (pt != null && (st.candPlay == null || pt < st.candPlay)) st.candPlay = pt;
+                return;
+            }
+            st.cand = r;
+            st.candWall = now;
+            st.candPlay = pt;
+        }
+
+        function settled(now, pt, paused) {
+            if (!st.cand) return false;
+            if (now - st.candWall < AUTOCROP.settleTime) return false;
+            if (!paused) {
+                const played = (pt != null && st.candPlay != null) ? pt - st.candPlay : 0;
+                if (played < AUTOCROP.settleTime * 0.8) return false;
+            }
+            return true;
+        }
+
+        function apply(r) {
+            const prev = st.result;
+            st.result = { ...r };
+            if (!rectEq(prev, st.result)) {
+                st.changed = true;
+                LOG(isFull(r) ? 'Autocrop: no bars, full frame' : `Autocrop: ${rectStr(r)} of ${st.sw}x${st.sh}`);
+            }
+            return true;
+        }
+
+        function stopWatching() {
+            st.phase = 'done';
+        }
+
+        function beginWatching(now) {
+            if (!AUTOCROP.keepWatching || isFull(st.result)) { stopWatching(); return; }
+            st.phase = 'watching';
+            st.watchUntil = now + AUTOCROP.watchSeconds;
+        }
+
+        function decide(now, pt, paused) {
+            if (st.phase === 'detecting') {
+                if (settled(now, pt, paused)) {
+                    apply(st.cand);
+                    beginWatching(now);
+                } else if (now > st.deadline) {
+                    if (st.cand) {
+                        WARN('Autocrop: detection never settled; using the newest sane reading');
+                        apply(st.cand);
+                        beginWatching(now);
+                    } else {
+                        WARN(`Autocrop: no usable crop within ${AUTOCROP.detectTimeout}s; leaving the frame uncropped`);
+                        stopWatching();
+                    }
+                }
+                return;
+            }
+            if (st.phase !== 'watching') return;
+            const cur = st.result;
+            const expired = !st.watchUntil || now > st.watchUntil;
+            if (st.cand && cur && !rectEq(st.cand, cur)) {
+                const grew = st.cand.w >= cur.w + AUTOCROP.growThreshold || st.cand.h >= cur.h + AUTOCROP.growThreshold;
+                if ((grew && settled(now, pt, paused)) || expired) {
+                    LOG(`Autocrop: picture grew, widening ${rectStr(cur)} -> ${rectStr(st.cand)}`);
+                    apply(st.cand);
+                    if (isFull(st.cand)) { stopWatching(); return; }
+                }
+            }
+            if (expired) stopWatching();
+        }
+
+        // Subtitle event times for the burned-in track, so frames carrying a
+        // subtitle can be skipped. null = no list (image subtitles): symmetric.
+        async function loadSubtitleEvents(forKey) {
+            st.events = undefined;
+            st.symmetric = false;
+            try {
+                const session = await ownSession();
+                const ps = session?.PlayState;
+                if (st.key !== forKey) return;
+                if (!session || ps.SubtitleStreamIndex == null || ps.SubtitleStreamIndex < 0) { st.events = []; return; }
+                const api = window.ApiClient;
+                const url = api.getUrl(`Videos/${session.NowPlayingItem.Id}/${ps.MediaSourceId}/Subtitles/${ps.SubtitleStreamIndex}/0/Stream.js`);
+                const data = await api.getJSON(url);
+                if (st.key !== forKey) return;
+                st.events = (data?.TrackEvents || [])
+                    .map((e) => [e.StartPositionTicks / 1e7 - AUTOCROP.subtitleMargin, e.EndPositionTicks / 1e7 + AUTOCROP.subtitleMargin])
+                    .sort((a, b) => a[0] - b[0]);
+                LOG(`Autocrop: skipping frames under ${st.events.length} subtitle events`);
+            } catch (e) {
+                if (st.key !== forKey) return;
+                st.events = null;
+                st.symmetric = true;
+                LOG('Autocrop: no subtitle timing for this track (image subtitles?); crops will be symmetric');
+            }
+        }
+
+        function subtitleOnScreen(pt) {
+            const ev = st.events;
+            if (!ev || !ev.length || pt == null) return false;
+            let lo = 0, hi = ev.length - 1, idx = -1;
+            while (lo <= hi) {                       // last event starting at or before pt
+                const mid = (lo + hi) >> 1;
+                if (ev[mid][0] <= pt) { idx = mid; lo = mid + 1; } else hi = mid - 1;
+            }
+            // Events can overlap; look back a little for a long one still on.
+            for (let i = idx; i >= 0 && i > idx - 8; i--) if (ev[i][1] >= pt) return true;
+            return false;
+        }
+
+        function ensureGL(gl) {
+            if (ctx && ctx.gl === gl) return ctx;
+            const prog = (fs) => {
+                const vs = compile(gl, gl.VERTEX_SHADER, VS_PASS);
+                const f = compile(gl, gl.FRAGMENT_SHADER, fs);
+                const p = gl.createProgram();
+                gl.attachShader(p, vs);
+                gl.attachShader(p, f);
+                gl.linkProgram(p);
+                if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('autocrop: ' + (gl.getShaderInfoLog(f) || gl.getProgramInfoLog(p)));
+                return p;
+            };
+            ctx = {
+                gl,
+                detect: prog(FS_CROPDETECT),
+                copy: prog(FS_CROP_COPY),
+                detectFbo: gl.createFramebuffer(),
+                detectTex: null,
+                detectLen: 0,
+                pbo: gl.createBuffer(),
+                cropFbo: gl.createFramebuffer(),
+                cropTex: null,
+                cropW: 0,
+                cropH: 0
+            };
+            return ctx;
+        }
+
+        return {
+            get result() { return st.result && !isFull(st.result) ? st.result : null; },
+            get phase() { return st.phase || null; },
+            get symmetric() { return !!st.symmetric; },
+
+            // Start over for a new item (or on request).
+            reset(key, sw, sh, now, burned) {
+                Object.assign(st, {
+                    key, sw, sh, det: null, cand: null, candWall: 0, candPlay: null,
+                    result: null, phase: 'detecting', deadline: now + AUTOCROP.detectTimeout,
+                    watchUntil: 0, lastDetect: 0, pending: null, changed: true,
+                    events: [], symmetric: false, burnedFor: burned, lastNow: now, lastPt: null
+                });
+                if (burned) loadSubtitleEvents(key);
+            },
+
+            needsReset(key, sw, sh) {
+                return key !== st.key || sw !== st.sw || sh !== st.sh;
+            },
+
+            // The OSD's item id often arrives after playback starts, when a
+            // duration key is already in use: same frame size means the same
+            // item, so keep everything detected so far.
+            adoptKey(key, sw, sh) {
+                if (st.key && st.key.startsWith('dur:') && !key.startsWith('dur:') && sw === st.sw && sh === st.sh) {
+                    st.key = key;
+                    return true;
+                }
+                return false;
+            },
+
+            // Burn-in can begin mid-file (subtitles switched on): fetch timings then.
+            noteBurnState(burned) {
+                if (burned && !st.burnedFor && st.phase !== 'done') {
+                    st.burnedFor = true;
+                    loadSubtitleEvents(st.key);
+                }
+            },
+
+            takeChanged() {
+                const c = !!st.changed;
+                st.changed = false;
+                return c;
+            },
+
+            // Every tick: collect a finished readback, account for skipped
+            // time, and run the decision rules.
+            update(gl, now, pt, paused) {
+                if (!st.key || st.phase === 'done') return;
+                const dt = Math.max(0, now - st.lastNow);
+                const dpt = (pt != null && st.lastPt != null) ? Math.max(0, pt - st.lastPt) : 0;
+                st.lastNow = now;
+                st.lastPt = pt;
+
+                // Time spent unable to look -- waiting for the subtitle list,
+                // or a subtitle on screen -- proves nothing about the picture,
+                // so it counts toward neither settling nor the deadlines.
+                if (st.burnedFor && (st.events === undefined || subtitleOnScreen(pt))) {
+                    st.candWall += dt;
+                    if (st.candPlay != null) st.candPlay += dpt;
+                    st.deadline += dt;
+                    if (st.watchUntil) st.watchUntil += dt;
+                    st.gated = true;
+                } else {
+                    st.gated = false;
+                }
+
+                if (st.pending && ctx) {
+                    const status = gl.clientWaitSync(st.pending.fence, 0, 0);
+                    if (status === gl.ALREADY_SIGNALED || status === gl.CONDITION_SATISFIED) {
+                        const { fence, len, w, h, pt: framePt } = st.pending;
+                        st.pending = null;
+                        gl.deleteSync(fence);
+                        const bytes = new Uint8Array(len * 2 * 4);
+                        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, ctx.pbo);
+                        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, bytes);
+                        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+                        if (w === st.sw && h === st.sh) this._ingest(bytes, len, w, h, now, framePt);
+                    }
+                }
+                decide(now, pt, paused);
+            },
+
+            _ingest(bytes, len, w, h, now, pt) {
+                // Row 0 of the readback is the columns, row 1 the rows; a
+                // texel's R is 255 where that line is picture.
+                const col = (x) => bytes[x * 4] > 127;
+                const row = (y) => bytes[(len + y) * 4] > 127;
+                let x1 = -1, x2 = -1, y1 = -1, y2 = -1;
+                for (let x = 0; x < w; x++) if (col(x)) { x1 = x; break; }
+                for (let x = w - 1; x >= 0; x--) if (col(x)) { x2 = x; break; }
+                for (let y = 0; y < h; y++) if (row(y)) { y1 = y; break; }
+                for (let y = h - 1; y >= 0; y--) if (row(y)) { y2 = y; break; }
+                if (x1 >= 0 && y1 >= 0) {
+                    // cropdetect reset=0: the extents only ever widen.
+                    const d = st.det;
+                    st.det = d ? { x1: Math.min(d.x1, x1), x2: Math.max(d.x2, x2), y1: Math.min(d.y1, y1), y2: Math.max(d.y2, y2) }
+                               : { x1, x2, y1, y2 };
+                }
+                const r = readDetection();
+                if (r && isSane(r)) noteReading(r, now, pt);
+            },
+
+            // After a new frame is uploaded: measure it, unless one is in
+            // flight, it is too soon, or a subtitle is on screen.
+            afterUpload(gl, srcTex, w, h, now, pt) {
+                if (!st.key || st.phase === 'done' || st.pending || st.gated) return;
+                if (now - st.lastDetect < AUTOCROP.pollInterval) return;
+                st.lastDetect = now;
+                const c = ensureGL(gl);
+                const len = Math.max(w, h);
+                if (c.detectLen !== len) {
+                    if (c.detectTex) gl.deleteTexture(c.detectTex);
+                    c.detectTex = makeTexture(gl, gl.NEAREST, gl.CLAMP_TO_EDGE);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, len, 2, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+                    c.detectLen = len;
+                    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, c.pbo);
+                    gl.bufferData(gl.PIXEL_PACK_BUFFER, len * 2 * 4, gl.STREAM_READ);
+                    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+                }
+                gl.bindFramebuffer(gl.FRAMEBUFFER, c.detectFbo);
+                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, c.detectTex, 0);
+                gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+                gl.useProgram(c.detect);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, srcTex);
+                gl.uniform1i(gl.getUniformLocation(c.detect, 'kt_src'), 0);
+                gl.uniform2i(gl.getUniformLocation(c.detect, 'kt_size'), w, h);
+                gl.uniform1f(gl.getUniformLocation(c.detect, 'kt_limit'), AUTOCROP.limit);
+                gl.viewport(0, 0, len, 2);
+                gl.drawArrays(gl.TRIANGLES, 0, 3);
+                gl.bindBuffer(gl.PIXEL_PACK_BUFFER, c.pbo);
+                gl.readPixels(0, 0, len, 2, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+                gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+                st.pending = { fence: gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0), len, w, h, pt };
+                gl.flush();
+            },
+
+            // The frame the chain sees: the crop copied out, or the frame.
+            source(gl, frame) {
+                const r = this.result;
+                if (!r) return frame;
+                const c = ensureGL(gl);
+                if (!c.cropTex || c.cropW !== r.w || c.cropH !== r.h) {
+                    if (c.cropTex) gl.deleteTexture(c.cropTex);
+                    c.cropTex = makeTexture(gl, gl.LINEAR, gl.CLAMP_TO_EDGE);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, r.w, r.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+                    c.cropW = r.w;
+                    c.cropH = r.h;
+                }
+                gl.bindFramebuffer(gl.FRAMEBUFFER, c.cropFbo);
+                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, c.cropTex, 0);
+                gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+                gl.useProgram(c.copy);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, frame.tex);
+                gl.uniform1i(gl.getUniformLocation(c.copy, 'kt_src'), 0);
+                gl.uniform2i(gl.getUniformLocation(c.copy, 'kt_off'), r.x, r.y);
+                gl.viewport(0, 0, r.w, r.h);
+                gl.drawArrays(gl.TRIANGLES, 0, 3);
+                return { tex: c.cropTex, w: r.w, h: r.h };
+            },
+
+            dropGL() {
+                ctx = null;
+                st.pending = null;
+            },
+
+            clear() {
+                st.result = null;
+                st.phase = 'done';
+                st.changed = true;
+            }
+        };
+    }
+
+    const autocrop = createAutocrop();
+
+    // Which item is playing, so a result survives a stream renegotiation but
+    // not the next episode. The OSD carries the item id on its rating button;
+    // the duration stands in until it does.
+    function currentItemKey() {
+        const id = document.querySelector('#videoOsdPage .btnUserRating[data-id]')?.getAttribute('data-id');
+        return id || (video && Number.isFinite(video.duration) ? `dur:${Math.round(video.duration)}` : null);
+    }
+
+    // ======================================================================
     //  HOST: canvas, video, render loop
     // ======================================================================
 
     let canvas = null;
+    let matte = null;       // black backdrop over the uncropped video
     let gl = null;
     let pipeline = null;
     let pipelineKey = null;
@@ -1437,12 +1908,23 @@ void main() {
             return false;
         }
         srcTex = makeTexture(gl, gl.LINEAR, gl.CLAMP_TO_EDGE);
+        autocrop.dropGL();
+
+        // Under the canvas, over the video: with a crop the canvas no longer
+        // covers the whole picture, and the video's own bars -- with any
+        // burned-in subtitle sitting in them -- would show around the tube.
+        matte = document.createElement('div');
+        matte.className = 'kefinCrtMatte';
+        matte.style.cssText = 'position:absolute;inset:0;background:#000;pointer-events:none;';
         return true;
     }
 
     function dropContext() {
         if (canvas) canvas.remove();
+        if (matte) matte.remove();
         canvas = null;
+        matte = null;
+        autocrop.dropGL();
         gl = null;
         pipeline = null;
         pipelineKey = null;
@@ -1483,8 +1965,11 @@ void main() {
     // the canvas, so a canvas even half a pixel short leaves a seam of raw
     // video along that edge.
     function updateLayout() {
-        const vw = video.videoWidth;
-        const vh = video.videoHeight;
+        // The picture is the crop when there is one: its shape is fitted to
+        // the element, as mpv fits the cropped video to the window.
+        const crop = autocrop.result;
+        const vw = crop ? crop.w : video.videoWidth;
+        const vh = crop ? crop.h : video.videoHeight;
         const ew = video.clientWidth;
         const eh = video.clientHeight;
         if (!vw || !vh || !ew || !eh) return false;
@@ -1572,6 +2057,20 @@ void main() {
         // HAVE_CURRENT_DATA: there is a frame to upload.
         if (video.readyState < 2 || !video.videoWidth) return;
 
+        // Autocrop: a new item (or size) starts detection over; readings and
+        // decisions run every tick, timed in seconds.
+        const nowS = now / 1000;
+        const pt = Number.isFinite(video.currentTime) ? video.currentTime : null;
+        const key = currentItemKey();
+        if (key && autocrop.needsReset(key, video.videoWidth, video.videoHeight)) {
+            if (!autocrop.adoptKey(key, video.videoWidth, video.videoHeight)) {
+                autocrop.reset(key, video.videoWidth, video.videoHeight, nowS, !!burnIn.lastBurned);
+            }
+        }
+        autocrop.noteBurnState(!!burnIn.lastBurned);
+        autocrop.update(gl, nowS, pt, video.paused);
+        if (autocrop.takeChanged()) layoutDirty = true;
+
         // Jellyfin's aspect-ratio setting is an inline object-fit, so a string
         // compare catches it without a style recalc.
         if (video.style.objectFit !== lastObjectFit) layoutDirty = true;
@@ -1593,8 +2092,10 @@ void main() {
                     return;
                 }
                 frameDirty = false;
+                autocrop.afterUpload(gl, srcTex, srcW, srcH, nowS, pt);
             }
-            pipeline.runMain({ tex: srcTex, w: srcW, h: srcH }, canvas.width, canvas.height, field);
+            const source = autocrop.source(gl, { tex: srcTex, w: srcW, h: srcH });
+            pipeline.runMain(source, canvas.width, canvas.height, field);
             lastField = field;
             ranMain = true;
         }
@@ -1649,7 +2150,8 @@ void main() {
         if (token !== startToken || !enabled || !el.isConnected) { updateButtons(); return; }
 
         video = el;
-        video.after(canvas);
+        video.after(matte);
+        matte.after(canvas);
         frameDirty = true;
         layoutDirty = true;
         lastField = -1;
@@ -1685,6 +2187,7 @@ void main() {
         if (resizeObserver) resizeObserver.disconnect();
         resizeObserver = null;
         if (canvas) canvas.remove();
+        if (matte) matte.remove();
         video = null;
         updateButtons();
     }
@@ -1814,8 +2317,16 @@ void main() {
             refreshHz: clock.periodMs ? +(1000 / clock.periodMs).toFixed(2) : null,
             fieldsLockedTo: clock.locked || null,
             outputStageActive: pipeline ? !!pipeline.outputActive : null,
-            subtitlesBurnedIn: burnIn.lastBurned
+            subtitlesBurnedIn: burnIn.lastBurned,
+            autocrop: autocrop.result ? `${autocrop.result.w}x${autocrop.result.h}+${autocrop.result.x}+${autocrop.result.y}` : 'none',
+            autocropPhase: autocrop.phase,
+            autocropSymmetric: autocrop.symmetric
         }),
+        // shift+C / shift+X in autocrop-fast.lua
+        redetectCrop() {
+            if (video) autocrop.reset(currentItemKey(), video.videoWidth, video.videoHeight, performance.now() / 1000, !!burnIn.lastBurned);
+        },
+        clearCrop() { autocrop.clear(); },
         // For tests: build a pipeline on any WebGL2 context.
         _createPipeline: (ctx, engine, profile) => (engine === 'fused' ? createFusedPipeline(ctx) : createMpvPipeline(ctx, profile || DEFAULT_PROFILE)),
         _createFieldClock: createFieldClock,
