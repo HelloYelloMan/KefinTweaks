@@ -86,6 +86,7 @@
     const STORAGE_KEY = 'kefinTweaks_crtShader';
     const PROFILE_KEY = 'kefinTweaks_crtProfile';
     const ENGINE_KEY  = 'kefinTweaks_crtEngine';
+    const SUBTITLE_MODE_KEY = 'kefinTweaks_crtSubtitles';
     const CRT_DIR     = 'scripts/crt/';
     const CONF_FILE   = 'retro.conf.txt';
     const FUSED_FILE  = 'crt-royale-hypr.frag.txt';
@@ -109,6 +110,9 @@
     let enabled = readPref(STORAGE_KEY, '0') === '1';
     let profileName = readPref(PROFILE_KEY, DEFAULT_PROFILE);
     let engineName = readPref(ENGINE_KEY, DEFAULT_ENGINE);
+    // 'composite': Jellyfin renders subtitles as usual and they are blended
+    // into the frame before the chain. 'burn': the server burns them in.
+    let subtitleMode = readPref(SUBTITLE_MODE_KEY, 'composite') === 'burn' ? 'burn' : 'composite';
 
     function notify(message) {
         window.KefinTweaksToaster?.toast?.(message);
@@ -1244,12 +1248,14 @@ void main() {
     }
 
     // ======================================================================
-    //  SUBTITLES: server burn-in, requested per stream, never stored
+    //  SUBTITLES (1 of 2): server burn-in, requested per stream, never stored
     // ======================================================================
     // mpv puts subtitles INTO the picture (retro-base's vf=sub), so they go
     // through the tube. The web player draws them as layers over the video,
-    // which the CRT canvas covers. So while CRT is enabled, the server burns
-    // them in -- with libass, the renderer mpv uses.
+    // which the CRT canvas covers. Two ways to get them into the frame:
+    // compositing them in the browser (the default -- see SUBTITLES 2 of 2),
+    // or, with subtitle mode 'burn', having the server burn them in with
+    // libass, the renderer mpv uses. This section is the second.
     //
     // HOW, without touching any setting. Jellyfin's own "Burn subtitles: All"
     // is a localStorage value (appSettings 'subtitleburnin'), and writing it
@@ -1281,7 +1287,7 @@ void main() {
     const PLAYBACK_INFO_RE = /\/Items\/[^/?#]+\/PlaybackInfo(?:[?#]|$)/i;
 
     function rewritePlaybackInfo(body) {
-        if (!enabled || typeof body !== 'string') {
+        if (!enabled || subtitleMode !== 'burn' || typeof body !== 'string') {
             burnIn.lastBurned = false;
             return body;
         }
@@ -1374,16 +1380,224 @@ void main() {
         }
     }
 
-    // Called from the render loop about once a second while CRT runs: a
-    // subtitle track switched on mid-stream arrives as a client layer, under
-    // the canvas, until the stream is renegotiated with burn-in.
+    // Called from the render loop about once a second while CRT runs, so the
+    // stream's delivery follows the subtitle mode. In 'burn', a subtitle
+    // track switched on mid-stream arrives as a client layer, under the
+    // canvas, until the stream is renegotiated with burn-in. In 'composite',
+    // a stream still carrying burned-in subtitles (from 'burn', or from before
+    // the switch) goes back to direct play so they can be composited.
     function checkSubtitleDelivery(now) {
         if (now - burnIn.lastCheck < 1000) return;
         burnIn.lastCheck = now;
-        if (!burnIn.lastBurned && clientSubtitlesShowing()) renegotiateStream('subtitles are showing client-side under the CRT layer');
+        if (subtitleMode === 'burn') {
+            if (!burnIn.lastBurned && clientSubtitlesShowing()) renegotiateStream('subtitles are showing client-side under the CRT layer');
+        } else if (burnIn.lastBurned) {
+            renegotiateStream('subtitle mode is composite; back to client-side subtitles');
+        }
     }
 
     installPlaybackInfoHook();
+
+    // ======================================================================
+    //  SUBTITLES (2 of 2): composited into the frame in the browser
+    // ======================================================================
+    // The stream stays direct play and Jellyfin renders subtitles exactly as
+    // it always does -- libass (SubtitlesOctopus) for ASS/SSA, libbitsub for
+    // PGS, the text track or its own element for SRT/VTT. Those layers are
+    // made invisible (opacity, so they keep rendering) and, each field, what
+    // they show is drawn onto a frame-sized overlay and blended into the video
+    // frame BEFORE the chain: retro-base's vf=sub, in the same place.
+    //
+    // ORDER matches mpv's vf chain: autocrop measures the raw frame (its
+    // cropdetect sits at the head), subtitles are blended in, then the crop
+    // is taken. So subtitles are laid out on the full frame, as libass lays
+    // them out in mpv, and none of the burn-in gating is needed.
+    //
+    // CANVAS RENDERERS (libass, PGS) draw over the video's on-screen picture;
+    // their canvas is mapped back to frame pixels through the video's
+    // content rectangle. They render at display resolution, which is at least
+    // the frame's on a 4K screen, and the chain downscales to 480 lines anyway.
+    //
+    // TEXT (SRT/VTT) has no canvas, so it is drawn here, in mpv's default
+    // subtitle style -- which is what mpv would use for it, since mpv.conf
+    // sets no sub-* options: sans-serif, font size 38 at 720 lines scaled to
+    // the frame, a 3 px black border, 22 px bottom margin, 25 px side
+    // margins with word wrap. A secondary track goes at the top.
+
+    const MPV_SUB_STYLE = { fontSize: 38, border: 3, marginY: 22, marginX: 25, lineSpacing: 1.2, refHeight: 720 };
+
+    const FS_SUB_BLEND = `#version 300 es
+precision highp float;
+uniform highp sampler2D kt_frame;
+uniform highp sampler2D kt_overlay;
+out vec4 kt_out;
+void main() {
+    ivec2 p = ivec2(gl_FragCoord.xy);
+    vec4 f = texelFetch(kt_frame, p, 0);
+    vec4 s = texelFetch(kt_overlay, p, 0);      // premultiplied
+    kt_out = vec4(f.rgb * (1.0 - s.a) + s.rgb, 1.0);
+}`;
+
+    function createSubtitleCompositor() {
+        let ctx = null;
+        const overlay = document.createElement('canvas');
+        const g = overlay.getContext('2d');
+        let lastSources = 0;
+
+        function ensureGL(gl) {
+            if (ctx && ctx.gl === gl) return ctx;
+            const vs = compile(gl, gl.VERTEX_SHADER, VS_PASS);
+            const fs = compile(gl, gl.FRAGMENT_SHADER, FS_SUB_BLEND);
+            const prog = gl.createProgram();
+            gl.attachShader(prog, vs);
+            gl.attachShader(prog, fs);
+            gl.linkProgram(prog);
+            if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error('subtitle blend: ' + gl.getShaderInfoLog(fs));
+            ctx = {
+                gl, prog,
+                overlayTex: makeTexture(gl, gl.NEAREST, gl.CLAMP_TO_EDGE),
+                fbo: gl.createFramebuffer(),
+                outTex: null, w: 0, h: 0
+            };
+            return ctx;
+        }
+
+        // The video's on-screen picture rectangle, uncropped, in CSS pixels.
+        function contentRect(v) {
+            const r = v.getBoundingClientRect();
+            const vw = v.videoWidth, vh = v.videoHeight;
+            const fit = v.style.objectFit || 'contain';
+            if (fit === 'fill' || !vw || !vh) return r;
+            const s = fit === 'cover' ? Math.max(r.width / vw, r.height / vh) : Math.min(r.width / vw, r.height / vh);
+            const w = vw * s, h = vh * s;
+            return { left: r.left + (r.width - w) / 2, top: r.top + (r.height - h) / 2, width: w, height: h };
+        }
+
+        // Text of the subtitles Jellyfin is showing, primary first.
+        function textSources(v) {
+            const out = [];
+            const container = v.parentNode;
+            for (const sel of ['.videoSubtitlesInner', '.videoSecondarySubtitlesInner']) {
+                const el = container && container.querySelector(sel);
+                const text = el && el.innerText.trim();
+                if (text) out.push({ lines: text.split('\n'), italic: !!el.querySelector('i'), top: sel.includes('Secondary') });
+            }
+            if (out.length) return out;
+            const showing = Array.from(v.textTracks || []).filter((t) => t.mode === 'showing');
+            showing.forEach((t, i) => {
+                const cues = Array.from(t.activeCues || []);
+                if (!cues.length) return;
+                const raw = cues.map((c) => c.text || '').join('\n');
+                const lines = raw.split(/\n|<br\s*\/?>/i).map((l) => l.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')).filter((l) => l.trim());
+                if (lines.length) out.push({ lines, italic: /<i>/i.test(raw), top: i > 0 });
+            });
+            return out;
+        }
+
+        function wrap(text, maxWidth) {
+            const words = text.split(/\s+/);
+            const lines = [];
+            let cur = '';
+            for (const w of words) {
+                const next = cur ? `${cur} ${w}` : w;
+                if (cur && g.measureText(next).width > maxWidth) { lines.push(cur); cur = w; } else cur = next;
+            }
+            if (cur) lines.push(cur);
+            return lines;
+        }
+
+        function drawText(src, W, H) {
+            const k = H / MPV_SUB_STYLE.refHeight;
+            const size = MPV_SUB_STYLE.fontSize * k;
+            g.font = `${src.italic ? 'italic ' : ''}${size}px sans-serif`;
+            g.textAlign = 'center';
+            g.textBaseline = 'alphabetic';
+            g.lineJoin = 'round';
+            g.lineWidth = 2 * MPV_SUB_STYLE.border * k;      // a 3 px border each side of the glyph edge
+            g.strokeStyle = '#000';
+            g.fillStyle = '#fff';
+            const maxWidth = W - 2 * MPV_SUB_STYLE.marginX * k;
+            const lines = src.lines.flatMap((l) => wrap(l, maxWidth));
+            const step = size * MPV_SUB_STYLE.lineSpacing;
+            const marginY = MPV_SUB_STYLE.marginY * k;
+            lines.forEach((line, i) => {
+                const y = src.top
+                    ? marginY + size * 0.95 + i * step
+                    : H - marginY - size * 0.25 - (lines.length - 1 - i) * step;
+                g.strokeText(line, W / 2, y);
+                g.fillText(line, W / 2, y);
+            });
+        }
+
+        return {
+            get sources() { return lastSources; },
+
+            // The frame with subtitles blended in, or the frame untouched when
+            // nothing is showing.
+            composite(gl, v, frame) {
+                const container = v.parentNode;
+                const canvases = container
+                    ? Array.from(container.querySelectorAll('canvas:not(.kefinCrtCanvas)')).filter((c) => c.width && c.height)
+                    : [];
+                const texts = textSources(v);
+                lastSources = canvases.length + texts.length;
+                if (!lastSources) return frame;
+
+                const W = frame.w, H = frame.h;
+                if (overlay.width !== W || overlay.height !== H) {
+                    overlay.width = W;
+                    overlay.height = H;
+                }
+                g.clearRect(0, 0, W, H);
+                if (canvases.length) {
+                    const cr = contentRect(v);
+                    const sx = W / cr.width, sy = H / cr.height;
+                    for (const c of canvases) {
+                        const r = c.getBoundingClientRect();
+                        if (!r.width || !r.height) continue;
+                        g.drawImage(c, 0, 0, c.width, c.height,
+                            (r.left - cr.left) * sx, (r.top - cr.top) * sy, r.width * sx, r.height * sy);
+                    }
+                }
+                texts.forEach((t) => drawText(t, W, H));
+
+                const c = ensureGL(gl);
+                gl.activeTexture(gl.TEXTURE1);
+                gl.bindTexture(gl.TEXTURE_2D, c.overlayTex);
+                gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+                gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+                gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, overlay);
+                gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+
+                if (!c.outTex || c.w !== W || c.h !== H) {
+                    if (c.outTex) gl.deleteTexture(c.outTex);
+                    c.outTex = makeTexture(gl, gl.LINEAR, gl.CLAMP_TO_EDGE);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, W, H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+                    c.w = W;
+                    c.h = H;
+                }
+                gl.bindFramebuffer(gl.FRAMEBUFFER, c.fbo);
+                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, c.outTex, 0);
+                gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+                gl.useProgram(c.prog);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, frame.tex);
+                gl.uniform1i(gl.getUniformLocation(c.prog, 'kt_frame'), 0);
+                gl.activeTexture(gl.TEXTURE1);
+                gl.bindTexture(gl.TEXTURE_2D, c.overlayTex);
+                gl.uniform1i(gl.getUniformLocation(c.prog, 'kt_overlay'), 1);
+                gl.viewport(0, 0, W, H);
+                gl.drawArrays(gl.TRIANGLES, 0, 3);
+                gl.activeTexture(gl.TEXTURE0);
+                return { tex: c.outTex, w: W, h: H };
+            },
+
+            dropGL() { ctx = null; }
+        };
+    }
+
+    const subtitleCompositor = typeof document !== 'undefined' ? createSubtitleCompositor() : null;
 
     // ======================================================================
     //  AUTOCROP  (~/.config/mpv/scripts/autocrop-fast.lua, ported)
@@ -1909,6 +2123,7 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
         }
         srcTex = makeTexture(gl, gl.LINEAR, gl.CLAMP_TO_EDGE);
         autocrop.dropGL();
+        if (subtitleCompositor) subtitleCompositor.dropGL();
 
         // Under the canvas, over the video: with a crop the canvas no longer
         // covers the whole picture, and the video's own bars -- with any
@@ -2094,7 +2309,9 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
                 frameDirty = false;
                 autocrop.afterUpload(gl, srcTex, srcW, srcH, nowS, pt);
             }
-            const source = autocrop.source(gl, { tex: srcTex, w: srcW, h: srcH });
+            let frame = { tex: srcTex, w: srcW, h: srcH };
+            if (subtitleMode === 'composite' && subtitleCompositor) frame = subtitleCompositor.composite(gl, video, frame);
+            const source = autocrop.source(gl, frame);
             pipeline.runMain(source, canvas.width, canvas.height, field);
             lastField = field;
             ranMain = true;
@@ -2152,6 +2369,7 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
         video = el;
         video.after(matte);
         matte.after(canvas);
+        setCompositingClass();
         frameDirty = true;
         layoutDirty = true;
         lastField = -1;
@@ -2188,8 +2406,16 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
         resizeObserver = null;
         if (canvas) canvas.remove();
         if (matte) matte.remove();
+        if (video && video.parentNode) video.parentNode.classList.remove('kefinCrtCompositing');
         video = null;
         updateButtons();
+    }
+
+    // Jellyfin's own subtitle layers are hidden while they are composited:
+    // opacity rather than display, so they keep rendering and keep their
+    // on-screen geometry for the mapping.
+    function setCompositingClass() {
+        if (video && video.parentNode) video.parentNode.classList.toggle('kefinCrtCompositing', subtitleMode === 'composite');
     }
 
     function setEnabled(value) {
@@ -2265,6 +2491,12 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
                 animation: kefinCrtPulse 1s ease-in-out infinite alternate;
             }
             @keyframes kefinCrtPulse { from { opacity: 1; } to { opacity: 0.35; } }
+            .kefinCrtCompositing .videoSubtitles,
+            .kefinCrtCompositing .libassjs-canvas-parent,
+            .kefinCrtCompositing > canvas:not(.kefinCrtCanvas),
+            .kefinCrtCompositing > div > canvas:not(.kefinCrtCanvas) {
+                opacity: 0 !important;
+            }
         `;
         document.head.appendChild(style);
     }
@@ -2317,6 +2549,8 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
             refreshHz: clock.periodMs ? +(1000 / clock.periodMs).toFixed(2) : null,
             fieldsLockedTo: clock.locked || null,
             outputStageActive: pipeline ? !!pipeline.outputActive : null,
+            subtitleMode,
+            subtitleSources: subtitleCompositor ? subtitleCompositor.sources : null,
             subtitlesBurnedIn: burnIn.lastBurned,
             autocrop: autocrop.result ? `${autocrop.result.w}x${autocrop.result.h}+${autocrop.result.x}+${autocrop.result.y}` : 'none',
             autocropPhase: autocrop.phase,
@@ -2327,6 +2561,16 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
             if (video) autocrop.reset(currentItemKey(), video.videoWidth, video.videoHeight, performance.now() / 1000, !!burnIn.lastBurned);
         },
         clearCrop() { autocrop.clear(); },
+        // 'composite' (default) or 'burn'. The render loop renegotiates the
+        // stream when the current delivery does not match.
+        setSubtitleMode(mode) {
+            if (mode !== 'composite' && mode !== 'burn') throw new Error("subtitle mode is 'composite' or 'burn'");
+            subtitleMode = mode;
+            writePref(SUBTITLE_MODE_KEY, mode);
+            setCompositingClass();
+            burnIn.lastCheck = 0;
+            return mode;
+        },
         // For tests: build a pipeline on any WebGL2 context.
         _createPipeline: (ctx, engine, profile) => (engine === 'fused' ? createFusedPipeline(ctx) : createMpvPipeline(ctx, profile || DEFAULT_PROFILE)),
         _createFieldClock: createFieldClock,
