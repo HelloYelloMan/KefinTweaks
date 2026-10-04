@@ -2457,19 +2457,52 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
         start();
     }
 
+    // The OSD button cycles these, as retro-toggle.lua does on ctrl+r in mpv:
+    // off -> retro-super -> retro-kurozumi-super -> off. Off is the default,
+    // and coming back from off always starts at retro-super.
+    const CRT_MODES = ['off', 'retro-super', 'retro-kurozumi-super'];
+    const MODE_LABELS = { 'off': 'off', 'retro-super': 'super', 'retro-kurozumi-super': 'kurozumi' };
+    const MODE_ICONS = { 'off': 'tv_off', 'retro-super': 'tv', 'retro-kurozumi-super': 'live_tv' };
+
+    function currentMode() {
+        return enabled ? profileName : 'off';
+    }
+
+    function setMode(mode) {
+        if (mode === 'off') {
+            setEnabled(false);
+            return;
+        }
+        const changed = profileName !== mode;
+        profileName = mode;
+        writePref(PROFILE_KEY, mode);
+        if (!enabled) setEnabled(true);
+        else if (changed) restartIfRunning();
+        updateButtons();
+    }
+
+    function cycleMode() {
+        // A profile set from the console that is not in the cycle goes to off.
+        const i = CRT_MODES.indexOf(currentMode());
+        setMode(CRT_MODES[i < 0 ? 0 : (i + 1) % CRT_MODES.length]);
+    }
+
     // ======================================================================
     //  OSD BUTTON
     // ======================================================================
 
     function updateButtons(state) {
         document.querySelectorAll(`.${BUTTON_CLASS}`).forEach((btn) => {
+            const mode = currentMode();
             const icon = btn.querySelector('.material-icons');
             if (icon) {
-                icon.classList.toggle('tv', enabled);
-                icon.classList.toggle('tv_off', !enabled);
+                Object.values(MODE_ICONS).forEach((c) => icon.classList.remove(c));
+                icon.classList.add(MODE_ICONS[mode] || 'tv');
             }
             btn.classList.toggle('kefinCrtLoading', state === 'loading');
-            btn.title = state === 'loading' ? 'CRT (compiling shaders...)' : (enabled ? 'CRT: on' : 'CRT: off');
+            btn.title = state === 'loading'
+                ? `CRT: ${MODE_LABELS[mode] || mode} (compiling shaders...)`
+                : `CRT: ${MODE_LABELS[mode] || mode}`;
         });
     }
 
@@ -2492,7 +2525,7 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
         button.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            setEnabled(!enabled);
+            cycleMode();
         });
 
         const settings = container.querySelector('.btnVideoOsdSettings');
@@ -2548,8 +2581,10 @@ void main() { kt_out = texelFetch(kt_src, ivec2(gl_FragCoord.xy) + kt_off, 0); }
             profileName = name;
             writePref(PROFILE_KEY, name);
             restartIfRunning();
+            updateButtons();
             return name;
         },
+        cycle: () => { cycleMode(); return currentMode(); },
         setEngine(name) {
             if (name !== 'mpv' && name !== 'fused') throw new Error("engine is 'mpv' or 'fused'");
             engineName = name;
