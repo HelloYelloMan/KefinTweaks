@@ -444,9 +444,18 @@
  * Gated on [data-par-hb], set only when the episode probe measured sanely.
  * .detailImageContainer excluded for the same reason as posters -- an item
  * page's cover is not a row.
+ *
+ * :not(#par-none) matches every card and exists only for its ID-level
+ * specificity. ElegantFin sizes a card with watch progress by
+ *
+ *     #homeTab .overflowBackdropCard[data-positionticks] { width: ... !important }
+ *
+ * and an ID outranks any number of classes, so without it a 4:3 episode went
+ * back to 16:9 the moment it had progress -- Evangelion E1 in Continue
+ * Watching, 351px beside Blue Submarine's 266px in the same row.
  */
-.par-on[data-par-hb]:not(.detailImageContainer) > .card.backdropCard[data-type="Episode"]:not([data-par-probe]),
-.par-on[data-par-hb]:not(.detailImageContainer) > .card.overflowBackdropCard[data-type="Episode"]:not([data-par-probe]) {
+.par-on[data-par-hb]:not(.detailImageContainer) > .card.backdropCard[data-type="Episode"]:not([data-par-probe]):not(#par-none),
+.par-on[data-par-hb]:not(.detailImageContainer) > .card.overflowBackdropCard[data-type="Episode"]:not([data-par-probe]):not(#par-none) {
     box-sizing: border-box !important;
     width: calc(var(--par-hb) * var(--par-ar, 1.7778) + var(--par-padb, 0px)) !important;
     transition: none !important;
