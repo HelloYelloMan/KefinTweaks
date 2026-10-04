@@ -1357,10 +1357,24 @@ void main() {
         }
 
         const dpr = window.devicePixelRatio || 1;
-        const x0 = Math.floor((video.offsetLeft + (ew - w) / 2) * dpr);
-        const y0 = Math.floor((video.offsetTop + (eh - h) / 2) * dpr);
-        const pw = Math.max(1, Math.ceil((video.offsetLeft + (ew + w) / 2) * dpr) - x0);
-        const ph = Math.max(1, Math.ceil((video.offsetTop + (eh + h) / 2) * dpr) - y0);
+        let x0 = Math.floor((video.offsetLeft + (ew - w) / 2) * dpr);
+        let y0 = Math.floor((video.offsetTop + (eh - h) / 2) * dpr);
+        let pw = Math.max(1, Math.ceil((video.offsetLeft + (ew + w) / 2) * dpr) - x0);
+        let ph = Math.max(1, Math.ceil((video.offsetTop + (eh + h) / 2) * dpr) - y0);
+
+        // Up to a multiple of 16, centred. crt-royale sizes its mask-resize
+        // buffers at OUTPUT * 0.0625 and tiles them assuming that is a whole
+        // number; when it is not, the size rounds and every tile boundary
+        // shows as a dark seam (measured: 633 px tall seams every 40 px, 640
+        // is clean). mpv does the same at such sizes. A 3840x2160 picture is
+        // already a multiple, so fullscreen 16:9 at 4K is untouched; anywhere
+        // else the canvas overhangs the picture by at most 8 px a side.
+        const cw = Math.ceil(pw / 16) * 16;
+        const ch = Math.ceil(ph / 16) * 16;
+        x0 -= (cw - pw) >> 1;
+        y0 -= (ch - ph) >> 1;
+        pw = cw;
+        ph = ch;
 
         canvas.style.left = `${x0 / dpr}px`;
         canvas.style.top = `${y0 / dpr}px`;
