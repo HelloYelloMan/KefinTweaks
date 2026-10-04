@@ -256,7 +256,7 @@
         themeMediaCastFix: true,  // Theme media playback while a remote/cast target is connected
         virtualSpecials: true,    // Collection pages: Studios row, no "Special - " prefix, breadcrumbs
         collectionSectionRows: true, // Collection pages: sections as rows, like the flat season row
-        crtShader: true,          // CRT toggle on the video OSD: the mpv retro-super chain in WebGL2 (off until clicked)
+        crtShader: true,          // CRT toggle on the video OSD: the mpv retro chain in WebGL2 (off until clicked)
 
         // Note: Core functionality scripts (utils, cardBuilder, localStorageCache, modal) 
         // are automatically enabled when needed by other scripts
@@ -779,7 +779,7 @@
             script: 'crtShader.js',
             css: null,
             dependencies: ['utils', 'toaster'],
-            description: "Adds a CRT button to the video OSD. When on, the playing video is drawn through the mpv retro-super chain (analog grid, composite NTSC, crt-royale) in WebGL2, from crtShader.frag.txt. Per browser; web player only."
+            description: "Adds a CRT button to the video OSD. When on, the playing video runs through the mpv retro CRT chain itself (scripts/crt/: retro.conf profiles and the .glsl files, translated to GLSL ES by tools/build-crt-shaders.mjs) in WebGL2, one field per 59.94 Hz locked to the refresh rate. Per browser; web player only."
         },
         {
             name: 'collectionSectionRows',
