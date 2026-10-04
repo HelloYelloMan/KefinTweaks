@@ -271,7 +271,7 @@ Plugin ABI: 12 targets **.NET 10** and Jellyfin.Controller 12.x.
 | **SmartLists** | 12.0.1.0 (a 10.11 build) | 12.0.3.0 | NotSupported | update; confirm it moves |
 | **File Transformation** | 3.0.1.0 | 3.0.1.0 (12 build, same number) | compatible | **uninstall and reinstall**; mechanism unchanged |
 | **JavaScript Injector** | 4.0.0.0 | 4.0.0.0 (same number) | compatible | **reinstall** |
-| **Jellyfin Enhanced** | 12.8.0.0 | 12.8.0.0 (same number) | compatible | **reinstall**; supports Modern; on 12 recommends its own Native Tab over Custom Tabs |
+| **Jellyfin Enhanced** | 12.8.0.0 | 12.8.0.0 (same number) | compatible | **reinstall**; supports Modern; on 12 recommends its own Native Tab over Custom Tabs, but that breaks alongside Custom Tabs (see below) |
 | **Media Bar Enhanced** | 3.8.0.0 | none with ABI 12 | compatible | open #136: home sections overlap the bar on 12 desktop |
 | **Custom Tabs** | 0.2.10.0 | **none** (a `v12` branch 0.3.0.0 is untested) | DLL compatible; tabs invisible in Modern | **blocker** for the Watchlist tab in Modern; legacy on 12 **(live)** |
 | **Collection Sections** | 2.3.10.0 | **none** (being folded into Home Screen Sections 3.0.2.0) | `MissingMethodException` | **blocker**, or switch plugins |
@@ -287,6 +287,15 @@ Themes:
 - **ElegantFin:** legacy only on 12. Its README says to use "Desktop (Legacy)". Our local copy predates 12.
 - **Abyss:** v1.2.3 is tested on 12.1 in Modern and Legacy. Our local clone is 4 commits behind, but we pull `@main` from jsDelivr.
 - **KefinTweaks upstream releases:** support 12 only in Desktop (Legacy). Modern work is on upstream `experimental`.
+
+**Jellyfin Enhanced native tabs and Custom Tabs don't mix in the Modern layout** (found 2026-10-03, JE 12.8.0.0, Custom Tabs 0.3.1.0). With both a Custom Tabs entry and a JE "native Home tab" (Calendar, Requests...), JE's header icons open a blank page:
+
+- JE numbers its tabs after the Custom Tabs ones (`nextFreeIndex` in `js/enhanced/native-tabs.js`). With Seerr, Requests and Calendar in Custom Tabs at `?tab=2..4`, JE's Requests became tab 5 and Calendar tab 6.
+- In the Modern layout, Custom Tabs renders its tabs into `main`, not into the home page's `.tabContent` list. That list held only Home, Favourites and JE's two panels.
+- jellyfin-web activates `getTabContainers()[selectedTabIndex]`, a panel by POSITION, not by `data-index` (`components/maintabsmanager.js`). Tab 6 pointed past the fourth panel, so nothing was activated and the home page also logged `[Home] failed to get tab controller`.
+- Proven by inserting three empty `.tabContent` placeholders before JE's panels: Calendar then rendered normally.
+
+What works: Custom Tabs alone (turn JE's native-tab options off), or JE native tabs alone with **no** Custom Tabs entries at all. Any entry shifts the numbering. The fix belongs in JE: pad the skipped positions with empty panels.
 
 Your pipeline tooling is fine: it already sends `Authorization: MediaBrowser Token=`. Ad-hoc `curl -H "X-Emby-Token: …"` will 401. Use `-H 'Authorization: MediaBrowser Token="…"'` or `?ApiKey=`.
 
