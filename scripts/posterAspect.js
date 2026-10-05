@@ -56,6 +56,12 @@
      * actually shows, so its ratio is the picture's. */
     const CARD_SELECTOR = '.card.portraitCard, .card.overflowPortraitCard, '
         + '.card.backdropCard[data-type="Episode"], .card.overflowBackdropCard[data-type="Episode"]';
+    /* Any card that says which ladder the row is on. Wider than CARD_SELECTOR:
+     * a non-episode thumb still tells overflow from grid, it is just not sized. */
+    const SAMPLE_SELECTOR = ['portraitCard', 'overflowPortraitCard', 'backdropCard', 'overflowBackdropCard']
+        .map((c) => '.card.' + c + ':not([data-par-probe])').join(', ');
+    const isOverflowCard = (c) => c.classList.contains('overflowPortraitCard')
+        || c.classList.contains('overflowBackdropCard');
     const PICKER_GAP = 12;
     const SKIN_KEY = 'kefinTweaks_selectedSkin';
     const SKIN_DEADLINE = Date.now() + 8000;
@@ -453,6 +459,33 @@
          * caught up. It is one getComputedStyle on one container per page. */
         publishColumnGap(container);
 
+        /* A row measured empty probed with a GUESSED card class (see below).
+         * The first real card settles it: if the guess was wrong, the height
+         * belongs to a ladder the row does not use, so forget it and measure
+         * again -- in the same microtask the card arrived in, before it paints.
+         *
+         * A person page's Shows row is a wrapping grid that Jellyfin fills with
+         * overflowPortraitCard. Measured empty after an in-app navigation, it
+         * guessed portraitCard and settled on 153px under Abyss where the skin's
+         * cards are 247px; a refresh, which found the cards already there, was
+         * right. Checked only while a guess is outstanding, so a settled row
+         * pays nothing. */
+        let reguess = false;
+        if (container.dataset.parGuess) {
+            const first = container.querySelector(SAMPLE_SELECTOR);
+            if (first) {
+                if ((isOverflowCard(first) ? 'o' : 'p') !== container.dataset.parGuess) {
+                    delete container.dataset.parAt;
+                    delete container.dataset.parCached;
+                    // If the new measurement is rejected, the skin sizes
+                    // these cards, rather than the wrong ladder's height.
+                    container.classList.remove(ON_CLASS);
+                    reguess = true;
+                }
+                delete container.dataset.parGuess;
+            }
+        }
+
         const sig = skinSignatureCached();
 
         /* Fast path: settled container, width from the observer, no layout.
@@ -470,7 +503,9 @@
         const homeKey = homeRowKey(container, sig);
         if (homeKey) {
             if (container.dataset.parCached === homeKey) return true;
-            const known = homeRowCache.get(homeKey);
+            // A wrong guess may be the cached answer itself: measure this row
+            // for real, and the result replaces the entry below.
+            const known = reguess ? null : homeRowCache.get(homeKey);
             if (known) {
                 container.style.setProperty('--par-h', known.h);
                 container.style.setProperty('--par-pad', known.pad);
@@ -479,6 +514,7 @@
                     container.style.setProperty('--par-padb', known.padb);
                     container.dataset.parHb = '1';
                 }
+                if (known.guess) container.dataset.parGuess = known.guess;
                 container.dataset.parSkin = sig;
                 container.dataset.parCached = homeKey;
                 container.classList.add(ON_CLASS);
@@ -553,9 +589,10 @@
          * shorter than the skin drew it. The row height is the skin's, so the
          * probe has to be the skin's card.
          */
-        const sample = container.querySelector(
-            '.card.portraitCard:not([data-par-probe]), .card.overflowPortraitCard:not([data-par-probe])'
-        );
+        /* Episode cards count too: a row of nothing but episodes would
+         * otherwise guess on every measurement, and a wrong guess would never
+         * be corrected. */
+        const sample = container.querySelector(SAMPLE_SELECTOR);
         /* A sample is the truth when there is one, but usually there is not:
          * containers are measured as they appear, BEFORE their cards arrive, so
          * that the row is the right size on its first paint. So fall back to
@@ -569,7 +606,7 @@
          * Specials, injected by a plugin after its cards, picked the right class
          * and came out correct. */
         const overflow = sample
-            ? sample.classList.contains('overflowPortraitCard')
+            ? isOverflowCard(sample)
             : (container.classList.contains('scrollSlider')
                 || !!(container.closest && container.closest('.emby-scroller')));
 
@@ -662,12 +699,16 @@
             container.style.removeProperty('--par-padb');
         }
         delete container.dataset.parReject;
+        // Recorded only on success: a rejected measurement has nothing to correct.
+        if (sample) delete container.dataset.parGuess;
+        else container.dataset.parGuess = overflow ? 'o' : 'p';
         if (homeKey) {
             homeRowCache.set(homeKey, {
                 h: Math.round(box.height) + 'px',
                 pad: pad + 'px',
                 hb: container.dataset.parHb ? container.style.getPropertyValue('--par-hb') : '',
-                padb: container.dataset.parHb ? container.style.getPropertyValue('--par-padb') : ''
+                padb: container.dataset.parHb ? container.style.getPropertyValue('--par-padb') : '',
+                guess: container.dataset.parGuess || ''
             });
             container.dataset.parCached = homeKey;
         }
