@@ -2,8 +2,8 @@
 // Two related fixes to the season <-> series relationship in detail page headers:
 //
 //   1. EPISODE pages show the SEASON's title (Original Title by default) where
-//      Jellyfin shows the series name, and clicking it goes to the season. The
-//      header logo (.detailLogo) goes to the season too.
+//      Jellyfin shows the series name. That title keeps Jellyfin's own link to
+//      the series; the header logo (.detailLogo) goes to the season.
 //   2. SEASON pages get a clickable header logo that navigates up to the series.
 //
 // Why: Jellyfin's episode header is built from the series only - renderName()
@@ -25,15 +25,7 @@
 // brings it back under the thumbnail, and this script supplies the one thing
 // CSS cannot know there - where the title slot is (see EPISODE LOGO SLOT).
 //
-// Navigation notes - both matter, and neither is obvious:
-//   * The episode header's parent link is rendered with a literal href="#"; the
-//     real destination lives in data-action="link" + data-id, read by Jellyfin's
-//     DELEGATED itemAction handler (it walks up from the event target via
-//     parentWithAttribute). Rewriting href alone does nothing. So we bind a click
-//     handler on the anchor - which runs before the ancestor's delegated handler -
-//     and stopPropagation() keeps that handler from overriding us. data-id/
-//     data-type are updated too, matching the season links Jellyfin builds itself,
-//     so keyboard activation lands in the right place.
+// Logo navigation notes - none of this is obvious:
 //   * .detailLogo is a plain div with a lazy background-image, not a link, so it
 //     gets click + keyboard handlers and link semantics added. It also loses the
 //     stacking contest to its sibling .detailPageWrapperContainer (position:
@@ -75,10 +67,6 @@
         // defaults to true. Set false to always show the season, empty-or-not.
         KEEP_SERIES_WHEN_EMPTY: true,
 
-        // Point the retargeted episode-page link at the season's detail page. Set
-        // false to keep it navigating to the series, as Jellyfin does by default.
-        LINK_TO_SEASON: true,
-
         // On EPISODE pages, make the header logo (.detailLogo) navigate to the
         // season - whether it is showing the season's own logo or the series logo
         // Jellyfin falls back to.
@@ -92,10 +80,7 @@
 
     // Mark the anchor we rewrote and store what was there before, so a repeat
     // pass is idempotent and the original is always recoverable.
-    const ORIGINAL_ATTR      = 'data-kefin-series-title';
-    const ORIGINAL_HREF_ATTR = 'data-kefin-series-href';
-    const ORIGINAL_ID_ATTR   = 'data-kefin-series-dataid';
-    const ORIGINAL_TYPE_ATTR = 'data-kefin-series-datatype';
+    const ORIGINAL_ATTR = 'data-kefin-series-title';
 
     const LINK_CLASS  = 'kefin-logo-link';
     const HIT_CLASS   = 'kefin-logo-hit';
@@ -198,7 +183,7 @@
     }
 
     // --------------------------------------------------
-    //  EPISODE PAGE: SEASON TITLE ON THE PARENT LINK
+    //  EPISODE PAGE: SEASON TITLE ON THE SERIES LINK
     // --------------------------------------------------
 
     // The series link inside .parentName. Episodes get exactly one link there, but
@@ -221,56 +206,6 @@
         return links[0];
     }
 
-    function retargetLink(link, seasonId) {
-        // Keep the latest season id on the node, so the (single) click handler
-        // below stays correct across re-renders and item changes.
-        link._kefinSeasonId = seasonId;
-
-        // Bound to the anchor itself, so it runs before Jellyfin's delegated
-        // itemAction handler; stopPropagation then keeps that handler from
-        // navigating to the series.
-        if (!link._kefinSeasonNav) {
-            link._kefinSeasonNav = true;
-            link.addEventListener('click', (e) => {
-                const id = link._kefinSeasonId;
-                if (!id) return;
-                e.preventDefault();
-                e.stopPropagation();
-                navigateToItem(id);
-            }, true);
-        }
-
-        // Also point the native path at the season, so keyboard activation and any
-        // code path that bypasses the handler above still lands on the right page.
-        if (link.getAttribute('data-action') === 'link' && link.hasAttribute('data-id')) {
-            if (!link.hasAttribute(ORIGINAL_ID_ATTR)) {
-                link.setAttribute(ORIGINAL_ID_ATTR, link.getAttribute('data-id') || '');
-                link.setAttribute(ORIGINAL_TYPE_ATTR, link.getAttribute('data-type') || '');
-            }
-            if (link.getAttribute('data-id') !== seasonId)   link.setAttribute('data-id', seasonId);
-            if (link.getAttribute('data-type') !== 'Season') link.setAttribute('data-type', 'Season');
-            link.setAttribute('data-isfolder', 'true');
-            return;
-        }
-
-        // Older builds put a real URL on the anchor - swap the id parameter of the
-        // ORIGINAL href (never one we already rewrote, so repeat passes are
-        // idempotent), which inherits the route shape and every other param.
-        if (!link.hasAttribute(ORIGINAL_HREF_ATTR)) {
-            link.setAttribute(ORIGINAL_HREF_ATTR, link.getAttribute('href') || '');
-        }
-        const original = link.getAttribute(ORIGINAL_HREF_ATTR);
-        let href;
-        if (original && /[?&]id=/.test(original)) {
-            href = original.replace(/([?&]id=)[^&]*/, '$1' + encodeURIComponent(seasonId));
-        } else {
-            const serverId = (typeof ApiClient !== 'undefined' && ApiClient.serverId) ? ApiClient.serverId() : '';
-            href = '#/details?id=' + encodeURIComponent(seasonId)
-                + (serverId ? '&serverId=' + encodeURIComponent(serverId) : '');
-        }
-        if (link.getAttribute('href') !== href) link.setAttribute('href', href);
-    }
-
     function applyTitle(page, item, title) {
         const link = findSeriesLink(page, item);
         if (!link) return false;
@@ -279,10 +214,6 @@
             link.setAttribute(ORIGINAL_ATTR, link.textContent || '');
         }
         if (link.textContent !== title) link.textContent = title;
-
-        if (CONFIG.LINK_TO_SEASON && item.SeasonId) {
-            retargetLink(link, item.SeasonId);
-        }
         // A re-render can move the heading the logo is laid over.
         placeEpisodeLogo(page);
         return true;
