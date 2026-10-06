@@ -121,3 +121,14 @@
 	border-radius: var(--jf-card-borderRadius, 0.2em) 0 0 var(--jf-card-borderRadius, 0.2em);
 	pointer-events: none;
 }
+
+/* Every row on an item page stops at its own left edge, as on Abyss
+ * (abyss-kefin.css, "Every row on an item page").
+ *
+ * A row with scroll arrows (desktop, mouse) scrolls by translating its slider,
+ * and its frame does not clip, so a row beside the cover -- the Characters
+ * plugin's row on a person page -- slid left under it to the screen edge.
+ * clip, not hidden: a focused card's scale-up keeps its top and bottom. */
+#itemDetailPage .verticalSection.emby-scroller-container {
+	overflow-x: clip;
+}

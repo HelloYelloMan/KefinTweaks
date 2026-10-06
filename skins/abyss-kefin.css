@@ -580,3 +580,18 @@ html:is(.layout-desktop, .layout-tablet, .layout-mobile) :is(#castContent, #gues
 @media (min-width: 131.25em) {
 	html:is(.layout-desktop, .layout-tablet, .layout-mobile) :is(#castContent, #guestCastContent) .card.overflowPortraitCard { width: 9.3vw !important; }
 }
+
+/* Every row on an item page stops at its own left edge.
+ *
+ * A row with scroll arrows (desktop, mouse) scrolls by translating its slider,
+ * and its frame does not clip, so the cards slide left until something does.
+ * Abyss clips four rows by id -- #castCollapsible, #scenesCollapsible,
+ * #similarCollapsible, .moreFromSeasonSection (its issue #8) -- and every other
+ * row ran on under the cover to the screen edge: the Characters plugin's row
+ * on a person page, Jellyfin Enhanced's Recommended and Similar rows. Every
+ * such row is an .emby-scroller-container section, so this names the kind
+ * rather than the rows. clip, not hidden: only the horizontal overflow goes,
+ * so a focused card's scale-up keeps its top and bottom. */
+#itemDetailPage .verticalSection.emby-scroller-container {
+	overflow-x: clip;
+}
