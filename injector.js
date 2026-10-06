@@ -245,9 +245,9 @@
         // ================================================================
         castSessionWatchdog: true, // Re-subscribe the Sessions feed when a stale now playing bar shows a dead cast target
         elegantfinHaspatch: true, // ElegantFin :has() hotfix marker classes (needs the local ElegantFin build)
-        seriesSpecials: true,     // Series & Specials group (see scripts/kefinTweaks-loader.js)
-        seriesSpecialsData: true, // Series & Specials: shared virtual-special lookup (a dependency, no switch in the window)
-        episodeTitle: true,       // Series & Specials: episode heading names/opens the season or virtual special
+        seriesSpecials: true,     // Item Page Tweaks group (see scripts/kefinTweaks-loader.js)
+        seriesSpecialsData: true, // Item Page Tweaks: shared virtual-special lookup (a dependency, no switch in the window)
+        episodeTitle: true,       // Item Page Tweaks: episode heading names/opens the season or virtual special
         episodeSeasonTitle: true, // Episode Logo: header logo links up (episode -> season -> series)
         jeSidebarMemo: true,      // Memoise Jellyfin Enhanced's getSidebarContainer (forced style flush on every DOM mutation)
         jeSpoilerGuardScope: true, // Scope Jellyfin Enhanced's Spoiler Guard image refresh to the item that changed
@@ -821,14 +821,14 @@
             script: null,
             css: null,
             dependencies: [],
-            description: 'Series & Specials group switch (gating lives in scripts/kefinTweaks-loader.js).'
+            description: 'Item Page Tweaks group switch (gating lives in scripts/kefinTweaks-loader.js).'
         },
         {
             name: 'seriesSpecials-configuration',
             script: '../configuration/seriesSpecials-configuration.js',
             css: null,
             dependencies: ['modal', 'toaster', 'utils'],
-            description: 'Settings window for the Series & Specials group'
+            description: 'Settings window for the Item Page Tweaks group'
         },
         {
             name: 'jeSpoilerGuardScope',

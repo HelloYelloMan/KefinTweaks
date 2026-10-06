@@ -1,4 +1,4 @@
-// KefinTweaks Episode Title (part of Series & Specials)
+// KefinTweaks Episode Title (part of Item Page Tweaks)
 //
 // The big heading above an episode's title is the series name, linking to the
 // series. This makes it name and open the level the episode actually sits in:

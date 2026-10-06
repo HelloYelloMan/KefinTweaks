@@ -1,6 +1,9 @@
-// KefinTweaks Series & Specials - settings window
+// KefinTweaks Item Page Tweaks - settings window
 //
-// Series & Specials is one entry in the feature list standing for several
+// (Named Series & Specials at first; the key, seriesSpecials, and the file
+// names keep that name so saved settings still match.)
+//
+// Item Page Tweaks is one entry in the feature list standing for several
 // tweaks that work together on episode, season and collection pages. Each tweak
 // is still its own script with its own switch, config.scripts.<key>, exactly as
 // when they were listed separately, so saved choices carry over. This window is
@@ -87,7 +90,7 @@
         const content = document.createElement('div');
         content.innerHTML = '<div style="max-width:800px;">'
             + '<div class="listItemBodyText secondary" style="margin-bottom:1em;">'
-            + 'Each tweak can be switched on its own. Turning Series &amp; Specials off in the feature list turns all of them off and keeps these choices for when it is turned back on.'
+            + 'Each tweak can be switched on its own. Turning Item Page Tweaks off in the feature list turns all of them off and keeps these choices for when it is turned back on.'
             + '</div>'
             + TWEAKS.map(row).join('')
             + '</div>';
@@ -99,7 +102,7 @@
 
         const modalInstance = window.ModalSystem.create({
             id: MODAL_ID,
-            title: 'Series & Specials',
+            title: 'Item Page Tweaks',
             content: content,
             footer: footer,
             closeOnBackdrop: true,
@@ -112,7 +115,7 @@
                     .addEventListener('click', async () => {
                         if (await save(modal)) {
                             if (window.KefinTweaksToaster && window.KefinTweaksToaster.toast) {
-                                window.KefinTweaksToaster.toast('Series & Specials saved! Reload to apply.');
+                                window.KefinTweaksToaster.toast('Item Page Tweaks saved! Reload to apply.');
                             }
                             window.ModalSystem.close(MODAL_ID);
                         } else {

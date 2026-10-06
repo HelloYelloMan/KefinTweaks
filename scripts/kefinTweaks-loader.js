@@ -44,9 +44,9 @@
         // which is why it went unnoticed after the merge.
         castSessionWatchdog: true, // Re-subscribe the Sessions feed when a stale now playing bar shows a dead cast target
         elegantfinHaspatch: true, // ElegantFin :has() hotfix marker classes (needs the local ElegantFin build)
-        seriesSpecials: true,     // Series & Specials group: the five tweaks marked group: 'seriesSpecials' run only while this is on
-        seriesSpecialsData: true, // Series & Specials: shared virtual-special lookup (a dependency, no switch in the window)
-        episodeTitle: true,       // Series & Specials: episode heading names/opens the season or virtual special
+        seriesSpecials: true,     // Item Page Tweaks group (key kept from its first name): every script marked group: 'seriesSpecials' runs only while this is on
+        seriesSpecialsData: true, // Item Page Tweaks: shared virtual-special lookup (a dependency, no switch in the window)
+        episodeTitle: true,       // Item Page Tweaks: episode heading names/opens the season or virtual special
         episodeSeasonTitle: true, // Episode Logo: header logo links up (episode -> season -> series)
         jeSidebarMemo: true,      // Memoise Jellyfin Enhanced's getSidebarContainer (forced style flush on every DOM mutation)
         jeSpoilerGuardScope: true, // Scope Jellyfin Enhanced's Spoiler Guard image refresh to the item that changed
@@ -688,7 +688,7 @@
             dependencies: ['utils', 'seriesSpecialsData'],
             description: "Episode heading names and opens the season (its Original Title), or a special's virtual special collection."
         },
-        // Series & Specials. A group switch with no script of its own: the
+        // Item Page Tweaks. A group switch with no script of its own: the
         // definitions above that carry group: 'seriesSpecials' run only while
         // this is on (see mergeEnabledScripts), and each keeps its own switch,
         // set from the group's settings window instead of the feature list.
@@ -697,14 +697,14 @@
             script: null,
             css: null,
             dependencies: [],
-            description: 'Series & Specials: the related episode, season and collection-page tweaks, each switched from one settings window.'
+            description: 'Item Page Tweaks: the related episode, season and collection-page tweaks, each switched from one settings window.'
         },
         {
             name: 'seriesSpecials-configuration',
             script: '../configuration/seriesSpecials-configuration.js',
             css: null,
             dependencies: ['modal', 'toaster', 'utils'],
-            description: 'Settings window for the Series & Specials group'
+            description: 'Settings window for the Item Page Tweaks group'
         }
     ];
 

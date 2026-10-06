@@ -1,6 +1,6 @@
-// KefinTweaks Series & Specials - shared data
+// KefinTweaks Item Page Tweaks - shared data
 //
-// What the Series & Specials tweaks need to know about a special episode's
+// What the Item Page Tweaks tweaks need to know about a special episode's
 // virtual special collection, asked for once. Virtual Specials (its breadcrumb
 // and the Collections row title), Episode Title and Episode Logo all want it on
 // the same page within moments of each other; without this each would make its
@@ -13,7 +13,7 @@
 // decided against on 2026-10-05; nothing here needs more than this call.)
 //
 // No UI and no switch of its own: the loader brings it in as a dependency of the
-// tweaks that use it, and only while the Series & Specials group is on.
+// tweaks that use it, and only while the Item Page Tweaks group is on.
 
 (function () {
     'use strict';
