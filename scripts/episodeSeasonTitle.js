@@ -41,8 +41,7 @@
 //
 // Navigation itself uses the same form as KefinTweaks' breadcrumbs.
 //
-// Configuration is the CONFIG block below (internal, not exposed in the
-// KefinTweaks configuration UI).
+// Every behaviour is a switch in Item Page Tweaks' settings window (tweakOn).
 
 (function () {
     'use strict';
@@ -53,21 +52,19 @@
     // ==========================================
     //              CONFIGURATION
     // ==========================================
-    const CONFIG = {
-        // On EPISODE pages, make the header logo (.detailLogo) navigate to the
-        // season - whether it is showing the season's own logo or the series logo
-        // Jellyfin falls back to.
-        EPISODE_LOGO_LINKS_TO_SEASON: true,
-
-        // On SEASON pages, make the header logo (.detailLogo) navigate to the
-        // series - whether it is showing the season's own logo or the series logo
-        // Jellyfin falls back to.
-        SEASON_LOGO_LINKS_TO_SERIES: true,
-
-        // On a VIRTUAL SPECIAL's collection page, make the header logo navigate to
-        // the series its episodes come from - when that is one series.
-        COLLECTION_LOGO_LINKS_TO_SERIES: true,
-    };
+    // Each behaviour is its own switch in the Item Page Tweaks settings window
+    // (config.itemPageTweaks); unset means on, which is what every install ran
+    // before the switches existed. With all of them off the window turns this
+    // script's own flag off and the loader does not load it at all.
+    //   episodeLogoToSeason       episode page: logo opens the season
+    //   specialLogoFromCollection special: its virtual special's logo, opening it
+    //   elegantfinEpisodeLogo     ElegantFin: episode logo under the thumbnail
+    //   seasonLogoToSeries        season page: logo opens the series
+    //   collectionLogoToSeries    virtual special's page: logo opens the series
+    function tweakOn(key) {
+        const tweaks = window.KefinTweaksConfig && window.KefinTweaksConfig.itemPageTweaks;
+        return !tweaks || tweaks[key] !== false;
+    }
 
     const LINK_CLASS  = 'kefin-logo-link';
     const HIT_CLASS   = 'kefin-logo-hit';
@@ -628,7 +625,7 @@
                 // ---- Virtual special's page: logo navigates up to its series ----
                 if (item.Type === 'BoxSet') {
                     const pipelineMade = !!(item.ProviderIds && item.ProviderIds.AnimePipelineSeries);
-                    if (!CONFIG.COLLECTION_LOGO_LINKS_TO_SERIES || !pipelineMade) return;
+                    if (!tweakOn('collectionLogoToSeries') || !pipelineMade) return;
                     const data = await seriesSpecialsData();
                     const seriesId = data ? await data.seriesOfVirtualSpecial(item) : null;
                     if (!seriesId || !current() || page.classList.contains('hide')) return;
@@ -638,7 +635,7 @@
 
                 // ---- Season page: logo navigates up to the series ----
                 if (item.Type === 'Season') {
-                    if (CONFIG.SEASON_LOGO_LINKS_TO_SERIES && item.SeriesId) {
+                    if (tweakOn('seasonLogoToSeries') && item.SeriesId) {
                         whenPresent(page, '.detailLogo', () => bindLogoLink(page, item.SeriesId, 'Go to series'));
                     }
                     return;
@@ -649,24 +646,24 @@
                 // ---- Special in one virtual special: that collection's logo ----
                 // Same rule as Episode Title's heading, so the two agree: exactly
                 // one virtual special, or the episode is treated as any other.
-                const data = item.ParentIndexNumber === 0 ? await seriesSpecialsData() : null;
+                const wantSpecial = item.ParentIndexNumber === 0 && tweakOn('specialLogoFromCollection');
+                const data = wantSpecial ? await seriesSpecialsData() : null;
                 const special = (data && data.isSpecialEpisode(item)) ? await data.virtualSpecialOf(item) : null;
                 if (!current() || page.classList.contains('hide')) return;
 
+                const elegantfinSlot = tweakOn('elegantfinEpisodeLogo');
                 if (special) {
                     const shown = showCollectionLogo(page, special);
-                    if (CONFIG.EPISODE_LOGO_LINKS_TO_SEASON) {
-                        whenPresent(page, '.detailLogo', () => bindLogoLink(page, special.Id, 'Go to collection'));
-                    }
-                    if (shown || hasHeaderLogo(item)) markEpisodeLogoSlot(page);
+                    whenPresent(page, '.detailLogo', () => bindLogoLink(page, special.Id, 'Go to collection'));
+                    if (elegantfinSlot && (shown || hasHeaderLogo(item))) markEpisodeLogoSlot(page);
                     return;
                 }
 
                 // ---- Episode page: logo navigates to the season ----
-                if (CONFIG.EPISODE_LOGO_LINKS_TO_SEASON) {
+                if (tweakOn('episodeLogoToSeason')) {
                     whenPresent(page, '.detailLogo', () => bindLogoLink(page, item.SeasonId, 'Go to season'));
                 }
-                if (hasHeaderLogo(item)) markEpisodeLogoSlot(page);
+                if (elegantfinSlot && hasHeaderLogo(item)) markEpisodeLogoSlot(page);
             },
             {
                 pages: ['details'],

@@ -14,8 +14,9 @@
 //   2. BREADCRUMBS, on the collection's page and on a special's episode page
 //      (its section says how).
 //
-// It also sets the single-item marker that collectionSingleItem.css reads to
-// hide a one-item collection's count and Shuffle button.
+// It also hides a one-item collection's count and Shuffle button.
+//
+// Every one of these is its own switch in Item Page Tweaks (tweakOn below).
 //
 // The "Special - " prefix used to be stripped here too, on collection pages, by
 // writing back each special's own Name. specialEpisodePrefix.js does it on every
@@ -34,6 +35,15 @@
 
     const LOG = (...args) => console.log('[KefinTweaks VirtualSpecials]', ...args);
     const WARN = (...args) => console.warn('[KefinTweaks VirtualSpecials]', ...args);
+
+    // Each behaviour here is its own switch in the Item Page Tweaks settings
+    // window (config.itemPageTweaks). Unset means on: that is what every
+    // install ran before the switches existed. With all of them off the window
+    // turns this script's own flag off, and the loader does not load it at all.
+    function tweakOn(key) {
+        const tweaks = window.KefinTweaksConfig && window.KefinTweaksConfig.itemPageTweaks;
+        return !tweaks || tweaks[key] !== false;
+    }
 
     const POLL_INTERVAL_MS = 150;
     const POLL_TIMEOUT_MS = 8000;
@@ -74,18 +84,41 @@
     // The single-item marker
     // ======================================================================
 
-    // THE SINGLE-ITEM MARKER, read by skins/optional/global/collectionSingleItem.css.
+    // THE SINGLE-ITEM MARKER, and the rules that read it: a collection of one
+    // still shows a "1 items" count and a Shuffle button that can only ever
+    // shuffle one thing, so both are hidden. Switch: singleItemCollection.
     //
-    // It lives here rather than in elegantfin-haspatch.js so that the stylesheet
-    // depends on a feature the user can actually see and switch in the Feature
-    // Configuration list, instead of on a script that is deliberately not listed
-    // there. Taken from the child count rather than from `:only-child` in the
-    // DOM, which is both authoritative and available before the row renders --
-    // so the row never appears and then vanishes.
+    // The rules used to live in skins/optional/global/collectionSingleItem.css,
+    // switched separately in the skin settings, so the feature took two switches
+    // in two places and did nothing with either alone. They are injected here
+    // now, with the marker, under the one switch.
+    //
+    // The marker is taken from the child count rather than from `:only-child`
+    // in the DOM, which is authoritative and available before the row renders,
+    // so the row never appears and then vanishes. A page-level :has() could do
+    // it in CSS alone, but that is the selector shape elegantfin-haspatch.js
+    // exists to eliminate (style invalidation on every mutation under it).
+    //
+    // Every rule is scoped to the VISIBLE detail page: Jellyfin keeps the
+    // outgoing view in the DOM during a navigation, and the marker describes
+    // the visible one only. The "1 items" count is :first-child because
+    // mediainfo.js pushes a BoxSet's child count first. The Play button is left
+    // alone: for one item it still means "play this item".
     const SINGLE_CLASS = 'kefin-collection-single';
+    const SINGLE_STYLE_ID = 'kefin-collection-single-style';
 
     function setSingleItemMarker(isSingle) {
-        document.body.classList.toggle(SINGLE_CLASS, !!isSingle);
+        document.body.classList.toggle(SINGLE_CLASS, !!isSingle && tweakOn('singleItemCollection'));
+    }
+
+    function injectSingleItemStyle() {
+        if (!tweakOn('singleItemCollection') || document.getElementById(SINGLE_STYLE_ID)) return;
+        const style = document.createElement('style');
+        style.id = SINGLE_STYLE_ID;
+        style.textContent =
+            'body.' + SINGLE_CLASS + ' .itemDetailPage:not(.hide) .itemMiscInfo-primary > .mediaInfoItem:first-child { display: none; }\n'
+            + 'body.' + SINGLE_CLASS + ' .itemDetailPage:not(.hide) .btnShuffle { display: none; }';
+        (document.head || document.documentElement).appendChild(style);
     }
 
     // ======================================================================
@@ -278,6 +311,7 @@
     }
 
     async function virtualSpecialBreadcrumbs(item) {
+        if (!tweakOn('collectionBreadcrumb')) return null;
         if (!item || item.Type !== 'BoxSet' || !isVirtualSpecial(item)) return null;
         const episodes = (await fetchChildren(item.Id)).filter(c => c.SeriesId);
         if (!episodes.length) return null;
@@ -325,7 +359,7 @@
     }
 
     async function specialsBreadcrumbs(item, elements) {
-        if (!isSpecialEpisode(item)) return null;
+        if (!tweakOn('specialBreadcrumb') || !isSpecialEpisode(item)) return null;
         const specials = (await collectionsOf(item.Id)).filter(isVirtualSpecial);
         if (!specials.length) return null;
 
@@ -485,6 +519,7 @@
                 setCollectionsTitle(page, null);
 
                 if (isSpecialEpisode(item)) {
+                    if (!tweakOn('specialCollectionsRowTitle')) return;
                     const token = viewToken;
                     collectionsOf(item.Id).then(collections => {
                         if (token !== viewToken || page.classList.contains('hide')) return;
@@ -517,7 +552,7 @@
                 if (children.length) setSingleItemMarker(children.length === 1);
 
                 // --- studios -------------------------------------------------
-                waitFor(page, '.itemDetailsGroup', Date.now()).then(group => {
+                if (tweakOn('collectionStudios')) waitFor(page, '.itemDetailsGroup', Date.now()).then(group => {
                     if (!group || !alive()) return;
                     teardown.push(makeBoundedObserver(
                         group, () => injectStudios(page, item), POLL_TIMEOUT_MS));
@@ -539,6 +574,7 @@
             WARN('Dependencies not available, giving up');
             return;
         }
+        injectSingleItemStyle();
         initializeHook();
     }
 

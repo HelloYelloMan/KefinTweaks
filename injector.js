@@ -798,7 +798,7 @@
             script: 'virtualSpecials.js',
             css: null,
             dependencies: ['utils', 'seriesSpecialsData'],
-            description: "Fixes to the collection (BoxSet) detail page. Fills in the Studios row, which renderStudio refuses to render for a BoxSet. Gives a virtual special breadcrumbs back to its series, and sets the single-item marker collectionSingleItem.css reads."
+            description: "Fixes to the collection (BoxSet) detail page. Fills in the Studios row, which renderStudio refuses to render for a BoxSet. Gives a virtual special breadcrumbs back to its series, and hides a one-item collection's count and Shuffle button. Each is a switch in Item Page Tweaks."
         },
         {
             name: 'seriesSpecialsData',

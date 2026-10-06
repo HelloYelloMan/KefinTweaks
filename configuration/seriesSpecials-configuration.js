@@ -3,12 +3,18 @@
 // (Named Series & Specials at first; the key, seriesSpecials, and the file
 // names keep that name so saved settings still match.)
 //
-// Item Page Tweaks is one entry in the feature list standing for several
-// tweaks that work together on episode, season and collection pages. Each tweak
-// is still its own script with its own switch, config.scripts.<key>, exactly as
-// when they were listed separately, so saved choices carry over. This window is
-// where those switches are set; scripts/kefinTweaks-loader.js runs a tweak only
-// while both its switch and the group's (config.scripts.seriesSpecials) are on.
+// Item Page Tweaks is one entry in the feature list standing for many small
+// tweaks to episode, season and collection pages. Each tweak has its own switch
+// here, stored in config.itemPageTweaks.<key>. Several tweaks live in one
+// script, so each script also keeps its own flag, config.scripts.<script>, and
+// this window keeps that in step: a script's flag is on when any of its tweaks
+// is. The loader reads those flags, so a script whose tweaks are all off is not
+// loaded at all; the scripts read the tweak switches themselves (tweakOn).
+// scripts/kefinTweaks-loader.js runs any of them only while the group's own flag
+// (config.scripts.seriesSpecials) is on.
+//
+// A tweak with no saved switch falls back to its script's flag - what it was
+// before the switches existed - so nothing changes until a box is unticked.
 //
 // Loaded with the configuration UI (CONFIG_DEPENDENCY_NAMES), not with the
 // feature, so the window opens while the group is switched off too.
@@ -22,27 +28,90 @@
 (function () {
     'use strict';
 
-    const LOG = (...args) => console.log('[KefinTweaks SeriesSpecials Config]', ...args);
+    const LOG = (...args) => console.log('[KefinTweaks ItemPageTweaks Config]', ...args);
     const MODAL_ID = 'kefin-seriesspecials-config';
 
-    // Order is the order shown.
-    const TWEAKS = [
-        { key: 'episodeTitle', label: 'Episode Title', desc: 'On an episode page, the heading above the episode title names and opens the season - its Original Title - instead of the series, on every show. On a special in one virtual special collection, it names and opens that collection. A season with no Original Title keeps the series name but still opens the season.' },
-        { key: 'episodeSeasonTitle', label: 'Episode Logo', desc: 'Makes the header logo a link one level up: on an episode page it opens the season, on a season page and on a virtual special\'s collection page it opens the series. On a special in one virtual special collection, it shows that collection\'s logo and opens the collection. Skins that hide the logo on episode pages (ElegantFin) show it under the thumbnail instead of the series name; other skins keep their logo where it is.' },
-        { key: 'virtualSpecials', label: 'Virtual Specials Tweaks', desc: 'Fixes to collection pages. Fills in the Studios row, which Jellyfin builds but never populates for a collection. Gives a virtual special a breadcrumb back to its series. On a special\'s episode page, the breadcrumb goes through its virtual special instead of the Specials season, and a Collections row holding one collection is titled Collection. Also marks a one-item collection so the Virtual Specials Tweaks CSS option can hide its count and Shuffle button.' },
-        { key: 'collectionSectionRows', label: 'Collection Sections As Rows', desc: 'Shows each section of a collection page (Episodes, Movies and so on) as a horizontal row of cards, the same as the flat season row on a series page.' },
-        { key: 'specialEpisodePrefix', label: 'No "Special - " Prefix', desc: 'Removes the "Special - " that Jellyfin prepends to the title of every episode in season zero, everywhere it appears - cards, season pages and episode pages. The prefix is localized, so the exact wording is learned once from your server rather than assumed, then cached.' },
-        { key: 'mediaTags', label: 'Media Tags', desc: 'Adds a Tags row to the details table on item pages, between Genres and Studios, with each tag linking to its items. Jellyfin only shows tags in a separate line under the overview, which some skins (ElegantFin) hide.' }
+    // Order is the order shown. script: the file whose flag this tweak keeps on.
+    const SECTIONS = [
+        {
+            title: 'Episode pages',
+            tweaks: [
+                { key: 'episodeHeadingToSeason', script: 'episodeTitle',
+                    label: 'Heading names and opens the season',
+                    desc: 'The heading above the episode title shows the season\'s Original Title and opens the season, instead of the series - on every show, single-season ones too. A season with no Original Title keeps the series name but still opens the season.' },
+                { key: 'episodeLogoToSeason', script: 'episodeSeasonTitle',
+                    label: 'Logo opens the season',
+                    desc: 'Clicking the header logo opens the episode\'s season.' },
+                { key: 'specialHeadingToCollection', script: 'episodeTitle',
+                    label: 'Special: heading names and opens its virtual special',
+                    desc: 'On a special that belongs to exactly one virtual special collection, the heading shows that collection\'s name and opens it.' },
+                { key: 'specialLogoFromCollection', script: 'episodeSeasonTitle',
+                    label: 'Special: logo is its virtual special\'s, and opens it',
+                    desc: 'On a special that belongs to exactly one virtual special collection, the header logo is that collection\'s own logo and opens the collection.' },
+                { key: 'specialBreadcrumb', script: 'virtualSpecials',
+                    label: 'Special: breadcrumb goes through its virtual special',
+                    desc: 'A special\'s breadcrumb trail goes Shows > series > virtual special > episode, instead of through the Specials season. With several virtual specials, that crumb opens a list of them.' },
+                { key: 'specialCollectionsRowTitle', script: 'virtualSpecials',
+                    label: 'Special: one collection is titled "Collection"',
+                    desc: 'Jellyfin titles the Collections row in the plural however many it holds; with one, it reads "Collection".' },
+                { key: 'elegantfinEpisodeLogo', script: 'episodeSeasonTitle',
+                    label: 'ElegantFin: logo under the thumbnail',
+                    desc: 'ElegantFin hides the logo on episode pages. This shows it under the thumbnail, in place of the series name. Other skins keep their logo where it is either way.' }
+            ]
+        },
+        {
+            title: 'Season pages',
+            tweaks: [
+                { key: 'seasonLogoToSeries', script: 'episodeSeasonTitle',
+                    label: 'Logo opens the series',
+                    desc: 'Clicking the header logo on a season page opens its series.' }
+            ]
+        },
+        {
+            title: 'Collection pages',
+            tweaks: [
+                { key: 'collectionLogoToSeries', script: 'episodeSeasonTitle',
+                    label: 'Virtual special: logo opens the series',
+                    desc: 'On a virtual special\'s page, clicking the header logo opens the series its episodes come from - when they all come from one.' },
+                { key: 'collectionBreadcrumb', script: 'virtualSpecials',
+                    label: 'Virtual special: breadcrumb back to the series',
+                    desc: 'A virtual special\'s page gets the trail Shows > series > collection, which Jellyfin gives a collection none of.' },
+                { key: 'collectionStudios', script: 'virtualSpecials',
+                    label: 'Studios row filled in',
+                    desc: 'Jellyfin builds a collection\'s Studios row but never fills it in. Any collection.' },
+                { key: 'collectionSectionRows', script: 'collectionSectionRows',
+                    label: 'Sections as rows',
+                    desc: 'Each section of a collection page (Episodes, Movies and so on) shows as a horizontal row of cards, like the season row on a series page. Any collection.' },
+                { key: 'singleItemCollection', script: 'virtualSpecials',
+                    label: 'One-item collections: no count or Shuffle',
+                    desc: 'A collection of one hides its "1 items" count and its Shuffle button, which could only shuffle one thing. Play stays. Any collection.' }
+            ]
+        },
+        {
+            title: 'Everywhere',
+            tweaks: [
+                { key: 'noSpecialPrefix', script: 'specialEpisodePrefix',
+                    label: 'No "Special - " prefix',
+                    desc: 'Removes the "Special - " Jellyfin puts before the title of every episode in a Specials season - cards, season pages and episode pages. The wording is localized, so it is learned once from your server rather than assumed.' },
+                { key: 'mediaTags', script: 'mediaTags',
+                    label: 'Tags row',
+                    desc: 'Adds a Tags row to the details table on item pages, between Genres and Studios, each tag linking to its items. Jellyfin only shows tags in a separate line under the overview, which some skins (ElegantFin) hide.' }
+            ]
+        }
     ];
+
+    const ALL_TWEAKS = SECTIONS.reduce((all, section) => all.concat(section.tweaks), []);
 
     function configs() {
         return [window.KefinTweaksCurrentConfig, window.KefinTweaksConfig]
             .filter((c, i, all) => c && all.indexOf(c) === i);
     }
 
-    function isOn(key) {
+    function isOn(tweak) {
         const cfg = configs()[0] || {};
-        return !cfg.scripts || cfg.scripts[key] !== false;   // every tweak defaults to on
+        const saved = cfg.itemPageTweaks && cfg.itemPageTweaks[tweak.key];
+        if (typeof saved === 'boolean') return saved;
+        return !cfg.scripts || cfg.scripts[tweak.script] !== false;   // before the switches existed
     }
 
     function escapeHtml(text) {
@@ -52,25 +121,35 @@
     }
 
     function row(tweak) {
-        return '<div class="listItem" style="border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:0.75em;margin-bottom:1em;">'
+        return '<div class="listItem" style="border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:0.75em;margin-bottom:0.75em;">'
             + '<div class="listItemContent">'
-            + '<div class="listItemBodyText" style="margin-bottom:0.5em;">' + escapeHtml(tweak.label) + '</div>'
-            + '<div class="listItemBodyText secondary" style="margin-bottom:0.75em;font-size:0.9em;">' + escapeHtml(tweak.desc) + '</div>'
-            + '<label class="checkboxContainer" style="display:flex;align-items:center;gap:0.5em;">'
-            + '<input type="checkbox" data-series-specials-key="' + tweak.key + '"' + (isOn(tweak.key) ? ' checked' : '') + '>'
-            + '<span class="listItemBodyText">Enabled</span></label>'
+            + '<label class="checkboxContainer" style="display:flex;align-items:center;gap:0.5em;margin-bottom:0.4em;">'
+            + '<input type="checkbox" data-item-page-tweak="' + tweak.key + '"' + (isOn(tweak) ? ' checked' : '') + '>'
+            + '<span class="listItemBodyText">' + escapeHtml(tweak.label) + '</span></label>'
+            + '<div class="listItemBodyText secondary" style="font-size:0.9em;">' + escapeHtml(tweak.desc) + '</div>'
             + '</div></div>';
+    }
+
+    function section(sec) {
+        return '<div style="margin:1.25em 0 0.5em;font-weight:bold;font-size:1.1em;">' + escapeHtml(sec.title) + '</div>'
+            + sec.tweaks.map(row).join('');
     }
 
     async function save(modal) {
         const targets = configs();
         if (!targets.length) return false;
-        modal.dialogContent.querySelectorAll('[data-series-specials-key]').forEach(box => {
-            const key = box.getAttribute('data-series-specials-key');
-            targets.forEach(cfg => {
-                if (!cfg.scripts) cfg.scripts = {};
-                cfg.scripts[key] = box.checked;
-            });
+        const chosen = {};
+        modal.dialogContent.querySelectorAll('[data-item-page-tweak]').forEach(box => {
+            chosen[box.getAttribute('data-item-page-tweak')] = box.checked;
+        });
+        // A script stays loaded while any of its tweaks is on.
+        const scriptsOn = {};
+        ALL_TWEAKS.forEach(t => { scriptsOn[t.script] = scriptsOn[t.script] || chosen[t.key] === true; });
+
+        targets.forEach(cfg => {
+            cfg.itemPageTweaks = Object.assign({}, cfg.itemPageTweaks || {}, chosen);
+            if (!cfg.scripts) cfg.scripts = {};
+            Object.keys(scriptsOn).forEach(name => { cfg.scripts[name] = scriptsOn[name]; });
         });
         try {
             if (!window.KefinTweaksUtils || !window.KefinTweaksUtils.saveConfigToJavaScriptInjector) return false;
@@ -89,16 +168,16 @@
         }
         const content = document.createElement('div');
         content.innerHTML = '<div style="max-width:800px;">'
-            + '<div class="listItemBodyText secondary" style="margin-bottom:1em;">'
+            + '<div class="listItemBodyText secondary" style="margin-bottom:0.5em;">'
             + 'Each tweak can be switched on its own. Turning Item Page Tweaks off in the feature list turns all of them off and keeps these choices for when it is turned back on.'
             + '</div>'
-            + TWEAKS.map(row).join('')
+            + SECTIONS.map(section).join('')
             + '</div>';
 
         const footer = document.createElement('div');
         footer.style.cssText = 'display:flex;gap:0.75em;justify-content:flex-end;';
-        footer.innerHTML = '<button class="emby-button raised" data-series-specials-close>Close</button>'
-            + '<button class="emby-button raised block button-submit" data-series-specials-save>Save</button>';
+        footer.innerHTML = '<button class="emby-button raised" data-item-page-tweaks-close>Close</button>'
+            + '<button class="emby-button raised block button-submit" data-item-page-tweaks-save>Save</button>';
 
         const modalInstance = window.ModalSystem.create({
             id: MODAL_ID,
@@ -109,9 +188,9 @@
             closeOnEscape: true,
             showCloseButton: true,
             onOpen: (modal) => {
-                modal.dialogFooter.querySelector('[data-series-specials-close]')
+                modal.dialogFooter.querySelector('[data-item-page-tweaks-close]')
                     .addEventListener('click', () => window.ModalSystem.close(MODAL_ID));
-                modal.dialogFooter.querySelector('[data-series-specials-save]')
+                modal.dialogFooter.querySelector('[data-item-page-tweaks-save]')
                     .addEventListener('click', async () => {
                         if (await save(modal)) {
                             if (window.KefinTweaksToaster && window.KefinTweaksToaster.toast) {

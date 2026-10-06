@@ -185,11 +185,11 @@
                 enabled: true
             },
             {
-                // Hides a one-item collection's count and Shuffle button.
-                // Needs body.kefin-collection-single from the Virtual
-                // Specials feature; inert without it, hence the name. See the
-                // header of the stylesheet for why it is not a :has().
-                name: 'Virtual Specials Tweaks',
+                // Keeps a collection's own heading when ElegantFin shows its
+                // logo. The file once also hid a one-item collection's count
+                // and Shuffle button; that moved into Item Page Tweaks. The
+                // file name stays: the saved option key is built from it.
+                name: 'Collection Title With Logo',
                 url: `${getKefinTweaksRoot()}skins/optional/global/collectionSingleItem.css`,
                 enabled: false
             },

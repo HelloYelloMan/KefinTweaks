@@ -45,6 +45,16 @@
 
     const seasonCache = new Map();   // seasonId -> season item, or null
 
+    // Both behaviours are switches in the Item Page Tweaks settings window
+    // (config.itemPageTweaks); unset means on.
+    //   episodeHeadingToSeason      heading names and opens the season
+    //   specialHeadingToCollection  a special's heading names and opens its
+    //                               virtual special
+    function tweakOn(key) {
+        const tweaks = window.KefinTweaksConfig && window.KefinTweaksConfig.itemPageTweaks;
+        return !tweaks || tweaks[key] !== false;
+    }
+
     // --------------------------------------------------
     //  DATA
     // --------------------------------------------------
@@ -80,12 +90,13 @@
     // What the heading should say and open, or null to leave it as Jellyfin
     // rendered it. text null = keep the series name, retarget only.
     async function resolveHeading(item) {
-        const data = item.ParentIndexNumber === 0 ? await seriesSpecialsData() : null;
+        const wantSpecial = item.ParentIndexNumber === 0 && tweakOn('specialHeadingToCollection');
+        const data = wantSpecial ? await seriesSpecialsData() : null;
         if (data && data.isSpecialEpisode(item)) {
             const special = await data.virtualSpecialOf(item);
             if (special) return { text: special.Name || null, id: special.Id, type: 'BoxSet' };
         }
-        if (!item.SeasonId) return null;
+        if (!item.SeasonId || !tweakOn('episodeHeadingToSeason')) return null;
         const season = await getSeason(item.SeasonId);
         const original = season && (season.OriginalTitle || '').trim();
         return { text: original || null, id: item.SeasonId, type: 'Season' };

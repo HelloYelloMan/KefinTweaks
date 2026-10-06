@@ -1,48 +1,13 @@
-/* Virtual Specials Tweaks -- collection page styling (KefinTweaks global option)
+/* Collection Title With Logo (KefinTweaks global option)
  *
- * Two unrelated corrections that both belong to collection pages. The first
- * applies only to a collection holding a single item; the second to every
- * collection.
- *
- * A collection of one still carries a "1 items" count in the misc-info line and
- * a shuffle button that can only ever shuffle one thing. Neither tells the
- * viewer anything, so both are hidden. Hiding the contents row of such a
- * collection is a separate CSS-only option, "Hide Contents Row On One-Item
- * Collections" (hideOneItemCollectionRow.css).
- *
- * The Play button is deliberately left alone. For one item it means "play this
- * item", which is still the useful thing to do from here.
- *
- * NEEDS JAVASCRIPT. These rules read body.kefin-collection-single, set by the
- * Virtual Specials feature (scripts/virtualSpecials.js) from the collection's
- * ChildCount, and do nothing without it. Doing them in CSS would take a
- * page-level :has() -- the count and the shuffle button are outside
- * .collectionItems, so the subject has to be an ancestor of the whole detail
- * page -- and that is the selector shape elegantfin-haspatch.js exists to
- * eliminate: a registered :has() pays style-invalidation cost on every DOM
- * mutation under its subject.
+ * Keeps a collection's own heading when a logo is showing; the rationale is
+ * below. File name and option key are historical: this file used to hide a
+ * one-item collection's count and Shuffle button as well, reading a marker set
+ * by Virtual Specials. Those rules moved into scripts/virtualSpecials.js
+ * (2026-10-05), under the "one-item collections" switch in Item Page Tweaks, so
+ * that feature takes one switch instead of two in two places. The name stays
+ * because the option's saved key is built from it.
  */
-
-/* Every rule is scoped to the VISIBLE detail page. Jellyfin keeps the outgoing
- * view in the DOM during a navigation, so for a moment two .itemDetailPage
- * elements exist at once -- measured mid-transition, a document-wide query saw
- * the cards of both. The marker is computed from the visible page alone, so
- * unscoped rules would apply that page's answer to its predecessor as well. */
-
-/* The "1 items" count. mediainfo.js pushes the child count first for a BoxSet,
- * before year, rating, runtime and size, so :first-child is the count and only
- * the count. Confirmed on 10.11.11, where the line reads:
- *   ["1 items", "2025", "4.8", "-23m / 23m", "5.52 GB"] */
-body.kefin-collection-single .itemDetailPage:not(.hide) .itemMiscInfo-primary > .mediaInfoItem:first-child {
-    display: none;
-}
-
-/* Shuffle. jellyfin-web already adds .hide when nothing in the collection is
- * playable, but not when there is exactly one thing to play. */
-body.kefin-collection-single .itemDetailPage:not(.hide) .btnShuffle {
-    display: none;
-}
-
 
 /* ---------------------------------------------------------------------------
  * Keep the collection's own title even when a logo is showing.
