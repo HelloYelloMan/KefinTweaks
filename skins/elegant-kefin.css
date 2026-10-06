@@ -190,3 +190,14 @@ html body #itemDetailPage.kefin-episode-logo.kefin-episode-logo-placed .detailLo
 	animation: none;
 	background-position: center;
 }
+
+/* Characters plugin: the ground behind an actor and their character takes
+ * ElegantFin's poster corner. The plugin measures the corner off the cast
+ * pictures, which ElegantFin draws as ovals, so it lands on their 2.98px
+ * instead. Set on the shape itself because the plugin writes the measured
+ * --character-pair-radius inline on the row, where a stylesheet's value for
+ * it cannot win. The class is the plugin's own, so with it off this matches
+ * nothing. */
+.itemsContainer > .card.characterPairStart::before {
+	border-radius: var(--largeRadius, 2.98px);
+}

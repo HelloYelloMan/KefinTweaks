@@ -514,3 +514,15 @@ html[data-theme="dark"].layout-mobile header.MuiAppBar-root .headerButton.header
 	align-items: center;
 	justify-content: center;
 }
+
+/* Characters plugin: the ground behind an actor and their character in the
+ * cast row, as Abyss's floating header is -- its tint at the header's 0.69
+ * rather than the 0.92 Abyss gives --jf-palette-AppBar-defaultBg, and its glass
+ * blur. Both name only the plugin's own variable and class, so with the plugin
+ * off they match nothing. */
+:root {
+	--character-pair-ground: rgba(var(--abyss-glass-tint), .69);
+}
+.characterPairStart::before {
+	backdrop-filter: blur(var(--abyss-glass-blur, 0px));
+}
