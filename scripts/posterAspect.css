@@ -301,9 +301,19 @@
 .par-299{--par-ar:2.99}
 .par-300{--par-ar:3.00}
 
-/* The row height is the skin's. The width follows from the ratio. */
-.par-on:not(.detailImageContainer) > .card.portraitCard:not([data-par-probe]),
-.par-on:not(.detailImageContainer) > .card.overflowPortraitCard:not([data-par-probe]) {
+/* The row height is the skin's. The width follows from the ratio.
+ *
+ * :not(#par-none) here and on the padder and picture box below, for the same
+ * reason as on episode cards further down: an ID outranks any number of
+ * classes. Abyss sizes its cast by
+ *
+ *     .layout-desktop #castContent .card.overflowPortraitCard { width: 10vw !important }
+ *
+ * (and the picture box's height likewise), so without it nothing in this file
+ * reached a cast card on Abyss -- the probe measured the row, and the cards
+ * kept Abyss's own size whatever their art. */
+.par-on:not(.detailImageContainer) > .card.portraitCard:not([data-par-probe]):not(#par-none),
+.par-on:not(.detailImageContainer) > .card.overflowPortraitCard:not([data-par-probe]):not(#par-none) {
     /* Width must include the padding, or a content-box skin (ElegantFin sets
        .card{box-sizing:content-box;padding:var(--padding)}) adds it again and
        the picture is stretched past its own shape. */
@@ -347,14 +357,14 @@
 
 /* Jellyfin's padder sets height from a percentage of width; the height comes
    from --par-h now, so the padder must stop contributing. */
-.par-on:not(.detailImageContainer) > .card.portraitCard:not([data-par-probe]) .cardPadder,
-.par-on:not(.detailImageContainer) > .card.overflowPortraitCard:not([data-par-probe]) .cardPadder {
+.par-on:not(.detailImageContainer) > .card.portraitCard:not([data-par-probe]):not(#par-none) .cardPadder,
+.par-on:not(.detailImageContainer) > .card.overflowPortraitCard:not([data-par-probe]):not(#par-none) .cardPadder {
     padding-bottom: 0 !important;
     height: 100%;
 }
 
-.par-on:not(.detailImageContainer) > .card.portraitCard:not([data-par-probe]) .cardScalable,
-.par-on:not(.detailImageContainer) > .card.overflowPortraitCard:not([data-par-probe]) .cardScalable {
+.par-on:not(.detailImageContainer) > .card.portraitCard:not([data-par-probe]):not(#par-none) .cardScalable,
+.par-on:not(.detailImageContainer) > .card.overflowPortraitCard:not([data-par-probe]):not(#par-none) .cardScalable {
     height: var(--par-h) !important;
     width: 100% !important;
     aspect-ratio: auto !important;

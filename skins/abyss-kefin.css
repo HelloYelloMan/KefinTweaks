@@ -526,3 +526,54 @@ html[data-theme="dark"].layout-mobile header.MuiAppBar-root .headerButton.header
 .characterPairStart::before {
 	backdrop-filter: blur(var(--abyss-glass-blur, 0px));
 }
+
+/* The cast row at jellyfin-web's own card sizes. Abyss's section 12 began as
+ * Ultrachromic's "smaller cast list" addon (smallercast.css: square cast
+ * pictures, smaller than jellyfin's at each of its breakpoints). Abyss
+ * bbc69b5 (2026-08-30, a TV-layout commit) swapped those breakpoints for
+ * layout classes, which leaves one flat width per layout: 10vw by 14vw on
+ * desktop, larger than jellyfin's cast on any wide window, and a picture
+ * wider than tall on a tablet.
+ *
+ * The widths are jellyfin-web 12's .overflowPortraitCard ones
+ * (src/components/cardbuilder/card.scss), in its order. The picture box goes
+ * back to auto so the card's own padder sets its shape again. `html` puts
+ * these above Abyss's rules, which name the layout class alone.
+ *
+ * With Poster Aspect on, its rules out-rank these on every cast card but its
+ * probe, so the probe measures the row at jellyfin's size and each card takes
+ * that height at its own art's width -- the cast as the Default skin draws it. */
+html:is(.layout-desktop, .layout-tablet, .layout-mobile) :is(#castContent, #guestCastContent) .cardScalable {
+	width: auto !important;
+	height: auto !important;
+}
+html:is(.layout-desktop, .layout-tablet, .layout-mobile) :is(#castContent, #guestCastContent) .card.overflowPortraitCard {
+	width: 40vw !important;
+}
+@media (min-width: 25em) {
+	html:is(.layout-desktop, .layout-tablet, .layout-mobile) :is(#castContent, #guestCastContent) .card.overflowPortraitCard { width: 31.2vw !important; }
+}
+@media (min-width: 43.75em) {
+	html:is(.layout-desktop, .layout-tablet, .layout-mobile) :is(#castContent, #guestCastContent) .card.overflowPortraitCard { width: 23.1vw !important; }
+}
+@media (orientation: landscape) {
+	html:is(.layout-desktop, .layout-tablet, .layout-mobile) :is(#castContent, #guestCastContent) .card.overflowPortraitCard { width: 23.1vw !important; }
+}
+@media (min-width: 50em) {
+	html:is(.layout-desktop, .layout-tablet, .layout-mobile) :is(#castContent, #guestCastContent) .card.overflowPortraitCard { width: 18.5vw !important; }
+}
+@media (min-width: 75em) {
+	html:is(.layout-desktop, .layout-tablet, .layout-mobile) :is(#castContent, #guestCastContent) .card.overflowPortraitCard { width: 15.5vw !important; }
+}
+@media (min-width: 87.5em) {
+	html:is(.layout-desktop, .layout-tablet, .layout-mobile) :is(#castContent, #guestCastContent) .card.overflowPortraitCard { width: 13.3vw !important; }
+}
+@media (min-width: 100em) {
+	html:is(.layout-desktop, .layout-tablet, .layout-mobile) :is(#castContent, #guestCastContent) .card.overflowPortraitCard { width: 11.6vw !important; }
+}
+@media (min-width: 120em) {
+	html:is(.layout-desktop, .layout-tablet, .layout-mobile) :is(#castContent, #guestCastContent) .card.overflowPortraitCard { width: 10.41vw !important; }
+}
+@media (min-width: 131.25em) {
+	html:is(.layout-desktop, .layout-tablet, .layout-mobile) :is(#castContent, #guestCastContent) .card.overflowPortraitCard { width: 9.3vw !important; }
+}
