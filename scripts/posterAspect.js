@@ -524,7 +524,7 @@
 
         // Inside Jellyfin's .hide the answer is 0 wide; get it without forcing
         // layout. The sweep retries once the section is shown.
-        if (container.closest('.hide')) return false;
+        if (container.closest('.hide')) { waitForUnhide(container); return false; }
         const width = Math.round(container.getBoundingClientRect().width);
         if (!width) return false;
         if (container.dataset.parSkin === sig) {
@@ -741,6 +741,50 @@
      * Only the wrapping grid needs it; a horizontal row scrolls and does not
      * care how many fit.
      */
+    /* A row inside a HIDDEN section is measured the moment the section is shown.
+     *
+     * A hidden row cannot be measured, and the section being shown is a class
+     * change, not an insertion, so the observer in start() never sees it: the
+     * row waited for the next sweep and its cards were painted at the skin's
+     * ladder width first, then resized. Seen on person pages: jellyfin-web's
+     * #listChildrenCollapsible starts as class="hide", the Characters plugin
+     * puts its row inside it, and jellyfin-web removes .hide only once the
+     * filmography has loaded -- the character card drew at 286px and snapped
+     * to 300px about 60ms later.
+     *
+     * So the element hiding the row is watched for its class, and when .hide
+     * comes off its rows are measured in that same microtask, before the frame
+     * is painted. If another ancestor still hides them, measureContainer comes
+     * back here and watches that one. WeakMap and the observer's own weak
+     * registrations: a section that is never shown holds nothing alive. */
+    const hiddenWaiting = new WeakMap();
+    let unhideObserver = null;
+
+    function waitForUnhide(container) {
+        const hidden = container.closest('.hide');
+        if (!hidden) return;
+        let rows = hiddenWaiting.get(hidden);
+        if (!rows) {
+            rows = new Set();
+            hiddenWaiting.set(hidden, rows);
+            if (!unhideObserver) unhideObserver = new MutationObserver(onUnhide);
+            unhideObserver.observe(hidden, { attributes: true, attributeFilter: ['class'] });
+        }
+        rows.add(container);
+    }
+
+    function onUnhide(records) {
+        const ready = new Set();
+        for (const r of records) {
+            const el = r.target;
+            const rows = hiddenWaiting.get(el);
+            if (!rows || el.classList.contains('hide')) continue;
+            hiddenWaiting.delete(el);
+            rows.forEach((c) => { if (c.isConnected) ready.add(c); });
+        }
+        if (ready.size) inBatch(() => ready.forEach(measureContainer));
+    }
+
     function publishColumnGap(container) {
         if (!container.classList.contains('vertical-wrap')) return;
         const gap = parseFloat(getComputedStyle(container).columnGap);
