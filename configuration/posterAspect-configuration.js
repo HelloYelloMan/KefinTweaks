@@ -1,9 +1,9 @@
 // KefinTweaks Poster Aspect - settings window
 //
 // One option so far, config.posterAspect.coverFullHeight: whether an item page's
-// cover keeps the skin's height even when its art is wider than the width the
-// skin gives the cover (see posterAspect.css, "An item page's cover keeps the
-// SKIN'S HEIGHT", and posterAspect.js, shiftDetailText). Off by default.
+// cover may widen into the empty room between it and the text, so more art keeps
+// the skin's height (see posterAspect.css, "An item page's cover keeps the SKIN'S
+// HEIGHT", and posterAspect.js, coverRoom). Off by default; the text never moves.
 //
 // Loaded with the configuration UI (CONFIG_DEPENDENCY_NAMES), so it opens while
 // the feature is off too. Saved into both window.KefinTweaksCurrentConfig (the
@@ -54,12 +54,12 @@
             + '<div class="listItemContent">'
             + '<label class="checkboxContainer" style="display:flex;align-items:center;gap:0.5em;margin-bottom:0.4em;">'
             + '<input type="checkbox" data-poster-aspect-option="coverFullHeight"' + (cfg.coverFullHeight ? ' checked' : '') + '>'
-            + '<span class="listItemBodyText">Item page covers: always the skin\'s height</span></label>'
+            + '<span class="listItemBodyText">Item page covers: use the room beside them</span></label>'
             + '<div class="listItemBodyText secondary" style="font-size:0.9em;">'
-            + 'An item page\'s cover keeps the height the skin draws a poster at, and its width follows the picture. '
-            + 'Off: a picture wider than the space the skin gives the cover comes out a little shorter instead. '
-            + 'On: it keeps the full height and extends past that space, and the title and text move right to make room. '
-            + 'Desktop and TV layouts; skins that fix the cover\'s size themselves (ElegantFin) are not affected.'
+            + 'An item page\'s cover keeps the height the skin draws it at, and its width follows the picture. '
+            + 'Off: it may only be as wide as the space the skin gives the cover, so a wider picture comes out a little shorter. '
+            + 'On: it may also use the empty room between the cover and the text, so more pictures keep the full height. The text never moves. '
+            + 'Portrait and square covers, on desktop and TV; skins that fix the cover\'s size themselves (ElegantFin) are not affected.'
             + '</div></div></div></div>';
 
         const footer = document.createElement('div');

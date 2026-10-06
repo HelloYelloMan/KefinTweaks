@@ -974,83 +974,75 @@
     }
 
     // ---------------------------------------------------------------------
-    // ITEM-PAGE COVER: THE FULL-HEIGHT OPTION
+    // ITEM-PAGE COVER: THE OPTION TO USE THE ROOM BESIDE IT
     //
     // Off by default. By default the item page's cover keeps the skin's height
-    // only as far as the skin's width allows, and wider art comes out shorter
-    // (posterAspect.css, "An item page's cover keeps the SKIN'S HEIGHT"). With
-    // config.posterAspect.coverFullHeight the stylesheet lets the picture extend
-    // past the card's box instead (html.par-cover-full), and this moves the text
-    // column right by exactly that overflow, so the skin's own gap is kept: at
-    // 0.78-0.80 the cover otherwise ran up to 14px into the title (Default and
-    // Abyss, 1600px). The column is .detailRibbon and .detailPagePrimaryContent,
-    // the two elements jellyfin-web offsets with padding-left; the skin's value
-    // is read fresh each time and only the overflow is added, inline and
-    // !important because skins set theirs !important too.
+    // only as far as the card's own width allows, and wider art comes out
+    // shorter (posterAspect.css, "An item page's cover keeps the SKIN'S HEIGHT").
+    // With config.posterAspect.coverFullHeight the width limit becomes the room
+    // jellyfin-web leaves beside the cover instead: from the cover's left edge to
+    // ROOM_MARGIN_VW short of where the text starts. That is measured here, from
+    // the page, because it is the skin's -- jellyfin-web starts the text column
+    // at padding-left 32.45vw, skins move it -- and handed to the stylesheet as
+    // --par-cover-max on the card. The text is never moved. Never less than the
+    // card's own width, so the option can only ever give a cover more room.
     // ---------------------------------------------------------------------
 
     const COVER_FULL_CLASS = 'par-cover-full';
-    const SHIFT_ATTR = 'data-par-shift';
-    let coverObserver = null;
-    let coverObserved = null;
-    let shiftTimers = [];
+    const ROOM_MARGIN_VW = 1;
+    let roomTimers = [];
 
     function coverFullHeightOn() {
         const cfg = window.KefinTweaksConfig && window.KefinTweaksConfig.posterAspect;
         return !!(cfg && cfg.coverFullHeight === true);
     }
 
-    function shiftDetailText() {
+    // Where the text starts: the content edge of the two elements jellyfin-web
+    // offsets with padding-left, whichever is further left.
+    function textStart(page) {
+        let left = Infinity;
+        page.querySelectorAll('.detailRibbon, .detailPagePrimaryContent').forEach((el) => {
+            const r = el.getBoundingClientRect();
+            if (!r.width || !r.height) return;
+            left = Math.min(left, r.left + (parseFloat(getComputedStyle(el).paddingLeft) || 0));
+        });
+        return left;
+    }
+
+    function coverRoom() {
         if (!document.documentElement.classList.contains(COVER_FULL_CLASS)) return;
         const page = document.querySelector('.itemDetailPage:not(.hide)');
         if (!page) return;
         const card = Array.from(page.querySelectorAll(
-            '.detailImageContainer.par-on > .card.portraitCard, .detailImageContainer.par-on > .card.overflowPortraitCard'
+            '.detailImageContainer > .card.portraitCard, .detailImageContainer > .card.overflowPortraitCard, '
+            + '.detailImageContainer > .card.squareCard'
         )).find((c) => c.getBoundingClientRect().width > 0);
-        const box = card && card.querySelector('.cardScalable');
-        const mobile = document.documentElement.classList.contains('layout-mobile');
-        const overflow = (box && !mobile)
-            ? Math.max(0, Math.ceil(box.getBoundingClientRect().right - card.getBoundingClientRect().right))
-            : 0;
-
-        page.querySelectorAll('.detailRibbon, .detailPagePrimaryContent').forEach((el) => {
-            // Back to the skin's value first, so a resize (the skin's padding is
-            // in vw) or a narrower cover never stacks on an old shift.
-            if (el.hasAttribute(SHIFT_ATTR)) {
-                el.style.removeProperty('padding-left');
-                el.removeAttribute(SHIFT_ATTR);
-            }
-            if (!overflow) return;
-            const base = parseFloat(getComputedStyle(el).paddingLeft) || 0;
-            el.style.setProperty('padding-left', (base + overflow) + 'px', 'important');
-            el.setAttribute(SHIFT_ATTR, String(overflow));
-        });
-
-        // The cover's size lands when --par-h does, which can be after this ran.
-        if (box && box !== coverObserved && window.ResizeObserver) {
-            if (coverObserver) coverObserver.disconnect();
-            coverObserved = box;
-            coverObserver = new ResizeObserver(() => requestAnimationFrame(shiftDetailText));
-            coverObserver.observe(box);
-        }
+        if (!card) return;
+        const box = card.getBoundingClientRect();
+        const text = textStart(page);
+        // No text column beside it (a phone, or a skin that stacks the two).
+        if (!isFinite(text) || text <= box.right) { card.style.removeProperty('--par-cover-max'); return; }
+        const room = Math.max(box.width, Math.floor(text - box.left - window.innerWidth * ROOM_MARGIN_VW / 100));
+        card.style.setProperty('--par-cover-max', room + 'px');
     }
 
-    function scheduleShift() {
-        shiftTimers.forEach(clearTimeout);
-        shiftTimers = [0, 300, 1000, 2500].map((ms) => setTimeout(shiftDetailText, ms));
+    function scheduleRoom() {
+        roomTimers.forEach(clearTimeout);
+        roomTimers = [0, 300, 1000, 2500].map((ms) => setTimeout(coverRoom, ms));
     }
 
     function startCoverOption() {
         if (!coverFullHeightOn()) return;
         document.documentElement.classList.add(COVER_FULL_CLASS);
-        window.addEventListener('resize', scheduleShift, { passive: true });
+        // The room is in vw: a resize changes it.
+        window.addEventListener('resize', scheduleRoom, { passive: true });
         if (window.KefinTweaksUtils && window.KefinTweaksUtils.onViewPage) {
-            window.KefinTweaksUtils.onViewPage(() => scheduleShift(), { pages: ['details'] });
+            window.KefinTweaksUtils.onViewPage(() => scheduleRoom(), { pages: ['details'] });
         }
-        scheduleShift();
+        scheduleRoom();
     }
 
-    window.KefinTweaksPosterAspect = { ensureTransformation, sweep, shiftDetailText };
+    window.KefinTweaksPosterAspect = { ensureTransformation, sweep, coverRoom };
 
     if (document.body) start();
     if (document.readyState === 'loading') {
