@@ -299,6 +299,12 @@ header.MuiAppBar-root > .MuiToolbar-root > .MuiBox-root:has([aria-controls="app-
 :is(.layout-desktop, .layout-tv) #itemDetailPage .detailRibbon > .infoWrapper {
 	position: relative;
 	align-self: stretch;
+	/* Stretched, the wrapper put its contents at the top of the ribbon rather
+	 * than where the ribbon's align-items: center had them -- 7px above the
+	 * title against 45px under the details row. It centres them itself. */
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
 }
 
 :is(.layout-desktop, .layout-tv) #itemDetailPage .detailRibbon > .infoWrapper::before {
