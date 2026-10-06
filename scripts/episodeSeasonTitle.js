@@ -115,6 +115,22 @@
     //  DATA
     // --------------------------------------------------
 
+    // seriesSpecialsData.js is a dependency, but the loader does not promise it
+    // has RUN by the time this handler does - it is a separate file, and was
+    // seen to land after this one on vault. So it is waited for, bounded, and
+    // only for a special: no other episode needs it.
+    function seriesSpecialsData() {
+        const startedAt = Date.now();
+        return new Promise(resolve => {
+            const look = () => {
+                if (window.KefinTweaksSeriesSpecialsData) resolve(window.KefinTweaksSeriesSpecialsData);
+                else if (Date.now() - startedAt >= POLL_TIMEOUT_MS) resolve(null);
+                else setTimeout(look, POLL_INTERVAL_MS);
+            };
+            look();
+        });
+    }
+
     // Whether Jellyfin will put a logo in .detailLogo for this item - the same
     // two sources its renderLogo() reads.
     function hasHeaderLogo(item) {
@@ -616,7 +632,7 @@
                 // ---- Special in one virtual special: that collection's logo ----
                 // Same rule as Episode Title's heading, so the two agree: exactly
                 // one virtual special, or the episode is treated as any other.
-                const data = window.KefinTweaksSeriesSpecialsData;
+                const data = item.ParentIndexNumber === 0 ? await seriesSpecialsData() : null;
                 const special = (data && data.isSpecialEpisode(item)) ? await data.virtualSpecialOf(item) : null;
                 if (!current() || page.classList.contains('hide')) return;
 

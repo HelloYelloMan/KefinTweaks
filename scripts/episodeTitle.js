@@ -61,10 +61,26 @@
         return season;
     }
 
+    // seriesSpecialsData.js is a dependency, but the loader does not promise it
+    // has RUN by the time this handler does - it is a separate file, and was
+    // seen to land after this one on vault. So it is waited for, bounded, and
+    // only for a special: no other episode needs it.
+    function seriesSpecialsData() {
+        const startedAt = Date.now();
+        return new Promise(resolve => {
+            const look = () => {
+                if (window.KefinTweaksSeriesSpecialsData) resolve(window.KefinTweaksSeriesSpecialsData);
+                else if (Date.now() - startedAt >= POLL_TIMEOUT_MS) resolve(null);
+                else setTimeout(look, POLL_INTERVAL_MS);
+            };
+            look();
+        });
+    }
+
     // What the heading should say and open, or null to leave it as Jellyfin
     // rendered it. text null = keep the series name, retarget only.
     async function resolveHeading(item) {
-        const data = window.KefinTweaksSeriesSpecialsData;
+        const data = item.ParentIndexNumber === 0 ? await seriesSpecialsData() : null;
         if (data && data.isSpecialEpisode(item)) {
             const special = await data.virtualSpecialOf(item);
             if (special) return { text: special.Name || null, id: special.Id, type: 'BoxSet' };
