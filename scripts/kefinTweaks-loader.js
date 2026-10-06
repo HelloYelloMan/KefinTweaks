@@ -44,6 +44,7 @@
         // which is why it went unnoticed after the merge.
         castSessionWatchdog: true, // Re-subscribe the Sessions feed when a stale now playing bar shows a dead cast target
         elegantfinHaspatch: true, // ElegantFin :has() hotfix marker classes (needs the local ElegantFin build)
+        seriesSpecials: true,     // Series & Specials group: the five tweaks marked group: 'seriesSpecials' run only while this is on
         episodeSeasonTitle: true, // Episode Logo: header logo links up (episode -> season -> series)
         jeSidebarMemo: true,      // Memoise Jellyfin Enhanced's getSidebarContainer (forced style flush on every DOM mutation)
         jeSpoilerGuardScope: true, // Scope Jellyfin Enhanced's Spoiler Guard image refresh to the item that changed
@@ -581,6 +582,7 @@
         },
         {
             name: 'episodeSeasonTitle',
+            group: 'seriesSpecials',
             script: 'episodeSeasonTitle.js',
             css: null,
             dependencies: ['utils'],
@@ -603,6 +605,7 @@
         },
         {
             name: 'mediaTags',
+            group: 'seriesSpecials',
             script: 'mediaTags.js',
             css: null,
             dependencies: ['utils'],
@@ -610,6 +613,7 @@
         },
         {
             name: 'specialEpisodePrefix',
+            group: 'seriesSpecials',
             script: 'specialEpisodePrefix.js',
             css: null,
             dependencies: ['utils'],
@@ -652,6 +656,7 @@
         },
         {
             name: 'collectionSectionRows',
+            group: 'seriesSpecials',
             script: 'collectionSectionRows.js',
             css: null,
             dependencies: ['utils', 'cardBuilder'],
@@ -659,10 +664,29 @@
         },
         {
             name: 'virtualSpecials',
+            group: 'seriesSpecials',
             script: 'virtualSpecials.js',
             css: null,
             dependencies: ['utils'],
             description: "Fixes to the collection (BoxSet) detail page. Fills in the Studios row, which renderStudio refuses to render for a BoxSet. Removes the \"Special - \" prefix jellyfin-web prepends to every season-0 episode title, on collection pages only. Gives a virtual special breadcrumbs back to its series, and sets the single-item marker collectionSingleItem.css reads."
+        },
+        // Series & Specials. A group switch with no script of its own: the
+        // definitions above that carry group: 'seriesSpecials' run only while
+        // this is on (see mergeEnabledScripts), and each keeps its own switch,
+        // set from the group's settings window instead of the feature list.
+        {
+            name: 'seriesSpecials',
+            script: null,
+            css: null,
+            dependencies: [],
+            description: 'Series & Specials: the related episode, season and collection-page tweaks, each switched from one settings window.'
+        },
+        {
+            name: 'seriesSpecials-configuration',
+            script: '../configuration/seriesSpecials-configuration.js',
+            css: null,
+            dependencies: ['modal', 'toaster', 'utils'],
+            description: 'Settings window for the Series & Specials group'
         }
     ];
 
@@ -673,7 +697,7 @@
         'versionPreferences-configuration', 'skinManager-configuration',
         'customMenuLinks-configuration', 'thumbnailScrubber-configuration',
         'watchTogether-configuration', 'watchlist-configuration', 'userManager-configuration', 'apiHelper',
-        'sectionHelper'
+        'sectionHelper', 'seriesSpecials-configuration'
     ];
 
     const CONFIGURATION_FILES = { script: 'configuration.js', css: 'configuration.css' };
@@ -706,6 +730,14 @@
 
     function mergeEnabledScripts(config) {
         const enabled = Object.assign({}, DEFAULT_ENABLED_SCRIPTS, (config && config.scripts) || {});
+        // A grouped script runs only while its group is on. Its own flag is left
+        // as saved in the config, so switching the group back on restores
+        // exactly the tweaks that were on before; it is only this merged view
+        // that turns it off. Done before dependencies are resolved, so a
+        // disabled tweak does not pull its dependencies in either.
+        SCRIPT_DEFINITIONS.forEach((script) => {
+            if (script.group && !enabled[script.group]) enabled[script.name] = false;
+        });
         let iterations = 0;
         while (iterations < 10) {
             let changed = false;

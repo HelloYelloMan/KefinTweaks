@@ -245,6 +245,7 @@
         // ================================================================
         castSessionWatchdog: true, // Re-subscribe the Sessions feed when a stale now playing bar shows a dead cast target
         elegantfinHaspatch: true, // ElegantFin :has() hotfix marker classes (needs the local ElegantFin build)
+        seriesSpecials: true,     // Series & Specials group (see scripts/kefinTweaks-loader.js)
         episodeSeasonTitle: true, // Episode Logo: header logo links up (episode -> season -> series)
         jeSidebarMemo: true,      // Memoise Jellyfin Enhanced's getSidebarContainer (forced style flush on every DOM mutation)
         jeSpoilerGuardScope: true, // Scope Jellyfin Enhanced's Spoiler Guard image refresh to the item that changed
@@ -783,6 +784,7 @@
         },
         {
             name: 'collectionSectionRows',
+            group: 'seriesSpecials',
             script: 'collectionSectionRows.js',
             css: null,
             dependencies: ['utils', 'cardBuilder'],
@@ -790,10 +792,25 @@
         },
         {
             name: 'virtualSpecials',
+            group: 'seriesSpecials',
             script: 'virtualSpecials.js',
             css: null,
             dependencies: ['utils'],
             description: "Fixes to the collection (BoxSet) detail page. Fills in the Studios row, which renderStudio refuses to render for a BoxSet. Removes the \"Special - \" prefix jellyfin-web prepends to every season-0 episode title, on collection pages only. Gives a virtual special breadcrumbs back to its series, and sets the single-item marker collectionSingleItem.css reads."
+        },
+        {
+            name: 'seriesSpecials',
+            script: null,
+            css: null,
+            dependencies: [],
+            description: 'Series & Specials group switch (gating lives in scripts/kefinTweaks-loader.js).'
+        },
+        {
+            name: 'seriesSpecials-configuration',
+            script: '../configuration/seriesSpecials-configuration.js',
+            css: null,
+            dependencies: ['modal', 'toaster', 'utils'],
+            description: 'Settings window for the Series & Specials group'
         },
         {
             name: 'jeSpoilerGuardScope',
@@ -805,6 +822,7 @@
         },
         {
             name: 'mediaTags',
+            group: 'seriesSpecials',
             script: 'mediaTags.js',
             css: null,
             dependencies: ['utils'],
@@ -812,6 +830,7 @@
         },
         {
             name: 'specialEpisodePrefix',
+            group: 'seriesSpecials',
             script: 'specialEpisodePrefix.js',
             css: null,
             dependencies: ['utils'],
@@ -826,6 +845,7 @@
         },
         {
             name: 'episodeSeasonTitle',
+            group: 'seriesSpecials',
             script: 'episodeSeasonTitle.js',
             css: null,
             dependencies: ['utils'],
