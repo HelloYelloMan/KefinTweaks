@@ -6,7 +6,9 @@
 //   * on a SPECIAL in exactly one virtual special collection, it shows that
 //     collection's logo and opens the collection (the same rule Episode Title
 //     uses for the heading, through seriesSpecialsData.js);
-//   * on a SEASON page it opens the series.
+//   * on a SEASON page it opens the series;
+//   * on a VIRTUAL SPECIAL's collection page it opens the series its episodes
+//     come from, when there is exactly one (seriesSpecialsData.js).
 // On ElegantFin, which hides the logo on episode pages, it also shows it under
 // the thumbnail in place of the series name. The title text itself is never
 // changed - an earlier version swapped in the season's Original Title.
@@ -61,6 +63,10 @@
         // series - whether it is showing the season's own logo or the series logo
         // Jellyfin falls back to.
         SEASON_LOGO_LINKS_TO_SERIES: true,
+
+        // On a VIRTUAL SPECIAL's collection page, make the header logo navigate to
+        // the series its episodes come from - when that is one series.
+        COLLECTION_LOGO_LINKS_TO_SERIES: true,
     };
 
     const LINK_CLASS  = 'kefin-logo-link';
@@ -618,6 +624,17 @@
                 clearLogoLink(page);
                 clearEpisodeLogoSlot(page);
                 stopCollectionLogo();
+
+                // ---- Virtual special's page: logo navigates up to its series ----
+                if (item.Type === 'BoxSet') {
+                    const pipelineMade = !!(item.ProviderIds && item.ProviderIds.AnimePipelineSeries);
+                    if (!CONFIG.COLLECTION_LOGO_LINKS_TO_SERIES || !pipelineMade) return;
+                    const data = await seriesSpecialsData();
+                    const seriesId = data ? await data.seriesOfVirtualSpecial(item) : null;
+                    if (!seriesId || !current() || page.classList.contains('hide')) return;
+                    whenPresent(page, '.detailLogo', () => bindLogoLink(page, seriesId, 'Go to series'));
+                    return;
+                }
 
                 // ---- Season page: logo navigates up to the series ----
                 if (item.Type === 'Season') {

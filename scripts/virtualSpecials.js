@@ -56,7 +56,11 @@
 
     const lastChildren = {};
 
+    // Shared with Episode Logo through seriesSpecialsData.js; the local fetch is
+    // only a fallback should that script not have run.
     function fetchChildren(collectionId) {
+        const shared = window.KefinTweaksSeriesSpecialsData;
+        if (shared && shared.childrenOf) return shared.childrenOf(collectionId);
         return sharedFetch(lastChildren, collectionId, () =>
             ApiClient.getItems(ApiClient.getCurrentUserId(), { ParentId: collectionId })
                 .then(r => r.Items || [])

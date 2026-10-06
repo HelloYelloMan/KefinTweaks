@@ -24,21 +24,37 @@
     // moment of each other, so one answer serves them all. Kept for seconds, not
     // for the session, so a revisit still sees the collections as they are now.
     const SHARED_FETCH_MS = 10000;
+
+    function sharedFetch(slot, id, fetch) {
+        if (slot.id !== id || Date.now() - slot.at > SHARED_FETCH_MS) {
+            slot.id = id;
+            slot.at = Date.now();
+            slot.promise = fetch();
+        }
+        return slot.promise;
+    }
+
     const lastCollections = { id: null, at: 0, promise: null };
+    const lastChildren    = { id: null, at: 0, promise: null };
 
     function collectionsOf(itemId) {
-        const slot = lastCollections;
-        if (slot.id !== itemId || Date.now() - slot.at > SHARED_FETCH_MS) {
-            slot.id = itemId;
-            slot.at = Date.now();
-            slot.promise = ApiClient.getJSON(ApiClient.getUrl(`Items/${itemId}/Collections`, {
+        return sharedFetch(lastCollections, itemId, () =>
+            ApiClient.getJSON(ApiClient.getUrl(`Items/${itemId}/Collections`, {
                 userId: ApiClient.getCurrentUserId(),
                 fields: 'ProviderIds'
             }))
                 .then(r => (r && r.Items) || [])
-                .catch(error => { WARN('Could not read the item\'s collections:', error); return []; });
-        }
-        return slot.promise;
+                .catch(error => { WARN('Could not read the item\'s collections:', error); return []; }));
+    }
+
+    // A collection's own items. Virtual Specials reads them for the Studios row,
+    // the special names, the single-item marker and its breadcrumb; Episode Logo
+    // for the series a virtual special belongs to.
+    function childrenOf(collectionId) {
+        return sharedFetch(lastChildren, collectionId, () =>
+            ApiClient.getItems(ApiClient.getCurrentUserId(), { ParentId: collectionId })
+                .then(r => (r && r.Items) || [])
+                .catch(error => { WARN('Could not read the collection\'s items:', error); return []; }));
     }
 
     function isSpecialEpisode(item) {
@@ -59,8 +75,19 @@
         return specials.length === 1 ? specials[0] : null;
     }
 
+    // The series a virtual special belongs to: the one series all its episodes
+    // come from, or null when they come from several (the breadcrumb lists them
+    // then; there is no single place to send the logo) or there are none.
+    async function seriesOfVirtualSpecial(collection) {
+        if (!isVirtualSpecial(collection)) return null;
+        const ids = new Set((await childrenOf(collection.Id)).map(c => c.SeriesId).filter(Boolean));
+        return ids.size === 1 ? [...ids][0] : null;
+    }
+
     window.KefinTweaksSeriesSpecialsData = {
         collectionsOf,
+        childrenOf,
+        seriesOfVirtualSpecial,
         isSpecialEpisode,
         isVirtualSpecial,
         virtualSpecialOf
