@@ -617,6 +617,9 @@
     //  INITIALIZATION
     // --------------------------------------------------
 
+    // The page and item the handler last set up, to skip repeat notifications.
+    let applied = { page: null, itemId: null };
+
     function initializeHook() {
         if (!window.KefinTweaksUtils || !window.KefinTweaksUtils.onViewPage) {
             WARN('KefinTweaksUtils.onViewPage not available, retrying in 1 second');
@@ -625,7 +628,7 @@
         }
 
         window.KefinTweaksUtils.onViewPage(
-            async (view, element, hash, itemPromise) => {
+            async (view, element, hash, itemPromise, previousHash) => {
                 if (ApiClient._loggedIn === false) return;
 
                 let item;
@@ -646,12 +649,25 @@
                 // the History API as the URL changes - before jellyfin-web has
                 // swapped the views - so the visible page at that moment is the
                 // OUTGOING one. Checking that page made the handler give up, and
-                // the second notification, from the view show, is suppressed
-                // (triggerOnSameHash: false) because the hash has not changed
-                // since. Result: nothing applied when arriving from the season
-                // page, while a refresh of the same episode worked.
+                // the second notification, from the view show, was suppressed
+                // (this used triggerOnSameHash: false) because the hash had not
+                // changed since. Result: nothing applied when arriving from the
+                // season page, while a refresh of the same episode worked.
                 const page = await pageFor(item);
                 if (!page || !current()) return;
+
+                // Registered with triggerOnSameHash: true, so one navigation can
+                // call this two or three times (History API, then view show). With
+                // false, utils drops every call whose URL equals the last one it
+                // reported - and when this script loads after Jellyfin has already
+                // reported the page, that drops the immediate call on registration
+                // AND the view show, so a refresh sometimes did nothing at all. A
+                // repeat for the same navigation (previousHash === hash) is skipped
+                // once this page is set up for this item; a later return to the
+                // same item (episode -> Home -> episode) still re-applies, since
+                // Jellyfin re-renders the header then.
+                if (previousHash === hash && applied.page === page && applied.itemId === item.Id) return;
+                applied = { page, itemId: item.Id };
 
                 // Tear down the previous page's observer, logo binding and slot.
                 stopObserving();
@@ -686,7 +702,7 @@
             },
             {
                 pages: ['details'],
-                triggerOnSameHash: false
+                triggerOnSameHash: true
             }
         );
 

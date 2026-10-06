@@ -44,7 +44,7 @@
         // which is why it went unnoticed after the merge.
         castSessionWatchdog: true, // Re-subscribe the Sessions feed when a stale now playing bar shows a dead cast target
         elegantfinHaspatch: true, // ElegantFin :has() hotfix marker classes (needs the local ElegantFin build)
-        episodeSeasonTitle: true, // Season title/logo on episode headers + season-page logo links to series
+        episodeSeasonTitle: true, // Season title on episode headers; header logo links up (episode -> season -> series)
         jeSidebarMemo: true,      // Memoise Jellyfin Enhanced's getSidebarContainer (forced style flush on every DOM mutation)
         jeSpoilerGuardScope: true, // Scope Jellyfin Enhanced's Spoiler Guard image refresh to the item that changed
         mediaTags: true,          // Add a Tags row to the item-details metadata table
@@ -584,7 +584,7 @@
             script: 'episodeSeasonTitle.js',
             css: null,
             dependencies: ['utils'],
-            description: "Season title/logo on episode headers, and a season-page logo that links to the series."
+            description: "Season title on episode headers, and a header logo that links up a level: episode to season, season to series."
         },
         {
             name: 'jeSidebarMemo',
