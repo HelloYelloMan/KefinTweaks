@@ -244,8 +244,16 @@
             },
             {
                 pages: ['details'],
-                triggerOnSameHash: false
+                // triggerOnSameHash must stay true. With false, utils drops every
+                // call whose URL equals the last one it reported - and when this
+                // script loads after Jellyfin has already reported the page, that
+                // drops both the immediate call on registration and the view show,
+                // so a refresh sometimes did nothing at all. Repeat calls for one
+                // navigation are harmless: the section is only inserted when the
+                // page has none.
+                triggerOnSameHash: true
             }
+
         );
 
         LOG('Collections hook initialized');

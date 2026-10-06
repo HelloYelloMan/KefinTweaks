@@ -436,6 +436,9 @@
     let viewToken = 0;
 
     let teardown = [];
+    // The page and item the handler last set up, to skip repeat notifications.
+    let applied = { page: null, itemId: null };
+
     function stopAll() {
         viewToken++;
         setSingleItemMarker(false);
@@ -469,7 +472,7 @@
         }
 
         window.KefinTweaksUtils.onViewPage(
-            async (view, element, hash, itemPromise) => {
+            async (view, element, hash, itemPromise, previousHash) => {
                 if (ApiClient._loggedIn === false) return;
 
                 let item;
@@ -485,13 +488,27 @@
                 // swapped the views -- so the visible page at that moment is the
                 // OUTGOING one, hidden by the time the item arrives. Checking that
                 // page made the handler give up, and the second notification, from
-                // the view show, is suppressed (triggerOnSameHash: false) because
-                // the hash has not changed since. Seen in the app opening a
+                // the view show, was suppressed (this used triggerOnSameHash: false)
+                // because the hash had not changed since. Seen in the app opening a
                 // collection from a series page's Collections row: no marker, so
                 // the count and Shuffle of a one-item collection stayed visible.
                 const page = document.querySelector('.itemDetailPage:not(.hide)')
                     || document.querySelector('.libraryPage:not(.hide)');
                 if (!page) return;
+
+                // Registered with triggerOnSameHash: true, so one navigation can
+                // call this two or three times (History API, then view show). With
+                // false, utils drops every call whose URL equals the last one it
+                // reported - and when this script loads after Jellyfin has already
+                // reported the page, that drops the immediate call on registration
+                // AND the view show, so a refresh sometimes did nothing at all. A
+                // repeat for the same navigation (previousHash === hash) is skipped
+                // once this page is set up for this item: stopAll() would cancel
+                // work already under way and briefly clear the marker and title. A
+                // later return to the same item has a different previousHash and
+                // runs again, as Jellyfin re-renders the page then.
+                if (previousHash === hash && applied.page === page && applied.itemId === item.Id) return;
+                applied = { page, itemId: item.Id };
 
                 stopAll();
                 setCollectionsTitle(page, null);
@@ -549,7 +566,7 @@
             },
             {
                 pages: ['details'],
-                triggerOnSameHash: false
+                triggerOnSameHash: true
             }
         );
 

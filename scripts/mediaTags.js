@@ -204,7 +204,16 @@
             },
             {
                 pages: ['details'],
-                triggerOnSameHash: false
+                // triggerOnSameHash must stay true. With false, utils drops every
+                // call whose URL equals the last one it reported - and when this
+                // script loads after Jellyfin has already reported the page, that
+                // drops both the immediate call on registration and the view show,
+                // so a refresh sometimes did nothing at all. It also starved the
+                // outgoing-page case: going from one item page to another, the
+                // first call finds the page being left and gives up, and the view
+                // show that would find the new one has the same hash. Repeat calls
+                // are harmless - injectTagsRow() replaces its own row.
+                triggerOnSameHash: true
             }
         );
 
