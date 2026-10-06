@@ -89,6 +89,12 @@
  * so the wrapper is stretched to that height and centres its own contents in
  * turn: the band covers the whole ribbon and the text stays where it was.
  * Desktop only: jellyfin-web paints no ribbon on TV. */
+:root {
+	--kefin-ribbon-bg: rgba(var(--jf-palette-background-paperChannel, 32 32 32) / 0.8);
+	/* The Characters plugin's cast-row pair backing, in the ribbon's colour. */
+	--character-pair-ground: var(--kefin-ribbon-bg);
+}
+
 .layout-desktop #itemDetailPage .detailRibbon {
 	background: transparent;
 	isolation: isolate;
@@ -111,7 +117,7 @@
 	bottom: 0;
 	left: -1.5em;
 	right: -100vw;
-	background: rgba(var(--jf-palette-background-paperChannel, 32 32 32) / 0.8);
+	background: var(--kefin-ribbon-bg);
 	border-radius: var(--jf-card-borderRadius, 0.2em) 0 0 var(--jf-card-borderRadius, 0.2em);
 	pointer-events: none;
 }

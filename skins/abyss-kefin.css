@@ -286,6 +286,10 @@ header.MuiAppBar-root > .MuiToolbar-root > .MuiBox-root:has([aria-controls="app-
  * edge (clipped there by overflow:hidden), and over the ribbon's own 0.5em top
  * and bottom padding (abyss.css). isolation:isolate on the ribbon keeps the
  * z-index:-1 band above the page but below the contents. */
+:root {
+	--kefin-ribbon-bg: rgba(0, 0, 0, 0.2);
+}
+
 :is(.layout-desktop, .layout-tv) #itemDetailPage .detailRibbon {
 	background: transparent !important;
 	isolation: isolate;
@@ -305,7 +309,7 @@ header.MuiAppBar-root > .MuiToolbar-root > .MuiBox-root:has([aria-controls="app-
 	bottom: -0.5em;
 	left: -1.5em;
 	right: -100vw;
-	background: rgba(0, 0, 0, 0.2);
+	background: var(--kefin-ribbon-bg);
 	border-radius: var(--abyss-radius, 12px) 0 0 var(--abyss-radius, 12px);
 	pointer-events: none;
 }
@@ -516,12 +520,11 @@ html[data-theme="dark"].layout-mobile header.MuiAppBar-root .headerButton.header
 }
 
 /* Characters plugin: the ground behind an actor and their character in the
- * cast row, as Abyss's floating header is -- its tint at the header's 0.69
- * rather than the 0.92 Abyss gives --jf-palette-AppBar-defaultBg, and its glass
- * blur. Both name only the plugin's own variable and class, so with the plugin
- * off they match nothing. */
+ * cast row takes the item-page ribbon's colour (--kefin-ribbon-bg, below), and
+ * the floating header's glass blur. Both name only the plugin's own variable
+ * and class, so with the plugin off they match nothing. */
 :root {
-	--character-pair-ground: rgba(var(--abyss-glass-tint), .69);
+	--character-pair-ground: var(--kefin-ribbon-bg);
 }
 .characterPairStart::before {
 	backdrop-filter: blur(var(--abyss-glass-blur, 0px));
