@@ -131,3 +131,62 @@
   border-radius: unset;
   backdrop-filter: none;
 }
+
+/* Episode pages: Jellyfin's logo under the thumbnail, in place of the series name.
+ *
+ * ElegantFin hides the logo on any page whose header image is a backdrop card,
+ * which is every episode, and forces the series name back on instead:
+ *
+ *     #itemDetailPage:has(.detailImageContainer .backdropCard) .detailLogo { display:none }
+ *     .detailImageContainer:has(.backdropCard) ~ .nameContainer h1 { display:block !important }
+ *
+ * Unhiding it is not enough: its position is set for the full-height header,
+ * so on an episode it lands behind the thumbnail. Its height is not the
+ * problem; the spot is. Under the thumbnail the ribbon CENTRES its content, so
+ * where the title sits depends on how tall that content is, and on a phone the
+ * thumbnail is pulled up by a negative margin.
+ *
+ * So the series-name heading is kept in the flow as an empty slot of the logo's
+ * height, and ElegantFin's own layout places it. The logo is absolutely
+ * positioned against the page, and episodeSeasonTitle.js measures the slot's
+ * offset and hands it over as --kefin-episode-logo-top. That script sets
+ * .kefin-episode-logo only on episodes that have a logo, so a logo-less one
+ * keeps its text title; .kefin-episode-logo-placed follows once the slot is
+ * measured, so the logo never flashes at the top of the page first.
+ *
+ * `html body` is there for specificity: ElegantFin's hide rule is (1,3,0), and
+ * the order these sheets load in is not something to rely on. The logo is
+ * shown through the theme's --clearLogoVisibility, so turning logos off in
+ * ElegantFin still turns this one off. */
+#itemDetailPage {
+	--kefin-episode-logo-height: 12vh;
+	--kefin-episode-logo-width: 40vw;
+}
+
+.layout-mobile #itemDetailPage {
+	--kefin-episode-logo-height: 10vh;
+	--kefin-episode-logo-width: calc(100vw - 2em);
+}
+
+html body #itemDetailPage.kefin-episode-logo .nameContainer > h1.parentName {
+	visibility: hidden;
+	height: var(--kefin-episode-logo-height);
+	box-sizing: border-box;
+	padding: 0;
+	overflow: hidden;
+}
+
+html body #itemDetailPage.kefin-episode-logo.kefin-episode-logo-placed .detailLogo:not(.hide) {
+	display: var(--clearLogoVisibility);
+	position: absolute;
+	top: var(--kefin-episode-logo-top);
+	left: 0;
+	right: 0;
+	width: var(--kefin-episode-logo-width);
+	height: var(--kefin-episode-logo-height);
+	max-height: none;
+	margin: 0 auto;
+	transform: none;
+	animation: none;
+	background-position: center;
+}

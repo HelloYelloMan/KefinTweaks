@@ -2,8 +2,8 @@
 // Two related fixes to the season <-> series relationship in detail page headers:
 //
 //   1. EPISODE pages show the SEASON's title (Original Title by default) where
-//      Jellyfin shows the series name, and clicking it goes to the season. When
-//      the season has its own Logo image, that logo is shown instead of the text.
+//      Jellyfin shows the series name, and clicking it goes to the season. The
+//      header logo (.detailLogo) goes to the season too.
 //   2. SEASON pages get a clickable header logo that navigates up to the series.
 //
 // Why: Jellyfin's episode header is built from the series only - renderName()
@@ -12,9 +12,18 @@
 // show whose seasons are distinctly titled or separately branded) the season
 // carries the title and artwork people actually recognise.
 //
-// Why JS (not CSS): none of this is in the DOM to reveal. The season's title and
-// logo are simply absent from an episode page, so they have to be fetched
-// (/Items/{SeasonId}) and written in.
+// Why JS (not CSS): the season's title is simply absent from an episode page, so
+// it has to be fetched (/Items/{SeasonId}) and written in.
+//
+// THE LOGO IS JELLYFIN'S. This script never draws one. On an episode the server
+// already gives .detailLogo the SEASON's logo when the season has one: its
+// parent-image walk (DtoService.AddInheritedImages) starts at the episode's
+// display parent, which is the season, and only falls back to the series. An
+// earlier version put the season logo into the series-name heading as well,
+// which on skins that show .detailLogo (Default, Abyss) meant the same logo
+// twice. ElegantFin hides .detailLogo on episode pages; skins/elegant-kefin.css
+// brings it back under the thumbnail, and this script supplies the one thing
+// CSS cannot know there - where the title slot is (see EPISODE LOGO SLOT).
 //
 // Navigation notes - both matter, and neither is obvious:
 //   * The episode header's parent link is rendered with a literal href="#"; the
@@ -36,21 +45,11 @@
 //     removes .hide and sets the background only once the lazy image resolves,
 //     long after the view event. Measuring the hitbox at bind time therefore reads
 //     a 0x0 box, so an observer re-measures when the image lands.
+//   * Abyss lays .detailLogo out in normal flow (position:static), where the
+//     absolutely positioned hitbox would anchor to some ancestor instead of the
+//     logo. Such a logo is made position:relative, which does not move it.
 //
 // Navigation itself uses the same form as KefinTweaks' breadcrumbs.
-//
-// SKIN INTERACTIONS (ElegantFin) - all three cost real debugging time:
-//   * It clamps .parentName's <a> and <bdi> with display:-webkit-box !important +
-//     -webkit-line-clamp:3 + overflow:hidden. -webkit-box is legacy flexbox, so
-//     the <a> becomes a FLEX ITEM: shrink-wrapped and pinned to the start of a box
-//     whose width is set by the longest sibling (the episode title). Long title =
-//     wide box = logo visibly stuck to the left. text-align cannot move a flex
-//     item, so the fix is forcing the elements back to display:block.
-//   * !important does NOT beat !important - specificity does. ElegantFin's
-//     selector is (0,2,2); a bare .kefin-logo-host is (0,1,0) and loses even with
-//     !important. Every override below is written specific enough to win.
-//   * .emby-button:active applies brightness+scale, which the logo inherits by
-//     virtue of the class Jellyfin puts on that anchor.
 //
 // Configuration is the CONFIG block below (internal, not exposed in the
 // KefinTweaks configuration UI).
@@ -80,38 +79,10 @@
         // false to keep it navigating to the series, as Jellyfin does by default.
         LINK_TO_SEASON: true,
 
-        // On episode pages, show the season's own Logo image in place of the
-        // season title text when that season has one set. Only a logo set on the
-        // SEASON counts - the series logo is never used here, since that would
-        // put the series' branding back where we just removed its name. Seasons
-        // without their own logo keep the text title.
-        USE_SEASON_LOGO: true,
-
-        // Size caps. Viewport units, NOT em: skins set wildly different heading
-        // sizes (ElegantFin puts font-size:4em on .parentName), so an em cap
-        // means something different on every skin.
-        SEASON_LOGO_MAX_HEIGHT: '20vh',
-        SEASON_LOGO_MAX_WIDTH:  '38vw',
-
-        // Horizontal alignment of the logo within the heading.
-        //   'center'  - centred (default; matches skins that centre the header)
-        //   'left' / 'right' - pinned to that edge
-        //   'inherit' - follow the heading's text-align, as plain text would
-        //
-        // Why this needs saying at all: .nameContainer shrink-to-fits around its
-        // WIDEST child, which is the episode title. Both headings then stretch to
-        // that width, so the title fills its box while the narrower logo sits at
-        // the box's left edge. With a short title the box is narrow and the logo
-        // looks centred; with a long one it drifts left. Explicit alignment makes
-        // it independent of the title's length.
-        SEASON_LOGO_ALIGN: 'center',
-
-        // Margin around the logo (CSS shorthand). Overlapping the thumbnail was
-        // tried and abandoned - ElegantFin clips .parentName's descendants, so the
-        // bleed never rendered cleanly. Negative values still overlap on skins
-        // that don't clip.
-        SEASON_LOGO_MARGIN_TOP:    '0',
-        SEASON_LOGO_MARGIN_BOTTOM: '0',
+        // On EPISODE pages, make the header logo (.detailLogo) navigate to the
+        // season - whether it is showing the season's own logo or the series logo
+        // Jellyfin falls back to.
+        EPISODE_LOGO_LINKS_TO_SEASON: true,
 
         // On SEASON pages, make the header logo (.detailLogo) navigate to the
         // series - whether it is showing the season's own logo or the series logo
@@ -126,12 +97,16 @@
     const ORIGINAL_ID_ATTR   = 'data-kefin-series-dataid';
     const ORIGINAL_TYPE_ATTR = 'data-kefin-series-datatype';
 
-    const LOGO_CLASS = 'kefin-season-logo';
-    const LINK_CLASS = 'kefin-logo-link';
-    const HIT_CLASS  = 'kefin-logo-hit';
-    const HOST_CLASS  = 'kefin-logo-host';
+    const LINK_CLASS  = 'kefin-logo-link';
+    const HIT_CLASS   = 'kefin-logo-hit';
     const HOVER_CLASS = 'kefin-logo-hovering';
-    const STYLE_ID   = 'kefin-episode-season-title-style';
+    const STYLE_ID    = 'kefin-episode-season-title-style';
+
+    // Set on the page by the EPISODE LOGO SLOT code below; only
+    // skins/elegant-kefin.css has rules for them.
+    const SLOT_CLASS   = 'kefin-episode-logo';
+    const PLACED_CLASS = 'kefin-episode-logo-placed';
+    const SLOT_TOP_VAR = '--kefin-episode-logo-top';
 
     // Headers re-render asynchronously (React) and can replace their contents
     // after our write, so we watch, re-apply, then stop.
@@ -145,51 +120,11 @@
     //  STYLES
     // --------------------------------------------------
 
-    // Auto margins centre/pin a BLOCK image inside its containing block, which
-    // works regardless of the heading's text-align - the alignment there is
-    // emergent from the flex layout, not something text-align controls.
-    // Alignment must land on the <h1>: it is the only element in the chain wider
-    // than the logo. ElegantFin leaves the <bdi> and <a> as shrink-to-fit
-    // inline-blocks, so margin:auto on the image has no free space to distribute
-    // and text-align on anything below the h1 has nothing to align against.
-    function hostAlignCss() {
-        switch (CONFIG.SEASON_LOGO_ALIGN) {
-            case 'left':    return 'text-align: left !important;';
-            case 'right':   return 'text-align: right !important;';
-            case 'inherit': return '';
-            case 'center':
-            default:        return 'text-align: center !important;';
-        }
-    }
-
-    function logoAlignCss() {
-        switch (CONFIG.SEASON_LOGO_ALIGN) {
-            case 'left':  return 'display: block; margin-right: auto;';
-            case 'right': return 'display: block; margin-left: auto;';
-            case 'inherit': return 'display: inline-block; vertical-align: middle;';
-            case 'center':
-            default:      return 'display: block; margin-left: auto; margin-right: auto;';
-        }
-    }
-
     function injectStyles() {
         if (document.getElementById(STYLE_ID)) return;
         const style = document.createElement('style');
         style.id = STYLE_ID;
         style.textContent = `
-            /* inline-block (not block) so the logo inherits whatever text
-               alignment the skin gives the heading, instead of forcing left */
-            .${LOGO_CLASS} {
-                ${logoAlignCss()}
-                max-height: ${CONFIG.SEASON_LOGO_MAX_HEIGHT};
-                max-width: ${CONFIG.SEASON_LOGO_MAX_WIDTH};
-                width: auto; height: auto;
-                object-fit: contain;
-                /* vertical only: horizontal margins carry the alignment above */
-                margin-top: ${CONFIG.SEASON_LOGO_MARGIN_TOP};
-                margin-bottom: ${CONFIG.SEASON_LOGO_MARGIN_BOTTOM};
-            }
-
             /* .detailLogo is absolutely positioned with z-index:auto and sits
                BEFORE .detailPageWrapperContainer (position:relative) in the DOM,
                so the wrapper paints over it and swallows clicks. Lift it above -
@@ -203,70 +138,6 @@
                 border-radius: 4px;
             }
             .${HIT_CLASS}:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
-
-            /* ElegantFin clamps .parentName's <a> AND the <bdi> Jellyfin wraps it
-               in to three text lines via display:-webkit-box + overflow:hidden.
-               That crops the logo to a line box and clips away the negative-margin
-               overlap. Undone only on elements we actually put a logo inside, so
-               text titles keep their clamping. */
-            /* block, NOT inline-block: these are block-level natively, and
-               shrink-wrapping them to the image removes the free space that
-               margin:auto needs to centre it. block still defeats ElegantFin's
-               display:-webkit-box clamp, which is the only reason we touch
-               display here at all. */
-            .${HOST_CLASS} {
-                display: block !important;
-                /* fallback: if a skin still forces -webkit-box, centre the box's
-                   contents the only way that layout understands */
-                -webkit-box-pack: center;
-                justify-content: center;
-                overflow: visible !important;
-                -webkit-line-clamp: unset !important;
-                line-clamp: unset !important;
-                -webkit-box-orient: unset !important;
-                max-height: none !important;
-            }
-            h1.${HOST_CLASS} {
-                display: block !important;
-                ${hostAlignCss()}
-            }
-
-            /* SPECIFICITY, not !important, is what decides here. ElegantFin's
-               rule is:
-                   .nameContainer>h1.parentName a,
-                   .nameContainer>h1.parentName bdi { display:-webkit-box !important }
-               at (0,2,2). A bare .kefin-logo-host is (0,1,0), so even with
-               !important it loses - between two !important declarations the more
-               specific one wins. These selectors are (0,4,2) and actually apply.
-
-               It matters because -webkit-box is legacy flexbox: it makes the <a>
-               a FLEX ITEM, which shrink-wraps and pins to the start of the line.
-               text-align cannot move a flex item, which is why centring the text
-               did nothing. Forcing block restores normal flow, where the image's
-               auto margins centre it. */
-            /* The logo's anchor carries ElegantFin's .emby-button class, which adds
-               a press effect:
-                   .emby-button:active { filter:brightness(1.2)!important; transform:scale(.98) }
-               That reads as a button being pushed, which is wrong for artwork.
-               Same specificity trap as below - (0,2,0) with !important - so the
-               override has to out-specify it rather than just repeat !important. */
-            .nameContainer > h1.parentName.${HOST_CLASS} a.${HOST_CLASS}:active,
-            .nameContainer > h1.parentName.${HOST_CLASS} a.${HOST_CLASS}:hover {
-                filter: none !important;
-                transform: none !important;
-            }
-
-            .nameContainer > h1.parentName.${HOST_CLASS} bdi.${HOST_CLASS},
-            .nameContainer > h1.parentName.${HOST_CLASS} a.${HOST_CLASS} {
-                display: block !important;
-                width: auto !important;
-                overflow: visible !important;
-                -webkit-line-clamp: unset !important;
-                line-clamp: unset !important;
-                -webkit-box-orient: unset !important;
-                max-height: none !important;
-            }
-
 
             /* The logo loses the stacking contest to .detailPageWrapperContainer,
                so :hover never reaches our hitbox and the cursor stays default. The
@@ -308,18 +179,10 @@
         return (season[other] || '').trim() || null;
     }
 
-    // A logo URL only when the SEASON itself has one. Built with Jellyfin's own
-    // helper so it respects the server address, auth and image scaling.
-    function seasonLogoUrl(season) {
-        if (!CONFIG.USE_SEASON_LOGO) return null;
-        const tag = season && season.ImageTags && season.ImageTags.Logo;
-        if (!tag) return null;
-        try {
-            return ApiClient.getScaledImageUrl(season.Id, { type: 'Logo', tag: tag, maxHeight: 200 });
-        } catch (err) {
-            WARN('Could not build season logo URL', err);
-            return null;
-        }
+    // Whether Jellyfin will put a logo in .detailLogo for this item - the same
+    // two sources its renderLogo() reads.
+    function hasHeaderLogo(item) {
+        return !!((item.ImageTags && item.ImageTags.Logo) || item.ParentLogoImageTag);
     }
 
     // --------------------------------------------------
@@ -335,13 +198,13 @@
     }
 
     // --------------------------------------------------
-    //  EPISODE PAGE: SEASON TITLE / LOGO ON THE PARENT LINK
+    //  EPISODE PAGE: SEASON TITLE ON THE PARENT LINK
     // --------------------------------------------------
 
     // The series link inside .parentName. Episodes get exactly one link there, but
     // match on the series name first so we never rewrite the wrong one if a skin or
-    // a future Jellyfin version adds more. Once we have replaced the text (or
-    // swapped in a logo), the stored original is what identifies it.
+    // a future Jellyfin version adds more. Once we have replaced the text, the
+    // stored original is what identifies it.
     function findSeriesLink(page, item) {
         const parentName = page.querySelector('.nameContainer .parentName');
         if (!parentName) return null;
@@ -408,47 +271,92 @@
         if (link.getAttribute('href') !== href) link.setAttribute('href', href);
     }
 
-    function applyTitle(page, item, title, logoUrl) {
+    function applyTitle(page, item, title) {
         const link = findSeriesLink(page, item);
         if (!link) return false;
 
         if (!link.hasAttribute(ORIGINAL_ATTR)) {
             link.setAttribute(ORIGINAL_ATTR, link.textContent || '');
         }
-
-        // The anchor, the <bdi> around it, and the <h1> each clip their overflow
-        // under ElegantFin - all three must be opened up or the tightest one crops
-        // the logo.
-        const hosts = [link, link.parentElement, link.closest('.parentName')]
-            .filter(el => el && el.nodeType === 1);
-
-        if (logoUrl) {
-            let img = link.querySelector('img.' + LOGO_CLASS);
-            if (!img) {
-                link.textContent = '';                       // drop the series text
-                img = document.createElement('img');
-                img.className = LOGO_CLASS;
-                link.appendChild(img);
-            }
-            if (img.getAttribute('src') !== logoUrl) img.setAttribute('src', logoUrl);
-            img.alt = title || '';
-            hosts.forEach(el => el.classList.add(HOST_CLASS));
-        } else {
-            hosts.forEach(el => el.classList.remove(HOST_CLASS));
-            if (link.textContent !== title) {
-                // Also clears a logo left over from a previous item.
-                link.textContent = title;
-            }
-        }
+        if (link.textContent !== title) link.textContent = title;
 
         if (CONFIG.LINK_TO_SEASON && item.SeasonId) {
             retargetLink(link, item.SeasonId);
         }
+        // A re-render can move the heading the logo is laid over.
+        placeEpisodeLogo(page);
         return true;
     }
 
     // --------------------------------------------------
-    //  SEASON PAGE: LOGO LINKS UP TO THE SERIES
+    //  EPISODE LOGO SLOT (ElegantFin)
+    // --------------------------------------------------
+    //
+    // ElegantFin hides .detailLogo on episode pages and keeps the series name as
+    // text. skins/elegant-kefin.css undoes that: on a page carrying SLOT_CLASS it
+    // turns the series-name heading into an empty slot of fixed height, and lays
+    // .detailLogo over it once PLACED_CLASS is set too. The slot is in normal
+    // flow, so ElegantFin's own layout decides where it lands - the ribbon under
+    // the thumbnail centres its content, and the phone layout pulls the thumbnail
+    // up with a negative margin. .detailLogo, though, is absolutely positioned
+    // against the page, so its offset has to be measured from the slot and handed
+    // over as SLOT_TOP_VAR.
+    //
+    // Both classes are set on every skin; only elegant-kefin.css gives them
+    // meaning, so Default and Abyss keep their logo exactly where it is.
+
+    let slotPage     = null;
+    let slotObserver = null;
+    let slotTimers   = [];
+
+    function placeEpisodeLogo(page) {
+        if (!page || page !== slotPage || !page.classList.contains(SLOT_CLASS)) return;
+        const slot = page.querySelector('.nameContainer > h1.parentName');
+        if (!slot) return;
+        const slotRect = slot.getBoundingClientRect();
+        if (!slotRect.height) return;                    // not laid out yet
+        const top = Math.round(slotRect.top - page.getBoundingClientRect().top);
+        if (page.style.getPropertyValue(SLOT_TOP_VAR) !== top + 'px') {
+            page.style.setProperty(SLOT_TOP_VAR, top + 'px');
+        }
+        page.classList.add(PLACED_CLASS);
+    }
+
+    function clearEpisodeLogoSlot(page) {
+        if (slotObserver) { slotObserver.disconnect(); slotObserver = null; }
+        slotTimers.forEach(clearTimeout);
+        slotTimers = [];
+        slotPage = null;
+        if (!page) return;
+        page.classList.remove(SLOT_CLASS, PLACED_CLASS);
+        page.style.removeProperty(SLOT_TOP_VAR);
+    }
+
+    function markEpisodeLogoSlot(page) {
+        slotPage = page;
+        page.classList.add(SLOT_CLASS);
+        const place = () => placeEpisodeLogo(page);
+
+        // The slot moves when anything above it changes size - the thumbnail
+        // loading, the window resizing, the ribbon re-rendering. ElegantFin's
+        // phone header also slides in by animation, which resizes nothing, so a
+        // few timed passes cover the time it takes to settle.
+        if (typeof ResizeObserver !== 'undefined') {
+            slotObserver = new ResizeObserver(place);
+            slotObserver.observe(page);
+            ['.detailRibbon', '.detailImageContainer', '.nameContainer'].forEach(sel => {
+                page.querySelectorAll(sel).forEach(el => slotObserver.observe(el));
+            });
+        }
+        [0, 300, 800, 1500, 3000].forEach(ms => slotTimers.push(setTimeout(place, ms)));
+    }
+
+    document.addEventListener('animationend', () => {
+        if (slotPage && slotPage.isConnected) placeEpisodeLogo(slotPage);
+    }, true);
+
+    // --------------------------------------------------
+    //  HEADER LOGO LINK (season -> series, episode -> season)
     // --------------------------------------------------
 
     function detailHref(itemId) {
@@ -513,16 +421,20 @@
     // .detailLogo is a div, so link semantics have to be added by hand - via a
     // real <a> child, which also gives middle-click / open-in-new-tab for free.
     // The target id lives on the node and is refreshed per view: detail pages are
-    // recycled, so a stale id here would send a later page to the wrong series.
-    function bindLogoLink(page, seriesId) {
+    // recycled, so a stale id here would send a later page to the wrong item.
+    function bindLogoLink(page, targetId, label) {
         const logo = page.querySelector('.detailLogo');
         if (!logo) return false;
 
-        logo._kefinLogoTargetId = seriesId || null;
+        logo._kefinLogoTargetId = targetId || null;
         let hit = logo.querySelector('a.' + HIT_CLASS);
 
-        if (!seriesId) {
+        if (!targetId) {
             logo.classList.remove(LINK_CLASS);
+            if (logo._kefinAnchored) {
+                logo._kefinAnchored = false;
+                ANCHOR_PROPS.forEach(([prop]) => logo.style.removeProperty(prop));
+            }
             if (hit) hit.remove();
             boundLogo = null;
             document.documentElement.classList.remove(HOVER_CLASS);
@@ -533,7 +445,6 @@
         if (!hit) {
             hit = document.createElement('a');
             hit.className = HIT_CLASS;
-            hit.setAttribute('aria-label', 'Go to series');
             hit.addEventListener('click', (e) => {
                 const id = logo._kefinLogoTargetId;
                 if (!id) return;
@@ -543,8 +454,24 @@
             });
             logo.appendChild(hit);
         }
-        hit.setAttribute('href', detailHref(seriesId));
+        hit.setAttribute('aria-label', label);
+        hit.setAttribute('href', detailHref(targetId));
         boundLogo = logo;
+
+        // A static logo (Abyss) is no containing block for the hitbox, so it is
+        // made relative. Inline, because Abyss sets static from
+        // #itemDetailPage .detailLogo, which outranks any class rule here. The
+        // offsets are cleared with it: Jellyfin's own .detailLogo rule gives
+        // top/left values that static ignores and relative would apply, which
+        // moved Abyss's logo hundreds of pixels. Once only: this runs from the
+        // attribute observer below, so a write that did not take would
+        // re-trigger it forever.
+        const anchor = () => {
+            if (logo._kefinAnchored || getComputedStyle(logo).position !== 'static') return;
+            logo._kefinAnchored = true;
+            ANCHOR_PROPS.forEach(([prop, value]) => logo.style.setProperty(prop, value));
+        };
+        anchor();
         sizeHitbox(logo, hit);
 
         // .detailLogo ships in the page's static template, but Jellyfin only
@@ -554,6 +481,7 @@
         if (logoAttrObserver) logoAttrObserver.disconnect();
         logoAttrObserver = new MutationObserver(() => {
             const h = logo.querySelector('a.' + HIT_CLASS);
+            anchor();
             if (h) sizeHitbox(logo, h);
         });
         logoAttrObserver.observe(logo, { attributes: true, attributeFilter: ['class', 'style'] });
@@ -568,6 +496,9 @@
     let logoAttrObserver = null;
     let logoAttrStop     = null;
 
+    // Inline styles that make a static logo a containing block without moving it.
+    const ANCHOR_PROPS = [['position', 'relative'], ['top', 'auto'], ['left', 'auto'], ['right', 'auto'], ['bottom', 'auto']];
+
     // Stacking-proof click fallback.
     //
     // .detailLogo's own sibling .detailPageWrapperContainer (position:relative,
@@ -577,7 +508,6 @@
     // hit-test the painted rect ourselves and navigate. Independent of z-index,
     // pointer-events, and whatever is layered on top.
     document.addEventListener('click', (e) => {
-        if (!CONFIG.SEASON_LOGO_LINKS_TO_SERIES) return;
         const logo = boundLogo;
         if (!logo || !logo.isConnected) return;
         const id = logo._kefinLogoTargetId;
@@ -612,7 +542,7 @@
             hoverRaf = null;
             const logo = boundLogo;
             let over = false;
-            if (CONFIG.SEASON_LOGO_LINKS_TO_SERIES && logo && logo.isConnected && logo._kefinLogoTargetId) {
+            if (logo && logo.isConnected && logo._kefinLogoTargetId) {
                 const hit = logo.querySelector('a.' + HIT_CLASS);
                 let rect  = hit ? hit.getBoundingClientRect() : null;
                 if (!rect || !rect.width || !rect.height) rect = logo.getBoundingClientRect();
@@ -624,9 +554,10 @@
         });
     }, { passive: true });
 
-    // Run KefinTweaksEpisodeSeasonTitleDebug() in the console on a season page to
-    // see what the script found and, crucially, which element actually sits on top
-    // of the logo (elementAtLogoCentre) - that is what intercepts the click.
+    // Run KefinTweaksEpisodeSeasonTitleDebug() in the console on a season or
+    // episode page to see what the script found and, crucially, which element
+    // actually sits on top of the logo (elementAtLogoCentre) - that is what
+    // intercepts the click.
     window.KefinTweaksEpisodeSeasonTitleDebug = function () {
         const page = document.querySelector('.itemDetailPage:not(.hide)')
             || document.querySelector('.libraryPage:not(.hide)');
@@ -652,6 +583,11 @@
             hitRect: rect ? JSON.stringify(rect) : null,
             targetId: logo ? logo._kefinLogoTargetId : null,
             boundLogoSet: !!boundLogo,
+            episodeSlot: page ? {
+                slot: page.classList.contains(SLOT_CLASS),
+                placed: page.classList.contains(PLACED_CLASS),
+                top: page.style.getPropertyValue(SLOT_TOP_VAR) || null
+            } : null,
             elementAtLogoCentre: mid ? (mid.tagName + ' | ' + String(mid.className).slice(0, 70)) : null
         };
         console.log('[KefinTweaks EpisodeSeasonTitle] debug', info);
@@ -721,6 +657,31 @@
         setTimeout(() => whenPresent(page, selector, onFound, startedAt), POLL_INTERVAL_MS);
     }
 
+    // The visible detail page Jellyfin has rendered this item into, identified by
+    // the played button its reloadFromItem() hands the item to (data-id). Our item
+    // fetch and Jellyfin's are separate, so ours can land before the page is shown
+    // - and, coming from another item page, while the outgoing page is still the
+    // visible one. Waits for the match, bounded; on timeout it falls back to the
+    // visible page, which is what this code did before.
+    function pageFor(item) {
+        const visible = () => document.querySelector('.itemDetailPage:not(.hide)')
+            || document.querySelector('.libraryPage:not(.hide)');
+        const startedAt = Date.now();
+        return new Promise(resolve => {
+            const look = () => {
+                const page = visible();
+                if (page && page.querySelector('.btnPlaystate[data-id="' + item.Id + '"]')) {
+                    resolve(page);
+                } else if (Date.now() - startedAt >= POLL_TIMEOUT_MS) {
+                    resolve(visible());
+                } else {
+                    setTimeout(look, POLL_INTERVAL_MS);
+                }
+            };
+            look();
+        });
+    }
+
     // --------------------------------------------------
     //  INITIALIZATION
     // --------------------------------------------------
@@ -736,10 +697,6 @@
             async (view, element, hash, itemPromise) => {
                 if (ApiClient._loggedIn === false) return;
 
-                const page = document.querySelector('.itemDetailPage:not(.hide)')
-                    || document.querySelector('.libraryPage:not(.hide)');
-                if (!page) return;
-
                 let item;
                 try {
                     item = await itemPromise;
@@ -748,34 +705,52 @@
                 }
                 // A slow fetch can resolve after the next page's handler has
                 // started; tearing down here would remove that page's guard.
-                if (page.classList.contains('hide')) return;
+                // Judged by the URL, which names the item this call is for.
+                const current = () => window.location.hash.includes(item.Id);
+                if (!item || !item.Id || !current()) return;
 
-                // Tear down the previous page's observer and logo binding first.
+                // The page is looked up only now, not before the await, and is
+                // the one Jellyfin has rendered THIS item into. Going from one item
+                // page to another (season -> episode), this handler is called from
+                // the History API as the URL changes - before jellyfin-web has
+                // swapped the views - so the visible page at that moment is the
+                // OUTGOING one. Checking that page made the handler give up, and
+                // the second notification, from the view show, is suppressed
+                // (triggerOnSameHash: false) because the hash has not changed
+                // since. Result: nothing applied when arriving from the season
+                // page, while a refresh of the same episode worked.
+                const page = await pageFor(item);
+                if (!page || !current()) return;
+
+                // Tear down the previous page's observer, logo binding and slot.
                 stopObserving();
                 clearLogoLink(page);
-
-                if (!item) return;
+                clearEpisodeLogoSlot(page);
 
                 // ---- Season page: logo navigates up to the series ----
                 if (item.Type === 'Season') {
                     if (CONFIG.SEASON_LOGO_LINKS_TO_SERIES && item.SeriesId) {
-                        whenPresent(page, '.detailLogo', () => bindLogoLink(page, item.SeriesId));
+                        whenPresent(page, '.detailLogo', () => bindLogoLink(page, item.SeriesId, 'Go to series'));
                     }
                     return;
                 }
 
-                // ---- Episode page: season title / logo on the parent link ----
                 if (item.Type !== 'Episode' || !item.SeasonId) return;
 
-                const season  = await getSeason(item.SeasonId);
-                if (page.classList.contains('hide')) return;
-                const title   = resolveTitle(season);
-                const logoUrl = seasonLogoUrl(season);
-                // Nothing to show: no usable season title AND no season logo.
-                if (!title && !logoUrl) return;
+                // ---- Episode page: logo navigates to the season ----
+                if (CONFIG.EPISODE_LOGO_LINKS_TO_SEASON) {
+                    whenPresent(page, '.detailLogo', () => bindLogoLink(page, item.SeasonId, 'Go to season'));
+                }
+                if (hasHeaderLogo(item)) markEpisodeLogoSlot(page);
+
+                // ---- Episode page: season title on the parent link ----
+                const season = await getSeason(item.SeasonId);
+                if (page.classList.contains('hide') || !current()) return;
+                const title = resolveTitle(season);
+                if (!title) return;
 
                 whenPresent(page, '.nameContainer', (container) => {
-                    observeContainer(page, container, () => applyTitle(page, item, title, logoUrl));
+                    observeContainer(page, container, () => applyTitle(page, item, title));
                 });
             },
             {
