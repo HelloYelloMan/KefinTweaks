@@ -970,9 +970,87 @@
             window.KefinTweaksUtils.onViewPage(() => scheduleSweep(), { pages: [] });
         }
         scheduleSweep();
+        startCoverOption();
     }
 
-    window.KefinTweaksPosterAspect = { ensureTransformation, sweep };
+    // ---------------------------------------------------------------------
+    // ITEM-PAGE COVER: THE FULL-HEIGHT OPTION
+    //
+    // Off by default. By default the item page's cover keeps the skin's height
+    // only as far as the skin's width allows, and wider art comes out shorter
+    // (posterAspect.css, "An item page's cover keeps the SKIN'S HEIGHT"). With
+    // config.posterAspect.coverFullHeight the stylesheet lets the picture extend
+    // past the card's box instead (html.par-cover-full), and this moves the text
+    // column right by exactly that overflow, so the skin's own gap is kept: at
+    // 0.78-0.80 the cover otherwise ran up to 14px into the title (Default and
+    // Abyss, 1600px). The column is .detailRibbon and .detailPagePrimaryContent,
+    // the two elements jellyfin-web offsets with padding-left; the skin's value
+    // is read fresh each time and only the overflow is added, inline and
+    // !important because skins set theirs !important too.
+    // ---------------------------------------------------------------------
+
+    const COVER_FULL_CLASS = 'par-cover-full';
+    const SHIFT_ATTR = 'data-par-shift';
+    let coverObserver = null;
+    let coverObserved = null;
+    let shiftTimers = [];
+
+    function coverFullHeightOn() {
+        const cfg = window.KefinTweaksConfig && window.KefinTweaksConfig.posterAspect;
+        return !!(cfg && cfg.coverFullHeight === true);
+    }
+
+    function shiftDetailText() {
+        if (!document.documentElement.classList.contains(COVER_FULL_CLASS)) return;
+        const page = document.querySelector('.itemDetailPage:not(.hide)');
+        if (!page) return;
+        const card = Array.from(page.querySelectorAll(
+            '.detailImageContainer.par-on > .card.portraitCard, .detailImageContainer.par-on > .card.overflowPortraitCard'
+        )).find((c) => c.getBoundingClientRect().width > 0);
+        const box = card && card.querySelector('.cardScalable');
+        const mobile = document.documentElement.classList.contains('layout-mobile');
+        const overflow = (box && !mobile)
+            ? Math.max(0, Math.ceil(box.getBoundingClientRect().right - card.getBoundingClientRect().right))
+            : 0;
+
+        page.querySelectorAll('.detailRibbon, .detailPagePrimaryContent').forEach((el) => {
+            // Back to the skin's value first, so a resize (the skin's padding is
+            // in vw) or a narrower cover never stacks on an old shift.
+            if (el.hasAttribute(SHIFT_ATTR)) {
+                el.style.removeProperty('padding-left');
+                el.removeAttribute(SHIFT_ATTR);
+            }
+            if (!overflow) return;
+            const base = parseFloat(getComputedStyle(el).paddingLeft) || 0;
+            el.style.setProperty('padding-left', (base + overflow) + 'px', 'important');
+            el.setAttribute(SHIFT_ATTR, String(overflow));
+        });
+
+        // The cover's size lands when --par-h does, which can be after this ran.
+        if (box && box !== coverObserved && window.ResizeObserver) {
+            if (coverObserver) coverObserver.disconnect();
+            coverObserved = box;
+            coverObserver = new ResizeObserver(() => requestAnimationFrame(shiftDetailText));
+            coverObserver.observe(box);
+        }
+    }
+
+    function scheduleShift() {
+        shiftTimers.forEach(clearTimeout);
+        shiftTimers = [0, 300, 1000, 2500].map((ms) => setTimeout(shiftDetailText, ms));
+    }
+
+    function startCoverOption() {
+        if (!coverFullHeightOn()) return;
+        document.documentElement.classList.add(COVER_FULL_CLASS);
+        window.addEventListener('resize', scheduleShift, { passive: true });
+        if (window.KefinTweaksUtils && window.KefinTweaksUtils.onViewPage) {
+            window.KefinTweaksUtils.onViewPage(() => scheduleShift(), { pages: ['details'] });
+        }
+        scheduleShift();
+    }
+
+    window.KefinTweaksPosterAspect = { ensureTransformation, sweep, shiftDetailText };
 
     if (document.body) start();
     if (document.readyState === 'loading') {

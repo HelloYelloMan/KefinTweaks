@@ -824,6 +824,13 @@
             description: 'Item Page Tweaks group switch (gating lives in scripts/kefinTweaks-loader.js).'
         },
         {
+            name: 'posterAspect-configuration',
+            script: '../configuration/posterAspect-configuration.js',
+            css: null,
+            dependencies: ['modal', 'toaster', 'utils'],
+            description: 'Settings window for Poster Aspect Cards'
+        },
+        {
             name: 'seriesSpecials-configuration',
             script: '../configuration/seriesSpecials-configuration.js',
             css: null,

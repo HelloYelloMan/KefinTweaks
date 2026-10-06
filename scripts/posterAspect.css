@@ -366,25 +366,47 @@
     background-size: cover;
 }
 
-/* An item page's cover is WIDTH-led, not height-led.
+/* An item page's cover keeps the SKIN'S HEIGHT, and its width follows the art
+ * -- inside the width the skin gives it, unless the full-height option is on.
  *
  * Everywhere else this feature works the way a row does: the skin fixes the
- * height, and each card's width is height x its own ratio. A detail page is the
- * other way round. The skin fixes the WIDTH -- Abyss uses
- * `.detailImageContainer .card { width: 21vw !important }` -- and then reserves
- * a matching gutter for it, `.detailRibbon { padding-left: 28.45vw }`, so the
- * title and play buttons clear the cover.
+ * height, and each card's width is height x its own ratio. A detail page sizes
+ * its cover by width instead -- jellyfin-web caps it at
+ * `.detailImageContainer .card { max-width: 25vw }` and starts the text column
+ * at `padding-left: 32.45vw`; skins move both (Abyss's item pages fix the cover
+ * at 21vw and the ribbon at 28.45vw) -- so the title and buttons clear it.
  *
- * Driving width from height there overrides the skin's width (this file's
- * selectors are more specific, and both are !important) while the ribbon keeps
- * padding for the width it thinks the cover has. At a measured row height of
- * ~1059px that is survivable for a 2:3 poster and badly wrong for landscape
- * art: a 1.78 ratio would compute to ~1885px against an ~804px gutter.
+ * This used to keep that width and take the height from the ratio, so a portrait
+ * changed height from page to page with its art: a 0.64 person photo stood
+ * 625px tall where a 0.70 one stood 571px (Default, 1600px window). Two people's
+ * pages, or a person's and a character's (the Characters plugin uses the same
+ * markup), should line up.
  *
- * So leave the width alone here and take the height from the ratio instead.
- * The cover still shows at its true shape -- which is the whole point, and the
- * reason this is not simply excluded -- but it can no longer outgrow the space
- * the skin set aside for it, whatever the art.
+ * THE HEIGHT IS THE SKIN'S, MEASURED. The script's probe card reports the height
+ * this skin draws a standard poster at in this very slot, as --par-h on the
+ * container (Default and Abyss: 600px on a 400px slot -- their 2:3). The width is
+ * that height x the cover's own ratio, as on every row. A fixed reference ratio
+ * was tried first and is wrong on any skin whose poster is another shape.
+ *
+ * BY DEFAULT IT STAYS INSIDE THE SKIN'S WIDTH. The card element keeps whatever
+ * width the skin gives it, fixed or capped; the picture box inside is
+ * min(100%, --par-h x ratio) of that, and its height follows from the ratio. So
+ * art narrower than the skin's poster gets the skin's height and a narrower box,
+ * and art wider than it (0.70 on a 2:3 skin) keeps the skin's width and comes out
+ * shorter -- never cropped, and never into the text. That is the trade Robert
+ * chose (2026-10-05): a shorter cover over moving the page. It is also the guard
+ * against a bad measurement: whatever --par-h says, the box cannot leave the
+ * card. No --par-h, no change: the width stays 100%.
+ *
+ * THE FULL-HEIGHT OPTION (Poster Aspect settings; html.par-cover-full) keeps the
+ * skin's height for every portrait and lets the picture extend past the card's
+ * box as far as it needs. Measured on Default and Abyss at 1600px: up to a
+ * 0.777 ratio that fits the space jellyfin-web reserves before the text; 0.78 to
+ * 0.80 -- the widest still drawn as a portrait, about 2% of people here -- ran
+ * up to 14px into the title and overview. So with the option on, the script also
+ * moves the text column right by exactly the cover's overflow
+ * (posterAspect.js, shiftDetailText), keeping the skin's own gap. Desktop and TV
+ * only: on a phone the cover is centred above the text, with no column to move.
  *
  * aspect-ratio rather than the percentage-padding trick, because the padder is
  * what pins Jellyfin's portrait cards to 2:3 in the first place. */
@@ -397,8 +419,14 @@
 .par-on.detailImageContainer > .card.portraitCard:not([data-par-probe]) .cardScalable,
 .par-on.detailImageContainer > .card.overflowPortraitCard:not([data-par-probe]) .cardScalable {
     height: auto !important;
-    width: 100% !important;
+    width: min(100%, calc(var(--par-h, 100000px) * var(--par-ar, 0.7013))) !important;
+    max-width: none !important;
     aspect-ratio: var(--par-ar, 0.7013) !important;
+}
+
+html.par-cover-full:not(.layout-mobile) .par-on.detailImageContainer > .card.portraitCard:not([data-par-probe]) .cardScalable,
+html.par-cover-full:not(.layout-mobile) .par-on.detailImageContainer > .card.overflowPortraitCard:not([data-par-probe]) .cardScalable {
+    width: calc(var(--par-h) * var(--par-ar, 0.7013)) !important;
 }
 
 /* The same for a landscape or square cover -- an episode page's still, most often.
