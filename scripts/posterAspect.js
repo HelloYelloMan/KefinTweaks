@@ -970,79 +970,9 @@
             window.KefinTweaksUtils.onViewPage(() => scheduleSweep(), { pages: [] });
         }
         scheduleSweep();
-        startCoverOption();
     }
 
-    // ---------------------------------------------------------------------
-    // ITEM-PAGE COVER: THE OPTION TO USE THE ROOM BESIDE IT
-    //
-    // Off by default. By default the item page's cover keeps the skin's height
-    // only as far as the card's own width allows, and wider art comes out
-    // shorter (posterAspect.css, "An item page's cover keeps the SKIN'S HEIGHT").
-    // With config.posterAspect.coverFullHeight the width limit becomes the room
-    // jellyfin-web leaves beside the cover instead: from the cover's left edge to
-    // ROOM_MARGIN_VW short of where the text starts. That is measured here, from
-    // the page, because it is the skin's -- jellyfin-web starts the text column
-    // at padding-left 32.45vw, skins move it -- and handed to the stylesheet as
-    // --par-cover-max on the card. The text is never moved. Never less than the
-    // card's own width, so the option can only ever give a cover more room.
-    // ---------------------------------------------------------------------
-
-    const COVER_FULL_CLASS = 'par-cover-full';
-    const ROOM_MARGIN_VW = 1;
-    let roomTimers = [];
-
-    function coverFullHeightOn() {
-        const cfg = window.KefinTweaksConfig && window.KefinTweaksConfig.posterAspect;
-        return !!(cfg && cfg.coverFullHeight === true);
-    }
-
-    // Where the text starts: the content edge of the two elements jellyfin-web
-    // offsets with padding-left, whichever is further left.
-    function textStart(page) {
-        let left = Infinity;
-        page.querySelectorAll('.detailRibbon, .detailPagePrimaryContent').forEach((el) => {
-            const r = el.getBoundingClientRect();
-            if (!r.width || !r.height) return;
-            left = Math.min(left, r.left + (parseFloat(getComputedStyle(el).paddingLeft) || 0));
-        });
-        return left;
-    }
-
-    function coverRoom() {
-        if (!document.documentElement.classList.contains(COVER_FULL_CLASS)) return;
-        const page = document.querySelector('.itemDetailPage:not(.hide)');
-        if (!page) return;
-        const card = Array.from(page.querySelectorAll(
-            '.detailImageContainer > .card.portraitCard, .detailImageContainer > .card.overflowPortraitCard, '
-            + '.detailImageContainer > .card.squareCard'
-        )).find((c) => c.getBoundingClientRect().width > 0);
-        if (!card) return;
-        const box = card.getBoundingClientRect();
-        const text = textStart(page);
-        // No text column beside it (a phone, or a skin that stacks the two).
-        if (!isFinite(text) || text <= box.right) { card.style.removeProperty('--par-cover-max'); return; }
-        const room = Math.max(box.width, Math.floor(text - box.left - window.innerWidth * ROOM_MARGIN_VW / 100));
-        card.style.setProperty('--par-cover-max', room + 'px');
-    }
-
-    function scheduleRoom() {
-        roomTimers.forEach(clearTimeout);
-        roomTimers = [0, 300, 1000, 2500].map((ms) => setTimeout(coverRoom, ms));
-    }
-
-    function startCoverOption() {
-        if (!coverFullHeightOn()) return;
-        document.documentElement.classList.add(COVER_FULL_CLASS);
-        // The room is in vw: a resize changes it.
-        window.addEventListener('resize', scheduleRoom, { passive: true });
-        if (window.KefinTweaksUtils && window.KefinTweaksUtils.onViewPage) {
-            window.KefinTweaksUtils.onViewPage(() => scheduleRoom(), { pages: ['details'] });
-        }
-        scheduleRoom();
-    }
-
-    window.KefinTweaksPosterAspect = { ensureTransformation, sweep, coverRoom };
+    window.KefinTweaksPosterAspect = { ensureTransformation, sweep };
 
     if (document.body) start();
     if (document.readyState === 'loading') {

@@ -700,13 +700,6 @@
             description: 'Item Page Tweaks: the related episode, season and collection-page tweaks, each switched from one settings window.'
         },
         {
-            name: 'posterAspect-configuration',
-            script: '../configuration/posterAspect-configuration.js',
-            css: null,
-            dependencies: ['modal', 'toaster', 'utils'],
-            description: 'Settings window for Poster Aspect Cards'
-        },
-        {
             name: 'seriesSpecials-configuration',
             script: '../configuration/seriesSpecials-configuration.js',
             css: null,
@@ -722,7 +715,7 @@
         'versionPreferences-configuration', 'skinManager-configuration',
         'customMenuLinks-configuration', 'thumbnailScrubber-configuration',
         'watchTogether-configuration', 'watchlist-configuration', 'userManager-configuration', 'apiHelper',
-        'sectionHelper', 'seriesSpecials-configuration', 'posterAspect-configuration'
+        'sectionHelper', 'seriesSpecials-configuration'
     ];
 
     const CONFIGURATION_FILES = { script: 'configuration.js', css: 'configuration.css' };
