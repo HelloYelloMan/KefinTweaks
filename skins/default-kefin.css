@@ -72,3 +72,46 @@
 	margin-left: 0 !important;
 	margin-right: 0 !important;
 }
+
+/* Item page ribbon: start the band where its contents start, as on Abyss
+ * (abyss-kefin.css, "Item page ribbon").
+ *
+ * jellyfin-web paints .detailRibbon full width on desktop -- under the cover and
+ * out to both screen edges -- in the dark theme's
+ * rgba(paperChannel / .8). The band moves to a pseudo-element of .infoWrapper,
+ * the ribbon's first child, which always starts where the contents do: 1.5em
+ * left of it, out to the ribbon's right edge (clipped there by overflow:hidden),
+ * with jellyfin's card rounding on the left corners. isolation:isolate on the
+ * ribbon keeps the z-index:-1 band above the page but below the contents.
+ *
+ * Unlike Abyss's, this ribbon has no padding and a fixed height with its
+ * contents centred (7.2em, or 9.6em with a third title line -- defaultSkin.css),
+ * so the wrapper is stretched to that height and centres its own contents in
+ * turn: the band covers the whole ribbon and the text stays where it was.
+ * Desktop only: jellyfin-web paints no ribbon on TV. */
+.layout-desktop #itemDetailPage .detailRibbon {
+	background: transparent;
+	isolation: isolate;
+	overflow: hidden;
+}
+
+.layout-desktop #itemDetailPage .detailRibbon > .infoWrapper {
+	position: relative;
+	align-self: stretch;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+}
+
+.layout-desktop #itemDetailPage .detailRibbon > .infoWrapper::before {
+	content: '';
+	position: absolute;
+	z-index: -1;
+	top: 0;
+	bottom: 0;
+	left: -1.5em;
+	right: -100vw;
+	background: rgba(var(--jf-palette-background-paperChannel, 32 32 32) / 0.8);
+	border-radius: var(--jf-card-borderRadius, 0.2em) 0 0 var(--jf-card-borderRadius, 0.2em);
+	pointer-events: none;
+}
