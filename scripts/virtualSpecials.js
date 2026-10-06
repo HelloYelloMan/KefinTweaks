@@ -276,7 +276,12 @@
 
     const lastCollections = {};
 
+    // The answer is shared with Episode Title and Episode Logo through
+    // seriesSpecialsData.js, a dependency, so the page makes one request for all
+    // three. The local fetch is only a fallback should that script be missing.
     function collectionsOf(itemId) {
+        const shared = window.KefinTweaksSeriesSpecialsData;
+        if (shared) return shared.collectionsOf(itemId);
         return sharedFetch(lastCollections, itemId, () =>
             ApiClient.getJSON(ApiClient.getUrl(`Items/${itemId}/Collections`, {
                 userId: ApiClient.getCurrentUserId(),

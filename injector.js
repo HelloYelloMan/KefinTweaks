@@ -246,6 +246,8 @@
         castSessionWatchdog: true, // Re-subscribe the Sessions feed when a stale now playing bar shows a dead cast target
         elegantfinHaspatch: true, // ElegantFin :has() hotfix marker classes (needs the local ElegantFin build)
         seriesSpecials: true,     // Series & Specials group (see scripts/kefinTweaks-loader.js)
+        seriesSpecialsData: true, // Series & Specials: shared virtual-special lookup (a dependency, no switch in the window)
+        episodeTitle: true,       // Series & Specials: episode heading names/opens the season or virtual special
         episodeSeasonTitle: true, // Episode Logo: header logo links up (episode -> season -> series)
         jeSidebarMemo: true,      // Memoise Jellyfin Enhanced's getSidebarContainer (forced style flush on every DOM mutation)
         jeSpoilerGuardScope: true, // Scope Jellyfin Enhanced's Spoiler Guard image refresh to the item that changed
@@ -795,8 +797,24 @@
             group: 'seriesSpecials',
             script: 'virtualSpecials.js',
             css: null,
-            dependencies: ['utils'],
+            dependencies: ['utils', 'seriesSpecialsData'],
             description: "Fixes to the collection (BoxSet) detail page. Fills in the Studios row, which renderStudio refuses to render for a BoxSet. Removes the \"Special - \" prefix jellyfin-web prepends to every season-0 episode title, on collection pages only. Gives a virtual special breadcrumbs back to its series, and sets the single-item marker collectionSingleItem.css reads."
+        },
+        {
+            name: 'seriesSpecialsData',
+            group: 'seriesSpecials',
+            script: 'seriesSpecialsData.js',
+            css: null,
+            dependencies: ['utils'],
+            description: "Shared lookup of a special episode's virtual special collection (stock /Items/{id}/Collections), asked once per page for Episode Title, Episode Logo and Virtual Specials."
+        },
+        {
+            name: 'episodeTitle',
+            group: 'seriesSpecials',
+            script: 'episodeTitle.js',
+            css: null,
+            dependencies: ['utils', 'seriesSpecialsData'],
+            description: "Episode heading names and opens the season (its Original Title), or a special's virtual special collection."
         },
         {
             name: 'seriesSpecials',
@@ -848,7 +866,7 @@
             group: 'seriesSpecials',
             script: 'episodeSeasonTitle.js',
             css: null,
-            dependencies: ['utils'],
+            dependencies: ['utils', 'seriesSpecialsData'],
             description: "Header logo that links up a level: episode to season, season to series. Shown under the thumbnail on ElegantFin episode pages."
         },
         {

@@ -3,6 +3,9 @@
 //
 // Makes the header logo (.detailLogo) a link one level up:
 //   * on an EPISODE page it opens the season;
+//   * on a SPECIAL in exactly one virtual special collection, it shows that
+//     collection's logo and opens the collection (the same rule Episode Title
+//     uses for the heading, through seriesSpecialsData.js);
 //   * on a SEASON page it opens the series.
 // On ElegantFin, which hides the logo on episode pages, it also shows it under
 // the thumbnail in place of the series name. The title text itself is never
@@ -116,6 +119,55 @@
     // two sources its renderLogo() reads.
     function hasHeaderLogo(item) {
         return !!((item.ImageTags && item.ImageTags.Logo) || item.ParentLogoImageTag);
+    }
+
+    // A special in a virtual special shows that collection's logo, not the
+    // series' or the Specials season's. Jellyfin's renderLogo() has already run
+    // by the time the page is found (pageFor waits for the same reload), but it
+    // hands the URL to the lazy loader, which paints it LATER from data-src -
+    // so both are pointed at the collection's logo, or the lazy load would paint
+    // the series logo back over ours. Returns whether a logo is now shown.
+    function showCollectionLogo(page, collection) {
+        const tag = collection.ImageTags && collection.ImageTags.Logo;
+        const logo = page.querySelector('.detailLogo');
+        if (!tag || !logo) return false;
+        let url;
+        try {
+            url = ApiClient.getScaledImageUrl(collection.Id, { type: 'Logo', tag: tag });
+        } catch (err) {
+            WARN('Could not build the collection logo URL', err);
+            return false;
+        }
+        const paint = () => {
+            if (logo.hasAttribute('data-src') && logo.getAttribute('data-src') !== url) {
+                logo.setAttribute('data-src', url);
+            }
+            // Only when it differs: this also runs from the observer below,
+            // which our own write would otherwise re-trigger forever.
+            if (!(logo.style.backgroundImage || '').includes(url)) {
+                logo.style.backgroundImage = 'url("' + url + '")';
+            }
+        };
+        paint();
+        logo.classList.remove('hide');   // an episode with no logo of its own
+
+        // A lazy load already in flight when we swapped data-src still paints
+        // the URL it read, so put ours back if anything replaces it - for as
+        // long as such a load can take.
+        if (collectionLogoObserver) collectionLogoObserver.disconnect();
+        collectionLogoObserver = new MutationObserver(paint);
+        collectionLogoObserver.observe(logo, { attributes: true, attributeFilter: ['style', 'data-src'] });
+        if (collectionLogoStop) clearTimeout(collectionLogoStop);
+        collectionLogoStop = setTimeout(stopCollectionLogo, POLL_TIMEOUT_MS);
+        return true;
+    }
+
+    let collectionLogoObserver = null;
+    let collectionLogoStop     = null;
+
+    function stopCollectionLogo() {
+        if (collectionLogoObserver) { collectionLogoObserver.disconnect(); collectionLogoObserver = null; }
+        if (collectionLogoStop)     { clearTimeout(collectionLogoStop);   collectionLogoStop = null; }
     }
 
     // --------------------------------------------------
@@ -549,6 +601,7 @@
                 // Tear down the previous page's logo binding and slot.
                 clearLogoLink(page);
                 clearEpisodeLogoSlot(page);
+                stopCollectionLogo();
 
                 // ---- Season page: logo navigates up to the series ----
                 if (item.Type === 'Season') {
@@ -559,6 +612,22 @@
                 }
 
                 if (item.Type !== 'Episode' || !item.SeasonId) return;
+
+                // ---- Special in one virtual special: that collection's logo ----
+                // Same rule as Episode Title's heading, so the two agree: exactly
+                // one virtual special, or the episode is treated as any other.
+                const data = window.KefinTweaksSeriesSpecialsData;
+                const special = (data && data.isSpecialEpisode(item)) ? await data.virtualSpecialOf(item) : null;
+                if (!current() || page.classList.contains('hide')) return;
+
+                if (special) {
+                    const shown = showCollectionLogo(page, special);
+                    if (CONFIG.EPISODE_LOGO_LINKS_TO_SEASON) {
+                        whenPresent(page, '.detailLogo', () => bindLogoLink(page, special.Id, 'Go to collection'));
+                    }
+                    if (shown || hasHeaderLogo(item)) markEpisodeLogoSlot(page);
+                    return;
+                }
 
                 // ---- Episode page: logo navigates to the season ----
                 if (CONFIG.EPISODE_LOGO_LINKS_TO_SEASON) {
