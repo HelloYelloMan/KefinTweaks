@@ -11,13 +11,17 @@
 //      for collections of items" -- so the row is built, left empty, and
 //      hidden however few studios the collection has.
 //
-//   2. THE "Special - " PREFIX. getDisplayName prepends
-//      ValueSpecialEpisodeName to every episode with ParentIndexNumber === 0,
-//      everywhere, with no option. On a collection built to group a series'
-//      specials it is on every card and distinguishes nothing.
+//   2. BREADCRUMBS, on the collection's page and on a special's episode page
+//      (its section says how).
 //
 // It also sets the single-item marker that collectionSingleItem.css reads to
 // hide a one-item collection's count and Shuffle button.
+//
+// The "Special - " prefix used to be stripped here too, on collection pages, by
+// writing back each special's own Name. specialEpisodePrefix.js does it on every
+// page, so with both on this was a second pass over the same cards - and with
+// that switch off it kept the prefix gone on collection pages anyway. Removed
+// 2026-10-05; that switch alone decides now.
 //
 // There used to be an artwork fallback here, borrowing a backdrop and logo from
 // the first child, the matching AniDB series, the Specials season or the series
@@ -34,7 +38,6 @@
     const POLL_INTERVAL_MS = 150;
     const POLL_TIMEOUT_MS = 8000;
     const SETTLE_MS = 220;
-    const OBSERVE_MS = 15000;
 
     // ======================================================================
     // Shared data
@@ -218,48 +221,7 @@
     }
 
     // ======================================================================
-    // 2. The "Special - " prefix
-    // ======================================================================
-    //
-    // Not stripped as a string: the prefix is localized ("Extra – {0}" in de,
-    // "Especial - {0}" in es), so a text match would work in one language.
-    // The item's own Name is written back instead -- what getDisplayName
-    // started from, so it is exact by construction and idempotent. The same
-    // fetch supplies the condition, jellyfin-web's own rather than an
-    // approximation of it, so a collection of ordinary episodes keeps the
-    // "S1:E5 - " numbering that a different branch produces.
-
-    function specialNamesFrom(children) {
-        const names = new Map();
-        children.forEach(child => {
-            if (child.Type === 'Episode' && child.ParentIndexNumber === 0 && child.Name) {
-                names.set(child.Id, child.Name);
-            }
-        });
-        return names;
-    }
-
-    // A card can hold more than one text anchor, so pick the one whose text ENDS
-    // WITH the real name: that is the one carrying "<prefix>Name".
-    function retitleCard(card, name) {
-        const anchors = card.querySelectorAll('a.textActionButton');
-        for (let i = 0; i < anchors.length; i++) {
-            const text = (anchors[i].textContent || '').trim();
-            if (text === name) return false;
-            if (text.endsWith(name)) { anchors[i].textContent = name; return true; }
-        }
-        return false;
-    }
-
-    function applyNames(container, names) {
-        container.querySelectorAll('.card[data-id]').forEach(card => {
-            const name = names.get(card.getAttribute('data-id'));
-            if (name) retitleCard(card, name);
-        });
-    }
-
-    // ======================================================================
-    // 3. Breadcrumbs, and a special's episode page
+    // 2. Breadcrumbs, and a special's episode page
     // ======================================================================
     //
     // A virtual special sits between a series and its specials, and the
@@ -561,17 +523,6 @@
                         group, () => injectStudios(page, item), POLL_TIMEOUT_MS));
                 });
 
-                // --- names ---------------------------------------------------
-                const names = specialNamesFrom(children);
-                if (names.size) {
-                    // The stable parent, not the first .collectionItemsContainer:
-                    // there is one per item type, and a refresh rebuilds them.
-                    waitFor(page, '.collectionItems', Date.now()).then(container => {
-                        if (!container || !alive()) return;
-                        teardown.push(makeBoundedObserver(
-                            container, () => applyNames(container, names), OBSERVE_MS));
-                    });
-                }
             },
             {
                 pages: ['details'],

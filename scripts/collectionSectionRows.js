@@ -48,7 +48,14 @@
         return 'Poster';
     }
 
+    // Through seriesSpecialsData.js when it has run, which asks for these same
+    // fields, so the collection page reads its items once for this, Virtual
+    // Specials and Episode Logo. Fetched here otherwise - same result.
     async function fetchChildren(collectionId) {
+        const shared = window.KefinTweaksSeriesSpecialsData;
+        if (shared && shared.childrenOf) {
+            return new Map((await shared.childrenOf(collectionId)).map((child) => [child.Id, child]));
+        }
         const result = await ApiClient.getItems(ApiClient.getCurrentUserId(), {
             ParentId: collectionId,
             Fields: 'PrimaryImageAspectRatio,MediaSourceCount,ChildCount,ProductionYear,PremiereDate',

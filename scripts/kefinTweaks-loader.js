@@ -661,7 +661,7 @@
             group: 'seriesSpecials',
             script: 'collectionSectionRows.js',
             css: null,
-            dependencies: ['utils', 'cardBuilder'],
+            dependencies: ['utils', 'cardBuilder', 'seriesSpecialsData'],
             description: "Collection pages: each section (Episodes, Movies...) as a horizontal row of cards, built the way the flat season row on a series page is. The original grid stays in the page, hidden, so collection sorting still applies."
         },
         {
@@ -670,7 +670,7 @@
             script: 'virtualSpecials.js',
             css: null,
             dependencies: ['utils', 'seriesSpecialsData'],
-            description: "Fixes to the collection (BoxSet) detail page. Fills in the Studios row, which renderStudio refuses to render for a BoxSet. Removes the \"Special - \" prefix jellyfin-web prepends to every season-0 episode title, on collection pages only. Gives a virtual special breadcrumbs back to its series, and sets the single-item marker collectionSingleItem.css reads."
+            description: "Fixes to the collection (BoxSet) detail page. Fills in the Studios row, which renderStudio refuses to render for a BoxSet. Gives a virtual special breadcrumbs back to its series, and sets the single-item marker collectionSingleItem.css reads."
         },
         {
             name: 'seriesSpecialsData',

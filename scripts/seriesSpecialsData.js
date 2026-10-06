@@ -47,12 +47,19 @@
                 .catch(error => { WARN('Could not read the item\'s collections:', error); return []; }));
     }
 
-    // A collection's own items. Virtual Specials reads them for the Studios row,
-    // the special names, the single-item marker and its breadcrumb; Episode Logo
-    // for the series a virtual special belongs to.
+    // A collection's own items. Virtual Specials reads them for the single-item
+    // marker and its breadcrumb, Episode Logo for the series a virtual special
+    // belongs to, and Collection Sections As Rows to build its cards - whose
+    // fields and image types are why the query asks for them; the others only
+    // read names and series ids, which every item carries anyway.
     function childrenOf(collectionId) {
         return sharedFetch(lastChildren, collectionId, () =>
-            ApiClient.getItems(ApiClient.getCurrentUserId(), { ParentId: collectionId })
+            ApiClient.getItems(ApiClient.getCurrentUserId(), {
+                ParentId: collectionId,
+                Fields: 'PrimaryImageAspectRatio,MediaSourceCount,ChildCount,ProductionYear,PremiereDate',
+                ImageTypeLimit: 1,
+                EnableImageTypes: 'Primary,Backdrop,Thumb'
+            })
                 .then(r => (r && r.Items) || [])
                 .catch(error => { WARN('Could not read the collection\'s items:', error); return []; }));
     }
