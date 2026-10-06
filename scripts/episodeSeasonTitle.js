@@ -1,19 +1,12 @@
-// KefinTweaks Episode / Season Header
-// Two related fixes to the season <-> series relationship in detail page headers:
+// KefinTweaks Episode Logo (file and feature key keep the old name,
+// episodeSeasonTitle, so saved settings and the loader registry still match)
 //
-//   1. EPISODE pages show the SEASON's title (Original Title by default) where
-//      Jellyfin shows the series name. That title keeps Jellyfin's own link to
-//      the series; the header logo (.detailLogo) goes to the season.
-//   2. SEASON pages get a clickable header logo that navigates up to the series.
-//
-// Why: Jellyfin's episode header is built from the series only - renderName()
-// pushes a single link for item.SeriesName and never consults the season. That is
-// fine for western TV, where seasons are just "Season 1", but for anime (and any
-// show whose seasons are distinctly titled or separately branded) the season
-// carries the title and artwork people actually recognise.
-//
-// Why JS (not CSS): the season's title is simply absent from an episode page, so
-// it has to be fetched (/Items/{SeasonId}) and written in.
+// Makes the header logo (.detailLogo) a link one level up:
+//   * on an EPISODE page it opens the season;
+//   * on a SEASON page it opens the series.
+// On ElegantFin, which hides the logo on episode pages, it also shows it under
+// the thumbnail in place of the series name. The title text itself is never
+// changed - an earlier version swapped in the season's Original Title.
 //
 // THE LOGO IS JELLYFIN'S. This script never draws one. On an episode the server
 // already gives .detailLogo the SEASON's logo when the season has one: its
@@ -56,17 +49,6 @@
     //              CONFIGURATION
     // ==========================================
     const CONFIG = {
-        // Which field of the SEASON to display in place of the series title.
-        //   'OriginalTitle' - the season's Original Title (default)
-        //   'Name'          - the season's regular title (e.g. "Season 2")
-        USE_SEASON_FIELD: 'OriginalTitle',
-
-        // When the chosen field is empty on that season, leave Jellyfin's series
-        // title alone instead of falling back to the other field. A bare
-        // "Season 2" in place of the show's name is usually a downgrade, so this
-        // defaults to true. Set false to always show the season, empty-or-not.
-        KEEP_SERIES_WHEN_EMPTY: true,
-
         // On EPISODE pages, make the header logo (.detailLogo) navigate to the
         // season - whether it is showing the season's own logo or the series logo
         // Jellyfin falls back to.
@@ -77,10 +59,6 @@
         // Jellyfin falls back to.
         SEASON_LOGO_LINKS_TO_SERIES: true,
     };
-
-    // Mark the anchor we rewrote and store what was there before, so a repeat
-    // pass is idempotent and the original is always recoverable.
-    const ORIGINAL_ATTR = 'data-kefin-series-title';
 
     const LINK_CLASS  = 'kefin-logo-link';
     const HIT_CLASS   = 'kefin-logo-hit';
@@ -93,13 +71,9 @@
     const PLACED_CLASS = 'kefin-episode-logo-placed';
     const SLOT_TOP_VAR = '--kefin-episode-logo-top';
 
-    // Headers re-render asynchronously (React) and can replace their contents
-    // after our write, so we watch, re-apply, then stop.
+    // Bounds for waiting on elements Jellyfin mounts asynchronously.
     const POLL_INTERVAL_MS = 150;
     const POLL_TIMEOUT_MS  = 5000;
-    const SETTLE_MS        = 250;
-
-    const seasonCache = new Map();   // seasonId -> season item (or null when unavailable)
 
     // --------------------------------------------------
     //  STYLES
@@ -138,32 +112,6 @@
     //  DATA
     // --------------------------------------------------
 
-    async function getSeason(seasonId) {
-        if (seasonCache.has(seasonId)) return seasonCache.get(seasonId);
-
-        let season = null;
-        try {
-            season = await ApiClient.getItem(ApiClient.getCurrentUserId(), seasonId);
-        } catch (err) {
-            WARN('Could not fetch season', seasonId, err);
-        }
-        seasonCache.set(seasonId, season);
-        return season;
-    }
-
-    // The title to show, or null to leave the series title as Jellyfin rendered it.
-    function resolveTitle(season) {
-        if (!season) return null;
-
-        const primary = (season[CONFIG.USE_SEASON_FIELD] || '').trim();
-        if (primary) return primary;
-
-        if (CONFIG.KEEP_SERIES_WHEN_EMPTY) return null;
-
-        const other = CONFIG.USE_SEASON_FIELD === 'OriginalTitle' ? 'Name' : 'OriginalTitle';
-        return (season[other] || '').trim() || null;
-    }
-
     // Whether Jellyfin will put a logo in .detailLogo for this item - the same
     // two sources its renderLogo() reads.
     function hasHeaderLogo(item) {
@@ -180,43 +128,6 @@
         const serverId = (typeof ApiClient !== 'undefined' && ApiClient.serverId) ? ApiClient.serverId() : '';
         window.location.href = base + '/web/#/details?id=' + encodeURIComponent(itemId)
             + (serverId ? '&serverId=' + encodeURIComponent(serverId) : '');
-    }
-
-    // --------------------------------------------------
-    //  EPISODE PAGE: SEASON TITLE ON THE SERIES LINK
-    // --------------------------------------------------
-
-    // The series link inside .parentName. Episodes get exactly one link there, but
-    // match on the series name first so we never rewrite the wrong one if a skin or
-    // a future Jellyfin version adds more. Once we have replaced the text, the
-    // stored original is what identifies it.
-    function findSeriesLink(page, item) {
-        const parentName = page.querySelector('.nameContainer .parentName');
-        if (!parentName) return null;
-
-        const links = parentName.querySelectorAll('a');
-        if (!links.length) return null;
-
-        if (item.SeriesName) {
-            for (const link of links) {
-                const text = link.getAttribute(ORIGINAL_ATTR) || link.textContent;
-                if ((text || '').trim() === item.SeriesName.trim()) return link;
-            }
-        }
-        return links[0];
-    }
-
-    function applyTitle(page, item, title) {
-        const link = findSeriesLink(page, item);
-        if (!link) return false;
-
-        if (!link.hasAttribute(ORIGINAL_ATTR)) {
-            link.setAttribute(ORIGINAL_ATTR, link.textContent || '');
-        }
-        if (link.textContent !== title) link.textContent = title;
-        // A re-render can move the heading the logo is laid over.
-        placeEpisodeLogo(page);
-        return true;
     }
 
     // --------------------------------------------------
@@ -545,40 +456,6 @@
         bindLogoLink(page, null);
     }
 
-    // --------------------------------------------------
-    //  RE-RENDER GUARD
-    // --------------------------------------------------
-
-    let activeObserver = null;
-    let settleTimer    = null;
-    let hardStopTimer  = null;
-
-    function stopObserving() {
-        if (activeObserver) { activeObserver.disconnect(); activeObserver = null; }
-        if (settleTimer)    { clearTimeout(settleTimer);   settleTimer = null; }
-        if (hardStopTimer)  { clearTimeout(hardStopTimer); hardStopTimer = null; }
-    }
-
-    // Re-apply with the observer paused, so our own write doesn't re-trigger it.
-    function reapply(page, container, apply) {
-        if (activeObserver) activeObserver.disconnect();
-        apply();
-        if (activeObserver && container.isConnected) {
-            activeObserver.observe(container, { childList: true, subtree: true });
-        }
-    }
-
-    function observeContainer(page, container, apply) {
-        stopObserving();
-        activeObserver = new MutationObserver(() => {
-            if (settleTimer) clearTimeout(settleTimer);
-            settleTimer = setTimeout(() => reapply(page, container, apply), SETTLE_MS);
-        });
-        activeObserver.observe(container, { childList: true, subtree: true });
-        reapply(page, container, apply);                    // initial attempt
-        hardStopTimer = setTimeout(stopObserving, POLL_TIMEOUT_MS);
-    }
-
     // Containers mount asynchronously; wait for one, bounded.
     function whenPresent(page, selector, onFound, startedAt) {
         startedAt = startedAt || Date.now();
@@ -669,8 +546,7 @@
                 if (previousHash === hash && applied.page === page && applied.itemId === item.Id) return;
                 applied = { page, itemId: item.Id };
 
-                // Tear down the previous page's observer, logo binding and slot.
-                stopObserving();
+                // Tear down the previous page's logo binding and slot.
                 clearLogoLink(page);
                 clearEpisodeLogoSlot(page);
 
@@ -689,16 +565,6 @@
                     whenPresent(page, '.detailLogo', () => bindLogoLink(page, item.SeasonId, 'Go to season'));
                 }
                 if (hasHeaderLogo(item)) markEpisodeLogoSlot(page);
-
-                // ---- Episode page: season title on the parent link ----
-                const season = await getSeason(item.SeasonId);
-                if (page.classList.contains('hide') || !current()) return;
-                const title = resolveTitle(season);
-                if (!title) return;
-
-                whenPresent(page, '.nameContainer', (container) => {
-                    observeContainer(page, container, () => applyTitle(page, item, title));
-                });
             },
             {
                 pages: ['details'],
