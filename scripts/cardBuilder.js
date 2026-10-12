@@ -1988,6 +1988,11 @@
                 unobserveSkeletonShimmer(sectionElement);
                 sectionElement.dataset.refreshing = 'false';
                 ensureSectionRevealObservation(sectionElement);
+                // New cards: the section's own hooks (a Next Up badge, a scroll
+                // position) run again, as on the first draw.
+                if (typeof sectionConfig._onSectionEnhanced === 'function') {
+                    sectionConfig._onSectionEnhanced(sectionElement, sectionConfig);
+                }
                 const newButton = sectionElement.querySelector('.section-refresh-button');
                 if (newButton) {
                     showRefreshComplete(newButton);
@@ -2022,6 +2027,9 @@
             content.dataset.refreshing = 'false';
             registerLazyImagesInSection(content);
             ensureSectionRevealObservation(content);
+            if (typeof sectionConfig._onSectionEnhanced === 'function') {
+                sectionConfig._onSectionEnhanced(content, sectionConfig);
+            }
             if (newButton) {
                 showRefreshComplete(newButton);
             }

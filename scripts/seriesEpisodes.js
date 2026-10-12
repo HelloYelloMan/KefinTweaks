@@ -68,6 +68,38 @@
         return season?.IndexNumber ?? season?.indexNumber;
     }
 
+    /* The season a special is watched in. A special lives in the Specials
+     * season, but the server places it after a season (AirsAfterSeasonNumber)
+     * or inside one (AirsBeforeSeasonNumber) and lists it there, so when one is
+     * next up the row opens on that season and badges it there. Opening on
+     * Specials instead showed the special out of the season it sits in. The
+     * placement fields come only with Fields=SpecialEpisodeNumbers. */
+    function displaySeasonOf(episode) {
+        if (!episode) return undefined;
+        if (episode.ParentIndexNumber === 0) {
+            const placed = episode.AirsAfterSeasonNumber ?? episode.AirsBeforeSeasonNumber;
+            if (Number.isInteger(placed)) return placed;
+        }
+        return episode.ParentIndexNumber;
+    }
+
+    function findTargetSeason(seasons, episode) {
+        if (!episode) return null;
+        const shown = displaySeasonOf(episode);
+        if (episode.ParentIndexNumber === 0 && shown !== 0) {
+            const placed = seasons.find(s => s.IndexNumber === shown);
+            if (placed) return placed;
+        }
+        if (episode.SeasonId) {
+            const bySeasonId = seasons.find(s => s.Id === episode.SeasonId);
+            if (bySeasonId) return bySeasonId;
+        }
+        if (episode.ParentIndexNumber !== undefined) {
+            return seasons.find(s => s.IndexNumber === episode.ParentIndexNumber) || null;
+        }
+        return null;
+    }
+
     function buildEpisodesQueryDef(seriesId, seasonIdValue) {
         return {
             path: `/Shows/${seriesId}/Episodes`,
@@ -282,7 +314,7 @@
         if (!scrollerContainer) return;
 
         if (targetEpisodeNumber && activeSeasonIndex !== undefined
-            && targetEpisodeNumber.season === activeSeasonIndex) {
+            && (targetEpisodeNumber.displaySeason ?? targetEpisodeNumber.season) === activeSeasonIndex) {
             ensureNextUpEpisodeStyle(nextUpHeaderText);
             updateNextUpItem(targetEpisodeNumber, scrollerContainer);
             return;
@@ -418,7 +450,7 @@
             const userId = apiClient.getCurrentUserId();
             const serverUrl = apiClient.serverAddress();
             LOG(`Fetching Next Up episode for series: ${seriesId}`);
-            const nextUpUrl = `${serverUrl}/Shows/NextUp?SeriesId=${seriesId}&UserId=${userId}&Fields=MediaSourceCount`;
+            const nextUpUrl = `${serverUrl}/Shows/NextUp?SeriesId=${seriesId}&UserId=${userId}&Fields=MediaSourceCount,SpecialEpisodeNumbers`;
             const nextUpRes = await fetch(nextUpUrl, { 
                 headers: { "Authorization": window.apiHelper.getAuthHeader() } 
             });
@@ -666,15 +698,7 @@
             return;
         }
 
-        let targetSeason = null;
-        if (targetEpisode) {
-            if (targetEpisode.SeasonId) {
-                targetSeason = seasons.find(s => s.Id === targetEpisode.SeasonId);
-            }
-            if (!targetSeason && targetEpisode.ParentIndexNumber !== undefined) {
-                targetSeason = seasons.find(s => s.IndexNumber === targetEpisode.ParentIndexNumber);
-            }
-        }
+        let targetSeason = findTargetSeason(seasons, targetEpisode);
         if (!targetSeason) {
             targetSeason = seasons[0];
         }
@@ -686,6 +710,7 @@
         const targetEpisodeNumber = targetEpisode ? {
             season: targetEpisode.ParentIndexNumber,
             episode: targetEpisode.IndexNumber,
+            displaySeason: displaySeasonOf(targetEpisode),
             id: targetEpisode.Id
         } : null;
 
@@ -925,8 +950,10 @@
         // Prefer Next Up from native DOM (already painted); API only if missing
         const pageForUi = document.querySelector('.libraryPage:not(.hide)') || activePage;
         let targetEpisode = inferNextUpFromDom(pageForUi);
-        if (!targetEpisode) {
-            targetEpisode = await fetchNextUpEpisode(seriesId);
+        // The card carries no placement, so a special next up is asked for
+        // again with it (see displaySeasonOf).
+        if (!targetEpisode || targetEpisode.ParentIndexNumber === 0) {
+            targetEpisode = (await fetchNextUpEpisode(seriesId)) || targetEpisode;
         }
         let targetEpisodeNumber = null;
         
@@ -938,17 +965,12 @@
             targetEpisodeNumber = { 
                 season: targetEpisode.ParentIndexNumber, 
                 episode: targetEpisode.IndexNumber,
+                displaySeason: displaySeasonOf(targetEpisode),
                 id: targetEpisode.Id
             };
 
-            // Find season matching NextUp episode by SeasonId (preferred) or index number
-            if (targetEpisode.SeasonId) {
-                targetSeason = seasons.find(s => s.Id === targetEpisode.SeasonId);
-            }
-            
-            if (!targetSeason && targetEpisode.ParentIndexNumber !== undefined) {
-                 targetSeason = seasons.find(s => s.IndexNumber === targetEpisode.ParentIndexNumber);
-            }
+            // A placed special's own season first, then SeasonId, then index number
+            targetSeason = findTargetSeason(seasons, targetEpisode);
         }
         
         // Fallback to first season if NextUp not found or season not in list
@@ -1010,27 +1032,32 @@
             return;
         }
 
+        // A refreshed row has no badge yet, so a missing one is not a reason
+        // to stop; only the same episode already badged is.
         const currentNextUpItem = document.querySelector('.libraryPage:not(.hide) .nextUpEpisode');
-        if (!currentNextUpItem) {
-            LOG('No Next Up episode element found, skipping');
-            return;
-        }
-
         if (currentNextUpItem?.dataset.id === nextUpItem.Id) {
             LOG('Next Up item is the same as the current one, skipping');
             return;
         }
 
-        const targetEpisodeNumber = nextUpItem ? {
+        const targetEpisodeNumber = {
             season: nextUpItem.ParentIndexNumber,
             episode: nextUpItem.IndexNumber,
+            displaySeason: displaySeasonOf(nextUpItem),
             id: nextUpItem.Id
-        } : null;
+        };
 
-        const scrollerContainer = document.querySelector('.libraryPage:not(.hide) .series-episodes-section .emby-scroller');
+        const host = document.querySelector('.libraryPage:not(.hide) .series-episodes-section');
+        const scrollerContainer = host?.querySelector('.emby-scroller');
         if (!scrollerContainer) {
             LOG('Scroller container not found, skipping');
             return;
+        }
+
+        // Later season switches and refreshes badge what is next up now.
+        const state = getEpisodeHookState(host);
+        if (state) {
+            state.targetEpisodeNumber = targetEpisodeNumber;
         }
 
         updateNextUpItem(targetEpisodeNumber, scrollerContainer);
