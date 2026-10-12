@@ -1989,9 +1989,11 @@
                 sectionElement.dataset.refreshing = 'false';
                 ensureSectionRevealObservation(sectionElement);
                 // New cards: the section's own hooks (a Next Up badge, a scroll
-                // position) run again, as on the first draw.
+                // position) run again, as on the first draw. `refreshed` tells a
+                // hook its data may have changed since then (an episode marked
+                // watched moves Next Up), so it can ask again.
                 if (typeof sectionConfig._onSectionEnhanced === 'function') {
-                    sectionConfig._onSectionEnhanced(sectionElement, sectionConfig);
+                    sectionConfig._onSectionEnhanced(sectionElement, sectionConfig, { refreshed: true });
                 }
                 const newButton = sectionElement.querySelector('.section-refresh-button');
                 if (newButton) {
@@ -2028,7 +2030,7 @@
             registerLazyImagesInSection(content);
             ensureSectionRevealObservation(content);
             if (typeof sectionConfig._onSectionEnhanced === 'function') {
-                sectionConfig._onSectionEnhanced(content, sectionConfig);
+                sectionConfig._onSectionEnhanced(content, sectionConfig, { refreshed: true });
             }
             if (newButton) {
                 showRefreshComplete(newButton);

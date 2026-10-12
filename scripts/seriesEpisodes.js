@@ -83,6 +83,16 @@
         return episode.ParentIndexNumber;
     }
 
+    // What the row badges and scrolls to for a Next Up episode.
+    function nextUpTarget(episode) {
+        return episode ? {
+            season: episode.ParentIndexNumber,
+            episode: episode.IndexNumber,
+            displaySeason: displaySeasonOf(episode),
+            id: episode.Id
+        } : null;
+    }
+
     function findTargetSeason(seasons, episode) {
         if (!episode) return null;
         const shown = displaySeasonOf(episode);
@@ -707,12 +717,7 @@
             return;
         }
 
-        const targetEpisodeNumber = targetEpisode ? {
-            season: targetEpisode.ParentIndexNumber,
-            episode: targetEpisode.IndexNumber,
-            displaySeason: displaySeasonOf(targetEpisode),
-            id: targetEpisode.Id
-        } : null;
+        const targetEpisodeNumber = nextUpTarget(targetEpisode);
 
         const nextUpSection = activePage.querySelector('.nextUpSection');
         if (nextUpSection) {
@@ -733,7 +738,7 @@
         setEpisodeHookState(host, hookState);
 
         const configureSection = (sectionConfig) => {
-            sectionConfig._onSectionEnhanced = (sectionEl) => {
+            sectionConfig._onSectionEnhanced = (sectionEl, _config, info) => {
                 const state = getEpisodeHookState(host);
                 if (!state) return;
                 const liveSection = sectionEl?.isConnected
@@ -746,6 +751,9 @@
                     state.activeSeasonIndex,
                     state.nextUpHeaderText
                 );
+                // A refresh is how a user sees an episode they just marked
+                // watched; the stored Next Up is from before that, so ask again.
+                if (info?.refreshed) refreshNextUp(host, seriesId);
             };
         };
 
@@ -757,6 +765,9 @@
             if (!sectionEl || !activeSeason) return;
 
             LOG(`Season switched via query picker: ${seasonName(activeSeason)}`);
+            // Refreshes and Next Up checks compare against the season on show,
+            // not the one the row opened on.
+            hookState.activeSeasonIndex = seasonIndex(activeSeason);
 
             applyEpisodeScrollAndBadge(
                 host,
@@ -962,12 +973,7 @@
         
         if (targetEpisode) {
             // Set targetEpisodeNumber for compatibility
-            targetEpisodeNumber = { 
-                season: targetEpisode.ParentIndexNumber, 
-                episode: targetEpisode.IndexNumber,
-                displaySeason: displaySeasonOf(targetEpisode),
-                id: targetEpisode.Id
-            };
+            targetEpisodeNumber = nextUpTarget(targetEpisode);
 
             // A placed special's own season first, then SeasonId, then index number
             targetSeason = findTargetSeason(seasons, targetEpisode);
@@ -1024,43 +1030,48 @@
         pageToMark.dataset.seriesEpisodesItemId = seriesId;
     }
 
-    async function verifyNextUpItem(seriesId) {
+    /* Ask the server for Next Up again and move the badge and scroll to it.
+     *
+     * Run when a series page is shown again and when the row is refreshed: both
+     * are how a user comes back after marking an episode watched, and the Next
+     * Up the row was drawn with is from before that. Compared against the
+     * season ON SHOW (the picker updates it), so a row switched to another
+     * season is not badged or scrolled for an episode it does not hold.
+     * Nothing to do when Next Up has not changed. */
+    async function refreshNextUp(host, seriesId) {
         const nextUpItem = await fetchNextUpEpisode(seriesId);
-
         if (!nextUpItem) {
             LOG('No Next Up item found, skipping');
             return;
         }
+        if (!host?.isConnected) return;
 
-        // A refreshed row has no badge yet, so a missing one is not a reason
-        // to stop; only the same episode already badged is.
-        const currentNextUpItem = document.querySelector('.libraryPage:not(.hide) .nextUpEpisode');
-        if (currentNextUpItem?.dataset.id === nextUpItem.Id) {
-            LOG('Next Up item is the same as the current one, skipping');
-            return;
-        }
-
-        const targetEpisodeNumber = {
-            season: nextUpItem.ParentIndexNumber,
-            episode: nextUpItem.IndexNumber,
-            displaySeason: displaySeasonOf(nextUpItem),
-            id: nextUpItem.Id
-        };
-
-        const host = document.querySelector('.libraryPage:not(.hide) .series-episodes-section');
-        const scrollerContainer = host?.querySelector('.emby-scroller');
-        if (!scrollerContainer) {
-            LOG('Scroller container not found, skipping');
-            return;
-        }
-
-        // Later season switches and refreshes badge what is next up now.
+        const target = nextUpTarget(nextUpItem);
         const state = getEpisodeHookState(host);
-        if (state) {
-            state.targetEpisodeNumber = targetEpisodeNumber;
+        if (!state) {
+            // A row this file did not draw: badge it as before.
+            const scroller = host.querySelector('.emby-scroller');
+            if (scroller) updateNextUpItem(target, scroller);
+            return;
+        }
+        const badged = host.querySelector('.nextUpEpisode');
+        if (state.targetEpisodeNumber?.id === target.id && badged?.dataset.id === target.id) {
+            LOG('Next Up unchanged, skipping');
+            return;
         }
 
-        updateNextUpItem(targetEpisodeNumber, scrollerContainer);
+        state.targetEpisodeNumber = target;
+        const liveSection = host.querySelector('.emby-scroller-container') || host.querySelector('[data-section-id]');
+        applyEpisodeScrollAndBadge(host, liveSection, target, state.activeSeasonIndex, state.nextUpHeaderText);
+    }
+
+    async function verifyNextUpItem(seriesId) {
+        const host = document.querySelector('.libraryPage:not(.hide) .series-episodes-section');
+        if (!host) {
+            LOG('Episodes row not found, skipping Next Up check');
+            return;
+        }
+        await refreshNextUp(host, seriesId);
     }
 
     function getSeriesIdFromHash(hash = window.location.hash) {
@@ -1119,6 +1130,12 @@
 
         LOG('Series episodes hook initialized');
     }
+
+    // The row's exact episodes query, for scripts that must drop its cache
+    // entries by URL: the Specials Order plugin (sandbox) changes a season's
+    // episodes and Next Up per user, then presses the row's refresh. Reading
+    // the query from here keeps it from drifting out of step with a copy.
+    window.KefinTweaksSeriesEpisodes = { buildEpisodesQueryDef };
 
     // Initialize the hook when the script loads
     function initialize() {
