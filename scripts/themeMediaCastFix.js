@@ -22,7 +22,8 @@
 //
 // The "Play Theme Music" / "Play Theme Videos" checkboxes on the Display settings
 // page are REPLACED at runtime: this script clones those rows, binds the clones to
-// its own userId-scoped localStorage keys, and forces native's own keys off so
+// its own userId-scoped keys (localStorage, mirrored to the user's display
+// preferences on the server with the volume and mute), and forces native's own keys off so
 // native never plays (no doubled audio, no "Remote players are disabled" throw). The
 // checkboxes look and behave the same, but now drive this script instead of native.
 // On first run the new keys are seeded from your current native values. CONFIG.enable*
@@ -104,6 +105,127 @@
         } catch (e) { /* noop */ }
     }
 
+    // ---- Server copy: the four settings follow the user, not the browser ----
+    //
+    // songs / videos / volume / muted are also kept in the user's Jellyfin display
+    // preferences (CustomPrefs.kefinTweaks.themeMedia) through userHelper, so a new
+    // browser or device starts with them. localStorage stays as the fast local copy:
+    // a theme can start before the server answers, and the server copy then wins.
+    //
+    // userHelper is reached lazily rather than declared as a dependency. A new
+    // dependency would only take effect once the registry snapshot baked into the
+    // JS Injector config is regenerated; userHelper is loaded by the home screen
+    // anyway, and the first viewshow after it appears picks the sync up.
+    const SERVER_KEY = 'themeMedia';
+    const SERVER_FIELDS = ['songs', 'videos', 'volume', 'muted'];
+    const VOLUME_SAVE_DELAY_MS = 1000; // a slider drag becomes one write, not dozens
+    let serverLoadedFor = null;        // userId whose server copy has been read
+    let serverSaveTimer = null;
+    let pendingServer = {};            // changes not yet written to the server
+
+    function serverHelper() {
+        const h = window.userHelper;
+        return h && typeof h.getUserDisplayPreferences === 'function'
+            && typeof h.parseKefinTweaks === 'function'
+            && typeof h.updateKefinTweaksFeature === 'function' ? h : null;
+    }
+
+    // Store a setting locally at once, and queue it for the server.
+    function saveSetting(which, val) {
+        if (which === 'volume') tmSetNum(which, val);
+        else tmSet(which, val);
+        pendingServer[which] = val;
+        if (serverSaveTimer) clearTimeout(serverSaveTimer);
+        serverSaveTimer = setTimeout(flushServerSave, which === 'volume' ? VOLUME_SAVE_DELAY_MS : 0);
+    }
+
+    async function flushServerSave() {
+        serverSaveTimer = null;
+        const h = serverHelper();
+        if (!h || !Object.keys(pendingServer).length) return; // kept pending; retried after the next load
+        const patch = pendingServer;
+        pendingServer = {};
+        try {
+            const ok = await h.updateKefinTweaksFeature(SERVER_KEY, (current) =>
+                Object.assign({}, current && typeof current === 'object' ? current : {}, patch));
+            if (!ok) LOG('could not save theme settings to the server; kept in this browser');
+        } catch (e) {
+            LOG('could not save theme settings to the server; kept in this browser', e);
+        }
+    }
+
+    // Take the server's values, except any the user has changed since and not yet saved.
+    function applyServerSettings(saved) {
+        if (typeof saved.songs === 'boolean' && !('songs' in pendingServer)) tmSet('songs', saved.songs);
+        if (typeof saved.videos === 'boolean' && !('videos' in pendingServer)) tmSet('videos', saved.videos);
+        ['songs', 'videos'].forEach((which) => {
+            const chk = document.getElementById('chkKefinTheme_' + which);
+            if (chk) chk.checked = which === 'videos' ? enableThemeVideos() : enableThemeSongs();
+        });
+        if (typeof saved.volume === 'number' && isFinite(saved.volume) && !('volume' in pendingServer)) {
+            userVolume = Math.min(1, Math.max(0, saved.volume));
+            tmSetNum('volume', userVolume);
+            if (el && !fadeTimer) el.volume = userVolume; // leave a running fade to finish
+            if (headerCtl && headerCtl.slider) headerCtl.slider.value = String(Math.round(userVolume * 100));
+        }
+        if (typeof saved.muted === 'boolean' && !('muted' in pendingServer)) {
+            userMuted = saved.muted;
+            tmSet('muted', userMuted);
+            // Muting is always allowed. Unmuting before the user has interacted with the
+            // page can make the browser block the theme, so that waits for the existing
+            // first-interaction unmute.
+            if (el && (userMuted || navigator.userActivation?.hasBeenActive)) el.muted = userMuted;
+            syncMuteIcon();
+        }
+    }
+
+    async function loadServerSettings() {
+        const h = serverHelper();
+        let uid = null;
+        try { uid = ApiClient.getCurrentUserId() || null; } catch (e) { /* noop */ }
+        if (!h || !uid || serverLoadedFor === uid) return;
+        // Re-read the local copy under this user's keys. The values read at script load
+        // may predate ApiClient (an empty userId in the key) or belong to a user who has
+        // since signed out on this page.
+        userVolume = tmGetNum('volume', CONFIG.volume);
+        userMuted = tmGet('muted', false);
+        serverLoadedFor = uid; // set before awaiting, so repeated viewshows don't fetch twice
+        let saved;
+        try {
+            // Read the preferences directly rather than through getKefinTweaksFeature,
+            // which turns a failed request into "nothing saved". That would make the
+            // upload below write this browser's values over the real server copy.
+            const { promise } = await h.getUserDisplayPreferences();
+            saved = h.parseKefinTweaks(await promise)[SERVER_KEY];
+        } catch (e) {
+            serverLoadedFor = null; // try again on the next viewshow
+            LOG('could not read theme settings from the server; using this browser\'s', e);
+            return;
+        }
+        if (saved && typeof saved === 'object') {
+            applyServerSettings(saved);
+            LOG('theme settings loaded from the server');
+        }
+        // Upload what this browser has that the server lacks, so moving to server
+        // storage loses nobody's choices. Server values always win over these.
+        const seed = {};
+        SERVER_FIELDS.forEach((which) => {
+            if (saved && typeof saved === 'object' && which in saved) return;
+            if (which in pendingServer || localStorage.getItem(tmKey(which)) == null) return;
+            seed[which] = which === 'volume' ? tmGetNum('volume', CONFIG.volume) : tmGet(which, false);
+        });
+        if (Object.keys(seed).length) {
+            LOG('copying this browser\'s theme settings to the server:', Object.keys(seed).join(', '));
+            try {
+                await h.updateKefinTweaksFeature(SERVER_KEY, (current) =>
+                    Object.assign({}, seed, current && typeof current === 'object' ? current : {}));
+            } catch (e) {
+                LOG('could not copy theme settings to the server', e);
+            }
+        }
+        if (Object.keys(pendingServer).length && !serverSaveTimer) void flushServerSave();
+    }
+
     // One-time init: seed our keys from the user's current native values (so the
     // replaced checkboxes start where native left off), then force native off.
     let nativeInitDone = false;
@@ -139,7 +261,7 @@
             chk.id = 'chkKefinTheme_' + which;
             chk.checked = which === 'videos' ? enableThemeVideos() : enableThemeSongs();
             chk.addEventListener('change', () => {
-                tmSet(which, chk.checked);
+                saveSetting(which, chk.checked);
                 LOG('theme ' + which + ' set to', chk.checked);
             });
         }
@@ -168,11 +290,18 @@
             if (input.dataset.kefinThemeBound) return;
             input.dataset.kefinThemeBound = '1';
             input.addEventListener('change', () => {
-                tmSet(which, input.checked);
+                if (input.dataset.kefinThemeSyncing) return; // our own click below: nothing changed
+                saveSetting(which, input.checked);
                 LOG('theme ' + which + ' set to', input.checked);
             });
             const wanted = which === 'videos' ? enableThemeVideos() : enableThemeSongs();
-            if (input.checked !== wanted) input.click();
+            if (input.checked !== wanted) {
+                // A click, not a property set, so React's form state follows. It fires
+                // change synchronously; the flag keeps it from queueing a server write.
+                input.dataset.kefinThemeSyncing = '1';
+                input.click();
+                delete input.dataset.kefinThemeSyncing;
+            }
         });
         if (found) LOG('bound the Display page theme checkboxes');
         return found;
@@ -674,7 +803,7 @@
             ctl.muteBtn = headerIconBtn(userMuted ? 'volume_off' : 'volume_up', 'Mute theme');
             ctl.muteBtn.addEventListener('click', () => {
                 userMuted = !userMuted;
-                tmSet('muted', userMuted);
+                saveSetting('muted', userMuted);
                 if (el) el.muted = userMuted;
                 syncMuteIcon();
             });
@@ -690,7 +819,7 @@
             ctl.slider.title = 'Theme volume';
             ctl.slider.addEventListener('input', () => {
                 userVolume = Number(ctl.slider.value) / 100;
-                tmSetNum('volume', userVolume);
+                saveSetting('volume', userVolume);
                 clearFade();               // stop any in-flight fade so the drag wins
                 if (el) el.volume = userVolume;
             });
@@ -1200,6 +1329,7 @@
 
     document.addEventListener('viewshow', (e) => {
         initThemeSettings();
+        void loadServerSettings();
         if ((window.location.hash || '').toLowerCase().indexOf('display') !== -1) {
             ensureThemeSettingsCustomized();
         }
@@ -1216,6 +1346,7 @@
     }, true);
 
     initThemeSettings(); // also attempt immediately at load
+    void loadServerSettings();
 
     // Instant-response observer: stop our theme the moment the bar changes into a
     // visible/playing state (local OR shim). This is the low-latency path; the 400ms
