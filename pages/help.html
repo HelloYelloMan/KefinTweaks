@@ -2769,11 +2769,11 @@
 								<span class="kh-feature-blurb">Move anime bonus specials to the end of the season</span>
 							</span>
 						</a>
-						<a class="kh-feature" href="#/help?topic=requests" data-goto="requests">
-							<span class="kh-feature-icon"><span class="material-icons" aria-hidden="true">add_circle</span></span>
+						<a class="kh-feature" href="#/help?topic=appearance" data-goto="appearance">
+							<span class="kh-feature-icon"><span class="material-icons" aria-hidden="true">palette</span></span>
 							<span class="kh-feature-text">
-								<span class="kh-feature-title">Requesting</span>
-								<span class="kh-feature-blurb">Ask for a movie or show that isn't here yet</span>
+								<span class="kh-feature-title">Skins</span>
+								<span class="kh-feature-blurb">Change how Jellyfin looks on this device</span>
 							</span>
 						</a>
 						<a class="kh-feature" href="#/help?topic=watchlist" data-goto="watchlist">
@@ -3521,7 +3521,7 @@
 						return b;
 					}
 
-					var FEATURED = ['spoiler-guard', 'alternate-order', 'requests', 'watchlist', 'theme-media', 'pause-screen'];
+					var FEATURED = ['spoiler-guard', 'alternate-order', 'appearance', 'watchlist', 'theme-media', 'pause-screen'];
 
 					// Questions as people would ask them, so a search for "music" finds the theme topic.
 					var QUESTIONS = [
@@ -3860,6 +3860,7 @@
 					});
 
 					P('appearance', {
+						head: 'Make it look your way',
 						html: '<div class="pv-col pv-w pv-tu-appwrap"><div class="pv-tu-mock">' +
 							'<div class="pv-tu-mockbar"><span class="pv-logo"></span><span class="pv-tu-mockline"></span><span class="pv-grow"></span>' +
 							'<button type="button" class="pv-btn pv-mini pv-tu-palette pv-hot" title="Appearance" aria-label="Appearance">' + icon('palette') + '</button></div>' +
