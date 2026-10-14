@@ -350,9 +350,11 @@
                         // Pinned to a release, not @main: it tracks the ElegantFin
                         // version it was written against (v26.09.05, the base copy in
                         // skins/), and a floating URL would change under us. Bump
-                        // both together.
+                        // both together. The pin is the tag; the file is the
+                        // release's -latest.css copy, so the include's saved key
+                        // (built from the filename) stays the same across bumps.
                         name: 'Jellyfin 12 Modern Layout Support (elegantfin-jf12)',
-                        url: 'https://cdn.jsdelivr.net/gh/mihaif7/elegantfin-jf12@v26.09.21/Theme/ElegantFin-jf12-modern-v26.09.21.css',
+                        url: 'https://cdn.jsdelivr.net/gh/mihaif7/elegantfin-jf12@v26.10.13/Theme/ElegantFin-jf12-modern-latest.css',
                         enabled: true,
                         loadLast: true
                     }
