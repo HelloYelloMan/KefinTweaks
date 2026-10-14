@@ -77,6 +77,31 @@
         };
     }
 
+    /*
+     * Backdrops, when the user has them on (Settings > Display > Backdrops).
+     *
+     * jellyfin-web's autoBackdrops.js shows them on 'pageshow' for a page with the
+     * class backdropPage and a data-backdroptype; with the setting off it clears
+     * them instead. Custom pages are shown by KefinTweaks, not the view manager,
+     * so no pageshow reaches this one: mark the page and send it one. Jellyfin
+     * then does exactly what it does for Home, setting included. globalBackdropPage
+     * draws from the whole library rather than the top parent in the URL.
+     *
+     * It is sent a tick later: #/help is an unknown route to Jellyfin, which
+     * renders its fallback page, and that page's own pageshow clears the
+     * backdrop. libraryMenu's pageshow handler reads e.detail.isRestored, so the
+     * event carries a detail; true also stops it scrolling the page to the top.
+     */
+    function showBackdrops(page) {
+        if (!page) return;
+        page.classList.add('backdropPage', 'globalBackdropPage');
+        page.setAttribute('data-backdroptype', 'movie,series');
+        setTimeout(() => {
+            if (page.classList.contains('hide') || !document.body.contains(page)) return;
+            page.dispatchEvent(new CustomEvent('pageshow', { bubbles: true, detail: { isRestored: true } }));
+        }, 0);
+    }
+
     async function registerHelpPage() {
         const utils = window.KefinTweaksUtils;
         const root = getRoot();
@@ -94,6 +119,7 @@
         }
 
         utils.addCustomPage('#/help', 'Help & Tips', buildContentHtmlFromDocument(raw, 'kefin-custom-page-help'), (page) => {
+            showBackdrops(page);
             // #/help?topic=watchlist opens that topic. The page's own script does
             // this on its first show; this covers every show after that.
             const m = (window.location.hash || '').match(/[?&]topic=([\w-]+)/);
