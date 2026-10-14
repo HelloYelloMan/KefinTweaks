@@ -911,6 +911,13 @@
 					radial-gradient(90% 100% at 0% 0%, color-mix(in srgb, var(--kv-c, var(--kh-accent)) 22%, transparent), transparent 70%),
 					#0d0e11;
 			}
+			/* While a preview is being fitted, nothing animates: a transition on an em
+			   size (the theme panel's width, for one) would play the change out on
+			   screen, and the measurements would read a value half-way through it. */
+			.kefin-help .pv.pv-fitting,
+			.kefin-help .pv.pv-fitting * {
+				transition: none !important;
+			}
 			/* Keeps its space while hidden, so a preview is sized for its fullest state. */
 			.kefin-help .pv-invisible {
 				visibility: hidden;
@@ -3910,6 +3917,7 @@
 						var availW = node.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
 						if (availH <= 0 || availW <= 0) return; // hidden: fitted when it is shown
 						var fs = parseFloat(cs.fontSize) || 16;
+						node.classList.add('pv-fitting');
 						// The content's width depends on the font-size too, so settle in a few steps.
 						for (var i = 0; i < 4; i++) {
 							// Most previews stretch to the area's width, which says nothing about
@@ -3919,12 +3927,19 @@
 							var w = content.offsetWidth;
 							content.style.width = prevWidth;
 							var h = content.offsetHeight;
-							if (!h || !w) return;
+							if (!h || !w) break;
 							var k = Math.min(availH * FIT_FILL / h, availW / w);
 							if (Math.abs(k - 1) < 0.02) break;
 							fs = Math.max(FIT_MIN_PX, Math.min(FIT_MAX_PX, fs * k));
 							node.style.fontSize = fs + 'px';
 						}
+						void node.offsetWidth; // settle the final size before transitions return
+						node.classList.remove('pv-fitting');
+					}
+					// Fit everything in a container now, before it is painted. The observer
+					// only reports after a frame, which would show the unfitted size first.
+					function fitAll(container) {
+						each(container, '.pv', fitPreview);
 					}
 					var fitObserver = window.ResizeObserver ? new ResizeObserver(function (entries) {
 						entries.forEach(function (e) { fitPreview(e.target); });
@@ -4144,6 +4159,7 @@
 							sheet.appendChild(bd);
 							sheet.appendChild(ft);
 							backdrop.appendChild(sheet);
+							if (livePreview) fitPreview(livePreview);
 							x.focus({ preventScroll: true });
 						}
 						function closeSheet() {
@@ -4203,6 +4219,7 @@
 						if (activeName && apis[activeName] && apis[activeName].leave) apis[activeName].leave();
 						Object.keys(hosts).forEach(function (k) { hosts[k].hidden = k !== v.id; });
 						if (!apis[v.id]) apis[v.id] = v.build(hosts[v.id]);
+						fitAll(hosts[v.id]);
 						activeName = v.id;
 						Object.keys(tabs).forEach(function (k) { tabs[k].setAttribute('aria-selected', k === v.id ? 'true' : 'false'); });
 						descEl.textContent = v.desc;
