@@ -286,6 +286,9 @@
         // progressive renderer already dismisses.
         const needsSmartFilter = !!(sectionConfig.refreshUserData || sectionConfig.postFetchFilter);
         const finish = async (data) => {
+            if (window.cardBuilder?.attachParentPosterRatios) {
+                await window.cardBuilder.attachParentPosterRatios(data, sectionConfig);
+            }
             if (!needsSmartFilter) return data;
             return (await applySmartFilter(sectionConfig, data)) ?? [];
         };

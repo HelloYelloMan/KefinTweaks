@@ -953,6 +953,38 @@
         return enforceMinimumItems(sectionConfig, processed);
     }
 
+    /* Series poster ratios, by series id, for cards that show their series'
+     * poster (Poster Aspect's par-NN). An episode's own PrimaryImageAspectRatio
+     * describes its still, and a season without a poster has none, so the
+     * series' ratio is fetched once per row, before the row is built -- the
+     * card is emitted at its shape and never moves. One small request for the
+     * series that are missing; a failure leaves the default ratio. */
+    const parentPosterRatio = new Map();
+    async function attachParentPosterRatios(itemsData, sectionConfig) {
+        const items = Array.isArray(itemsData) ? itemsData : (itemsData?.Items || []);
+        const format = String(sectionConfig?.cardFormat || '');
+        if (!items.length || /thumb|backdrop|banner|logo|disc|clear|square/i.test(format)) return itemsData;
+        const need = new Set();
+        for (const it of items) {
+            if (!it || it.IsJellyseerr) continue;
+            if (it.Type === 'Series' && it.PrimaryImageAspectRatio > 0) parentPosterRatio.set(it.Id, it.PrimaryImageAspectRatio);
+            const showsSeries = it.SeriesId && it.SeriesPrimaryImageTag
+                && (it.Type === 'Episode' || (it.Type === 'Season' && !it.ImageTags?.Primary));
+            if (showsSeries && !parentPosterRatio.has(it.SeriesId)) need.add(it.SeriesId);
+        }
+        if (!need.size || typeof ApiClient === 'undefined') return itemsData;
+        try {
+            const r = await ApiClient.getItems(ApiClient.getCurrentUserId(), {
+                Ids: [...need].join(','), Fields: 'PrimaryImageAspectRatio',
+                ImageTypeLimit: 1, EnableImageTypes: 'Primary', EnableUserData: false, EnableTotalRecordCount: false
+            });
+            (r?.Items || []).forEach((s) => {
+                if (s.PrimaryImageAspectRatio > 0) parentPosterRatio.set(s.Id, s.PrimaryImageAspectRatio);
+            });
+        } catch (e) { /* the default ratio, as before */ }
+        return itemsData;
+    }
+
     function postProcessItems(sectionConfig, itemsData) {
         let processed = itemsData?.Items || itemsData || [];
 
@@ -2188,6 +2220,7 @@
          * @returns {Array} - Post-processed array of Jellyfin items
          */
         postProcessItems: postProcessItems,
+        attachParentPosterRatios: attachParentPosterRatios,
         postProcessItemsByQuery: postProcessItemsByQuery,
         getQueryDisplayName: getQueryDisplayName,
         resolveActiveQueryIndex: resolveActiveQueryIndex,
@@ -3886,15 +3919,23 @@
              *
              * The class does nothing unless Poster Aspect is switched on.
              */
-            const ownPrimary = imageUrl.includes(`/Items/${item.Id}/Images/Primary`);
-            const ratio = item?.PrimaryImageAspectRatio;
-            if (ownPrimary && typeof ratio === 'number' && ratio > 0) {
+            /* A card that shows its SERIES poster -- an episode, or a season
+             * with no poster of its own (its URL names the season but carries
+             * the series' tag) -- takes the series poster's ratio, looked up by
+             * attachParentPosterRatios before the row was built. */
+            const seasonShowsSeries = item.Type === 'Season' && !item.ImageTags?.Primary;
+            const ownPrimary = !seasonShowsSeries && imageUrl.includes(`/Items/${item.Id}/Images/Primary`);
+            const seriesPoster = !ownPrimary && !!item.SeriesId && (imageUrl.includes(`/Items/${item.SeriesId}/Images/Primary`)
+                || (seasonShowsSeries && imageUrl.includes(`/Items/${item.Id}/Images/Primary`)));
+            const ratio = ownPrimary ? item?.PrimaryImageAspectRatio
+                : (seriesPoster ? parentPosterRatio.get(item.SeriesId) : undefined);
+            if ((ownPrimary || seriesPoster) && typeof ratio === 'number' && ratio > 0) {
                 card.classList.add('par-' + Math.round(ratio * 100));
 
                 /* Ask for the picture at that same ratio. Backdrop-shaped cards
                  * request a fixed 474x267 crop, so a 4:3 episode still came back
                  * cut to 16:9 and was then cropped again by the 4:3 box above. */
-                if (padderClass === 'cardPadder-backdrop') {
+                if (ownPrimary && padderClass === 'cardPadder-backdrop') {
                     imageUrl = imageUrl.replace('fillHeight=267&fillWidth=474',
                         `fillHeight=${Math.round(474 / ratio)}&fillWidth=474`);
                 }
