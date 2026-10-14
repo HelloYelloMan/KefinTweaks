@@ -655,7 +655,7 @@
             script: 'help.js',
             css: null,
             dependencies: ['utils'],
-            description: 'Adds a Help entry to the user menu, opening a page that explains the features this server adds'
+            description: 'Adds a Help & Tips entry to the user menu, opening a page that explains the features this server adds'
         },
         {
             name: 'crtShader',

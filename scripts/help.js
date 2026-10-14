@@ -1,5 +1,5 @@
 // KefinTweaks Help
-// FORK-ONLY: the Help & Tips page (pages/help.html) at #/help, with a Help entry
+// FORK-ONLY: the Help & Tips page (pages/help.html) at #/help, with a Help & Tips entry
 // in the user menu. The page explains, for household users, the features this
 // server's plugins and KefinTweaks add.
 // Requires: utils.js
@@ -93,7 +93,7 @@
             return false;
         }
 
-        utils.addCustomPage('#/help', 'Help', buildContentHtmlFromDocument(raw, 'kefin-custom-page-help'), (page) => {
+        utils.addCustomPage('#/help', 'Help & Tips', buildContentHtmlFromDocument(raw, 'kefin-custom-page-help'), (page) => {
             // #/help?topic=watchlist opens that topic. The page's own script does
             // this on its first show; this covers every show after that.
             const m = (window.location.hash || '').match(/[?&]topic=([\w-]+)/);
@@ -101,7 +101,7 @@
             if (m && help && typeof help.khOpenTopic === 'function') help.khOpenTopic(m[1]);
         });
 
-        const ok = await utils.addCustomMenuLink('Help', 'help', '#/help', false, getPlacement());
+        const ok = await utils.addCustomMenuLink('Help & Tips', 'help', '#/help', false, getPlacement());
         if (ok) LOG('Help page registered at #/help, with its menu entry');
         else WARN('Help page registered, but its menu entry could not be added');
         return !!ok;
