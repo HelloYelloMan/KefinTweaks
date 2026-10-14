@@ -1801,12 +1801,6 @@ window.KefinTweaksConfig = ${JSON.stringify(config, null, 2)};`;
 	background: none !important;
 }
 
-/* A custom page that keeps the backdrop dims it the way Jellyfin Enhanced's
-   calendar does, so the page stays readable over it. */
-html.kefin-custom-page-backdrop .backgroundContainer.withBackdrop {
-	background: rgba(0, 0, 0, 0.7) !important;
-}
-
 header.MuiPaper-root + main.MuiBox-root .customPage {
 	margin-top: 3rem;
 }
