@@ -800,7 +800,7 @@
 			.kefin-help .kv-feat .pv {
 				height: 15.5rem;
 				min-height: 0;
-				font-size: 0.74rem;
+				font-size: 0.74rem; /* until fitPreview has measured it */
 				border-radius: 0;
 				border-bottom: 1px solid var(--kh-border);
 			}
@@ -852,7 +852,7 @@
 				height: 11rem;
 				min-height: 0;
 				padding: 0.9rem;
-				font-size: 0.56rem;
+				font-size: 0.56rem; /* until fitPreview has measured it */
 				border-radius: 0;
 				border-bottom: 1px solid var(--kh-border);
 			}
@@ -871,8 +871,14 @@
 				margin: 0 0 1.4rem;
 			}
 			.kefin-help .kv-sheet-stage .pv {
-				min-height: 16rem;
-				font-size: 0.95rem;
+				height: 19rem;
+				min-height: 0;
+				font-size: 0.95rem; /* until fitPreview has measured it */
+			}
+			@media (max-width: 600px) {
+				.kefin-help .kv-sheet-stage .pv {
+					height: 15rem;
+				}
 			}
 			.kefin-help .kv-try {
 				display: flex;
@@ -894,7 +900,7 @@
 				position: relative;
 				display: grid;
 				place-items: center;
-				padding: 1.4em;
+				padding: 1.1rem;
 				min-height: 14em;
 				border-radius: var(--kh-radius);
 				overflow: hidden;
@@ -904,6 +910,21 @@
 				background:
 					radial-gradient(90% 100% at 0% 0%, color-mix(in srgb, var(--kv-c, var(--kh-accent)) 22%, transparent), transparent 70%),
 					#0d0e11;
+			}
+			/* Keeps its space while hidden, so a preview is sized for its fullest state. */
+			.kefin-help .pv-invisible {
+				visibility: hidden;
+			}
+			/* A dropdown floats over the preview instead of pushing it taller. */
+			.kefin-help .pv-dd {
+				position: relative;
+				display: inline-flex;
+			}
+			.kefin-help .pv-dd > .pv-menu {
+				position: absolute;
+				top: calc(100% + 0.3em);
+				left: 0;
+				z-index: 6;
 			}
 			/* In the grid a preview is a picture: nothing in it takes a click. */
 			.kefin-help .pv.pv-card {
@@ -1567,6 +1588,7 @@
 				font-size: 0.82em;
 			}
 			.kefin-help .pv-menu > div,
+			.kefin-help .pv-menu > span,
 			.kefin-help .pv-menu > button {
 				display: flex;
 				align-items: center;
@@ -1585,6 +1607,11 @@
 			}
 			.kefin-help .pv-menu .material-icons {
 				font-size: 1.15em;
+			}
+			/* Tall enough for the open Libraries menu, which floats below the bar. */
+			.kefin-help .pv-navcol {
+				justify-content: flex-start;
+				min-height: 11.5em;
 			}
 			.kefin-help .pv-crumbs {
 				align-self: flex-start;
@@ -1663,6 +1690,56 @@
 				border-color: #fff;
 			}
 
+			/* Jellyfin Enhanced panel */
+			.kefin-help .pv-epanel {
+				display: flex;
+				flex-direction: column;
+				gap: 0.15em;
+				width: 15em;
+				padding: 0.6em;
+				border: 1px solid rgba(255, 255, 255, 0.08);
+				border-radius: 0.8em;
+				background: #1b1d23;
+				box-shadow: 0 0.8em 2em rgba(0, 0, 0, 0.45);
+				opacity: 0;
+				transform: translateY(-0.4em) scale(0.98);
+				transition: opacity 0.2s, transform 0.2s;
+				pointer-events: none;
+			}
+			.kefin-help .pv-epanel.pv-open {
+				opacity: 1;
+				transform: none;
+				pointer-events: auto;
+			}
+			.kefin-help .pv-panel-h {
+				display: flex;
+				align-items: center;
+				gap: 0.4em;
+				margin-bottom: 0.2em;
+				font-size: 0.85em;
+			}
+			.kefin-help .pv-esec {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 0.3em 0.4em;
+				border-radius: 0.4em;
+				background: rgba(255, 255, 255, 0.04);
+				font-size: 0.74em;
+			}
+			.kefin-help .pv-esec .material-icons {
+				font-size: 1.2em;
+				color: rgba(255, 255, 255, 0.45);
+			}
+			.kefin-help .pv-ekey {
+				flex-direction: row;
+				gap: 0.5em;
+				padding: 0.45em 0.8em;
+			}
+			.kefin-help .pv-ekey span {
+				font-size: 0.78em;
+			}
+
 			/* Rows */
 			.kefin-help .pv-rowhead {
 				display: flex;
@@ -1678,6 +1755,9 @@
 				gap: 0.45em;
 				width: 100%;
 				overflow: hidden;
+				/* A row that runs off the edge, like a real one: its length must not
+				   count as width the preview needs when it is fitted. */
+				contain: inline-size;
 			}
 			.kefin-help .pv-strip.pv-wrap {
 				flex-wrap: wrap;
@@ -3337,13 +3417,15 @@
 
 					// ----- Getting around -----
 					P('navigation', {
-						html: '<div class="pv-col pv-w">' +
+						html: '<div class="pv-col pv-w pv-navcol">' +
 							'<div class="pv-topbar"><span class="pv-logo"></span>' +
-							'<button type="button" class="pv-tab pv-libs pv-hot">Libraries ▾</button><span class="pv-tab">Favorites</span><span class="pv-tab pv-tab-on">Watchlist</span><span class="pv-tab">Requests</span>' +
+							'<span class="pv-dd"><button type="button" class="pv-tab pv-libs pv-hot">Libraries ▾</button>' +
+							'<span class="pv-menu pv-libmenu" hidden><span>Anime</span><span>Anime Movies</span><span>Movies</span><span>Shows</span></span></span>' +
+							'<span class="pv-tab">Favorites</span><span class="pv-tab pv-tab-on">Watchlist</span><span class="pv-tab">Requests</span>' +
 							'<span class="pv-grow"></span>' + icon('casino') + icon('palette') + '</div>' +
-							'<div class="pv-menu pv-libmenu" hidden><div>Anime</div><div>Anime Movies</div><div>Movies</div><div>Shows</div></div>' +
-							'<div class="pv-crumbs">Shows › Show name › <button type="button" class="pv-crumb">Season 1 ▾</button></div>' +
-							'<div class="pv-menu pv-seasons" hidden><button type="button">Season 1</button><button type="button">Season 2</button><button type="button">Specials</button></div></div>',
+							'<div class="pv-crumbs">Shows › Show name › <span class="pv-dd"><button type="button" class="pv-crumb">Season 1 ▾</button>' +
+							'<span class="pv-menu pv-seasons" hidden><button type="button">Season 1</button><button type="button">Season 2</button><button type="button">Specials</button></span></span></div>' +
+							'<div class="pv-cap">Libraries and season lists open over the page</div></div>',
 						init: function (n) {
 							on(n, '.pv-libs', function () { var m = n.querySelector('.pv-libmenu'); m.hidden = !m.hidden; });
 							on(n, '.pv-crumb', function () { var m = n.querySelector('.pv-seasons'); m.hidden = !m.hidden; });
@@ -3558,15 +3640,15 @@
 							}).join('') + '</div>' + pill('Put them back', 'pv-small pv-ghost pv-reset') + '</div>',
 						init: function (n) {
 							var reset = n.querySelector('.pv-reset');
-							reset.hidden = true;
+							reset.classList.add('pv-invisible');
 							on(n, '.pv-x', function (b) {
 								b.closest('.pv-cwcard').classList.add('pv-gone');
 								toast(n, 'Removed. It will start from the beginning next time');
-								reset.hidden = false;
+								reset.classList.remove('pv-invisible');
 							});
 							reset.addEventListener('click', function () {
 								each(n, '.pv-cwcard', function (c) { c.classList.remove('pv-gone'); });
-								reset.hidden = true;
+								reset.classList.add('pv-invisible');
 							});
 						}
 					});
@@ -3604,12 +3686,12 @@
 							'<div class="pv-menu pv-pinmenu" hidden><button type="button">' + icon('playlist_add') + 'Add to playlist</button>' +
 							'<button type="button" class="pv-dopin">' + icon('push_pin') + 'Pin to Home Screen</button><button type="button">' + icon('info') + 'Media Info</button></div></div>' +
 							'<div class="pv-home"><div class="pv-cap">Your Home screen</div><div class="pv-homerow"><b>Continue Watching</b><div class="pv-row">' + thumb(40) + thumb(200) + '</div></div>' +
-							'<div class="pv-homerow pv-pinned" hidden><b>Pinned</b><div class="pv-row"><div class="pv-pcard">' + poster(150) + '<div class="pv-ov">' + pb('push_pin', 'pv-unpin pv-on', 'Unpin from Home Screen') + '</div></div></div></div></div></div>',
+							'<div class="pv-homerow pv-pinned pv-invisible"><b>Pinned</b><div class="pv-row"><div class="pv-pcard">' + poster(150) + '<div class="pv-ov">' + pb('push_pin', 'pv-unpin pv-on', 'Unpin from Home Screen') + '</div></div></div></div></div></div>',
 						init: function (n) {
 							var menu = n.querySelector('.pv-pinmenu');
 							on(n, '.pv-more', function () { menu.hidden = !menu.hidden; });
-							on(n, '.pv-dopin', function () { menu.hidden = true; n.querySelector('.pv-pinned').hidden = false; toast(n, 'Pinned to Pinned'); });
-							on(n, '.pv-unpin', function () { n.querySelector('.pv-pinned').hidden = true; toast(n, 'Unpinned'); });
+							on(n, '.pv-dopin', function () { menu.hidden = true; n.querySelector('.pv-pinned').classList.remove('pv-invisible'); toast(n, 'Pinned to Pinned'); });
+							on(n, '.pv-unpin', function () { n.querySelector('.pv-pinned').classList.add('pv-invisible'); toast(n, 'Unpinned'); });
 							on(n, '.pv-menu button:not(.pv-dopin)', function () { menu.hidden = true; });
 						}
 					});
@@ -3795,11 +3877,65 @@
 					});
 
 
+					P('enhanced-panel', {
+						html: '<div class="pv-col pv-w"><div class="pv-row pv-center"><button type="button" class="pv-key pv-ekey pv-hot"><kbd>?</kbd><span>Open the panel</span></button>' +
+							'<span class="pv-cap">or profile menu › Jellyfin Enhanced</span></div>' +
+							'<div class="pv-epanel"><div class="pv-panel-h">' + icon('tune') + '<b>Jellyfin Enhanced</b><span class="pv-grow"></span>' + pb('close', 'pv-mini pv-eclose', 'Close') + '</div>' +
+							['Shortcuts', 'Playback Settings', 'Auto-Skip Settings', 'Subtitle Settings', 'UI Settings', 'Spoiler Guard'].map(function (x) {
+								return '<div class="pv-esec"><span>' + x + '</span>' + icon('chevron_right') + '</div>';
+							}).join('') + '</div></div>',
+						init: function (n, live) {
+							var panel = n.querySelector('.pv-epanel');
+							function set(open) { panel.classList.toggle('pv-open', open); }
+							on(n, '.pv-ekey', function () { set(!panel.classList.contains('pv-open')); });
+							on(n, '.pv-eclose', function () { set(false); });
+							set(!live); // the grid's picture shows it open
+						}
+					});
+
+					// ---------------------------------------------------------------
+					// Fitting. Each preview has a fixed area (tile, featured card, topic
+					// panel). Previews are drawn in em, so the font-size scales a whole
+					// one; this picks the font-size at which the preview's content fills
+					// the area's height (or its width, if that runs out first). It runs
+					// when the area changes size, not when the content does, so opening a
+					// menu inside a preview does not make it jump.
+					// ---------------------------------------------------------------
+					var FIT_MIN_PX = 5, FIT_MAX_PX = 22, FIT_FILL = 0.9;
+					function fitPreview(node) {
+						var content = node._content;
+						if (!content || !node.isConnected) return;
+						var cs = getComputedStyle(node);
+						var availH = node.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+						var availW = node.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+						if (availH <= 0 || availW <= 0) return; // hidden: fitted when it is shown
+						var fs = parseFloat(cs.fontSize) || 16;
+						// The content's width depends on the font-size too, so settle in a few steps.
+						for (var i = 0; i < 4; i++) {
+							// Most previews stretch to the area's width, which says nothing about
+							// how much room they need; measure the width they would take on their own.
+							var prevWidth = content.style.width;
+							content.style.width = 'max-content';
+							var w = content.offsetWidth;
+							content.style.width = prevWidth;
+							var h = content.offsetHeight;
+							if (!h || !w) return;
+							var k = Math.min(availH * FIT_FILL / h, availW / w);
+							if (Math.abs(k - 1) < 0.02) break;
+							fs = Math.max(FIT_MIN_PX, Math.min(FIT_MAX_PX, fs * k));
+							node.style.fontSize = fs + 'px';
+						}
+					}
+					var fitObserver = window.ResizeObserver ? new ResizeObserver(function (entries) {
+						entries.forEach(function (e) { fitPreview(e.target); });
+					}) : null;
+
 					// A preview node. Live ones work; the rest are pictures nobody can click or focus.
 					function previewEl(id, live) {
 						var def = PREVIEWS[id];
 						if (!def) return null;
 						var node = el('div', 'pv ' + (live ? 'pv-live' : 'pv-card'), def.html);
+						node._content = node.firstElementChild;
 						var stop = null;
 						if (!live) {
 							node.setAttribute('inert', '');
@@ -3816,7 +3952,11 @@
 								if (h && node.contains(h)) h.classList.remove('pv-hot');
 							});
 						}
-						node._stop = stop;
+						if (fitObserver) fitObserver.observe(node);
+						node._stop = function () {
+							if (fitObserver) fitObserver.unobserve(node);
+							if (stop) stop();
+						};
 						return node;
 					}
 
@@ -3918,8 +4058,7 @@
 								tile.setAttribute('role', 'button');
 								tile.tabIndex = 0;
 								tile.setAttribute('aria-label', t.title);
-								// Featured topics already have a large preview above, so their tile stays plain.
-								var p = FEATURED.indexOf(t.id) === -1 ? previewEl(t.id, false) : null;
+								var p = previewEl(t.id, false);
 								if (p) {
 									tile.classList.add('kv-tile-pv');
 									tile.appendChild(p);
