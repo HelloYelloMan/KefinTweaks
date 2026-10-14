@@ -818,20 +818,16 @@
 				gap: 0.2rem;
 				padding: 0.95rem 1.15rem 1.15rem;
 			}
-			.kefin-help .kv-feat-eyebrow {
+			.kefin-help .kv-feat-head {
 				display: flex;
 				align-items: center;
-				gap: 0.35rem;
-				font-size: 0.8rem;
-				font-weight: 600;
-				color: color-mix(in srgb, var(--kv-c) 70%, white);
-			}
-			.kefin-help .kv-feat-eyebrow .material-icons {
-				font-size: 1rem;
-			}
-			.kefin-help .kv-feat-head {
+				gap: 0.45rem;
 				font-weight: 700;
 				font-size: 1.2rem;
+			}
+			.kefin-help .kv-feat-head .material-icons {
+				font-size: 1.3rem;
+				color: color-mix(in srgb, var(--kv-c) 70%, white);
 			}
 			.kefin-help .kv-feat-sum {
 				font-size: 0.9rem;
@@ -3622,7 +3618,6 @@
 					];
 
 					P('spoiler-guard', {
-						head: 'Watch without spoilers',
 						html: '<div class="pv-col">' +
 							'<div class="pv-row pv-eps">' +
 							[['11', 'S1:E11', 'Departure', 20], ['12', 'S1:E12', 'Next Stop', 110], ['21', 'S2:E1', 'The Reveal', 200]].map(function (e) {
@@ -3665,7 +3660,6 @@
 					});
 
 					P('alternate-order', {
-						head: 'Bonus episodes, out of the way',
 						html: '<div class="pv-col"><div class="pv-chips pv-ao"></div>' +
 							'<div class="pv-row pv-center">' + pb('favorite_border', '', 'Favorite') + pb('low_priority', 'pv-ao-btn pv-hot', 'Alternate Order') + '<span class="pv-label pv-ao-label"></span></div></div>',
 						init: function (n) {
@@ -3688,7 +3682,6 @@
 					});
 
 					P('requests', {
-						head: 'Can\'t find it? Ask for it',
 						html: '<div class="pv-col pv-w">' +
 							'<div class="pv-search">' + icon('search') + '<span>something new</span></div>' +
 							'<div class="pv-cap pv-left">Discover on Seerr</div>' +
@@ -3715,7 +3708,6 @@
 					});
 
 					P('watchlist', {
-						head: 'Save it for later',
 						html: '<div class="pv-col"><div class="pv-row">' + [200, 330, 40].map(function (h, i) {
 							return '<div class="pv-pcard" data-i="' + i + '">' + poster(h) + '<div class="pv-ov">' +
 								pb('bookmark_border', 'pv-wl' + (i === 1 ? ' pv-hot' : ''), 'Add to Watchlist') + pb('check', 'pv-pl', 'Mark played') + '</div></div>';
@@ -3748,7 +3740,6 @@
 					});
 
 					P('theme-media', {
-						head: 'Turn the theme music down',
 						html: '<div class="pv-tu-page">' +
 							'<div class="pv-tu-hdr"><span class="pv-logo"></span><span class="pv-grow"></span>' + icon('search') + icon('cast') + '<span class="pv-tu-avatar"></span></div>' +
 							'<div class="pv-tu-tctl">' + pb('volume_up', 'pv-mini pv-tu-mute pv-hot', 'Mute theme') +
@@ -3780,7 +3771,6 @@
 					});
 
 					P('pause-screen', {
-						head: 'Paused? Here\'s where you are',
 						html: '<div class="pv-player pv-tu-ps">' + '<div class="pv-frame" style="--h:215"></div>' +
 							'<div class="pv-tu-psov">' +
 							'<button type="button" class="pv-btn pv-mini pv-tu-psback" title="Leave video" aria-label="Leave video">' + icon('arrow_back') + '</button>' +
@@ -3859,7 +3849,6 @@
 					});
 
 					P('appearance', {
-						head: 'Make it look your way',
 						html: '<div class="pv-col pv-w pv-tu-appwrap"><div class="pv-tu-mock">' +
 							'<div class="pv-tu-mockbar"><span class="pv-logo"></span><span class="pv-tu-mockline"></span><span class="pv-grow"></span>' +
 							'<button type="button" class="pv-btn pv-mini pv-tu-palette pv-hot" title="Appearance" aria-label="Appearance">' + icon('palette') + '</button></div>' +
@@ -4389,14 +4378,14 @@
 
 					// Large featured card: a preview, then the headline. Used by Gallery and Classic.
 					function featureCard(id) {
-						var t = byId[id], def = PREVIEWS[id];
+						var t = byId[id];
 						var a = hue(el('a', 'kv-feat'), t.cat.hue);
 						a.href = '#/help?topic=' + id;
 						a.setAttribute('data-goto', id);
 						var p = previewEl(id, false);
 						if (p) a.appendChild(p);
-						a.appendChild(el('span', 'kv-feat-text', '<span class="kv-feat-eyebrow">' + icon(t.icon) + esc(t.title) +
-							'</span><span class="kv-feat-head">' + esc(def && def.head ? def.head : t.title) + '</span><span class="kv-feat-sum">' + esc(t.summary) + '</span>'));
+						a.appendChild(el('span', 'kv-feat-text', '<span class="kv-feat-head">' + icon(t.icon) + esc(t.title) +
+							'</span><span class="kv-feat-sum">' + esc(t.summary) + '</span>'));
 						return a;
 					}
 					function featureGrid() {
