@@ -1801,20 +1801,22 @@ window.KefinTweaksConfig = ${JSON.stringify(config, null, 2)};`;
 	background: none !important;
 }
 
-/* A custom page that keeps the backdrop treats it as Jellyfin Enhanced's calendar
-   tab does, which is how the Home page shows it plus the calendar's own dim:
-   - every skin: the calendar's dim layer;
-   - ElegantFin shows only the blurred copy of the backdrop on tabbed pages
-     (.withSectionTabs, which Home has and this page does not), hiding the sharp
-     ::after copy; on mobile its layer keeps the tabbed pages' opacity.
-   Abyss needs nothing more: it blurs the backdrop on any library page. */
-html.kefin-custom-page-backdrop .backgroundContainer.withBackdrop {
-	background: rgba(0, 0, 0, 0.7) !important;
+/* A custom page that keeps the backdrop shows it as the Home page does, which is
+   also what Jellyfin Enhanced's calendar tab shows: JE's own dim for it targets
+   .backgroundContainer:has(~ .mainAnimatedPages ...), and in Jellyfin 12's layout
+   .mainAnimatedPages is no longer a sibling, so it never applies.
+   Home differs from other pages only in ElegantFin, through .withSectionTabs on
+   <body> (Home has tabs, this page does not): the solid dark layer, the sharp
+   ::after copy of the backdrop hidden so only the blurred copy shows, and on
+   mobile the layer's opacity. Abyss blurs and darkens the backdrop on any
+   library page, and Jellyfin's own theme treats every page alike. */
+html[data-kefin-skin^="ElegantFin"].kefin-custom-page-backdrop .backgroundContainer.withBackdrop {
+	background: var(--darkerGradientPoint);
 }
-html.kefin-custom-page-backdrop .backdropImage::after {
+html[data-kefin-skin^="ElegantFin"].kefin-custom-page-backdrop .backdropImage::after {
 	opacity: 0;
 }
-html.kefin-custom-page-backdrop.layout-mobile .backgroundContainer.withBackdrop {
+html[data-kefin-skin^="ElegantFin"].kefin-custom-page-backdrop.layout-mobile .backgroundContainer.withBackdrop {
 	opacity: 0.9;
 }
 
