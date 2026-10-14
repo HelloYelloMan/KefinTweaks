@@ -76,151 +76,6 @@
 				backdrop-filter: blur(var(--abyss-glass-blur, 15px));
 			}
 
-			/* ---------- Header ---------- */
-			.kefin-help .kh-hero h1 {
-				margin: 0 0 0.3em;
-				font-size: clamp(1.7rem, 4vw, 2.3rem);
-				font-weight: 700;
-				letter-spacing: 0.01em;
-			}
-			.kefin-help .kh-hero p {
-				margin: 0 0 1.4rem;
-				color: var(--kh-muted);
-				max-width: 46rem;
-			}
-			.kefin-help .kh-search {
-				position: relative;
-				margin-bottom: 1rem;
-			}
-			.kefin-help .kh-search .material-icons {
-				position: absolute;
-				left: 0.85rem;
-				top: 50%;
-				transform: translateY(-50%);
-				color: var(--kh-muted);
-				pointer-events: none;
-			}
-			.kefin-help .kh-search input {
-				width: 100%;
-				padding: 0.8rem 2.8rem 0.8rem 2.9rem;
-				border-radius: var(--kh-radius-sm);
-				border: 1px solid var(--kh-border);
-				background: var(--kh-surface);
-				color: inherit;
-				font: inherit;
-				outline: none;
-			}
-			.kefin-help .kh-search input:focus {
-				border-color: var(--kh-accent);
-				background: var(--kh-surface-hover);
-			}
-			.kefin-help .kh-search-clear {
-				position: absolute;
-				right: 0.5rem;
-				top: 50%;
-				transform: translateY(-50%);
-				border: 0;
-				background: transparent;
-				color: var(--kh-muted);
-				cursor: pointer;
-				padding: 0.3rem;
-				border-radius: 50%;
-				display: none;
-			}
-			.kefin-help .kh-search-clear .material-icons {
-				position: static;
-				transform: none;
-				display: block;
-			}
-			.kefin-help .kh-searching .kh-search-clear {
-				display: block;
-			}
-
-			/* ---------- Categories and topics ---------- */
-			.kefin-help .kh-category {
-				margin: 0 0 2.25rem;
-				scroll-margin-top: 5.5rem;
-			}
-			.kefin-help .kh-category > h2 {
-				display: flex;
-				align-items: center;
-				gap: 0.55rem;
-				margin: 0 0 0.85rem;
-				font-size: 1.3rem;
-				font-weight: 650;
-			}
-			.kefin-help .kh-category > h2 .material-icons {
-				color: var(--kh-accent);
-			}
-			.kefin-help .kh-topics {
-				display: flex;
-				flex-direction: column;
-				gap: 0.6rem;
-			}
-			.kefin-help details.kh-topic {
-				background: var(--kh-surface);
-				border: 1px solid var(--kh-border);
-				border-radius: var(--kh-radius);
-				scroll-margin-top: 5.5rem;
-				transition: border-color 0.2s;
-			}
-			.kefin-help details.kh-topic[open] {
-				background: var(--kh-surface-hover);
-			}
-			.kefin-help details.kh-topic.kh-flash {
-				border-color: var(--kh-accent);
-			}
-			.kefin-help .kh-topic > summary {
-				list-style: none;
-				display: flex;
-				align-items: center;
-				gap: 0.85rem;
-				padding: 0.85rem 1rem;
-				cursor: pointer;
-				border-radius: var(--kh-radius);
-			}
-			.kefin-help .kh-topic > summary::-webkit-details-marker {
-				display: none;
-			}
-			.kefin-help .kh-topic > summary:hover {
-				background: var(--kh-surface-hover);
-			}
-			.kefin-help .kh-topic > summary:focus-visible {
-				outline: 2px solid var(--kh-accent);
-				outline-offset: -2px;
-			}
-			.kefin-help .kh-topic-icon {
-				flex: none;
-				display: grid;
-				place-items: center;
-				width: 2.4rem;
-				height: 2.4rem;
-				border-radius: var(--kh-radius-sm);
-				background: var(--kh-surface-strong);
-				color: var(--kh-accent);
-			}
-			.kefin-help .kh-topic-head {
-				flex: 1;
-				min-width: 0;
-			}
-			.kefin-help .kh-topic-title {
-				display: block;
-				font-weight: 600;
-				font-size: 1.04rem;
-			}
-			.kefin-help .kh-topic-summary {
-				display: block;
-				color: var(--kh-muted);
-				font-size: 0.9rem;
-			}
-			.kefin-help .kh-chevron {
-				flex: none;
-				color: var(--kh-muted);
-				transition: transform 0.2s;
-			}
-			.kefin-help details[open] > summary .kh-chevron {
-				transform: rotate(180deg);
-			}
 			.kefin-help .kh-topic-body {
 				padding: 0.2rem 1.15rem 1.15rem 4.4rem;
 			}
@@ -368,99 +223,15 @@
 				}
 			}
 
-			.kefin-help .kh-empty {
-				display: none;
-				padding: 2rem 1rem;
-				text-align: center;
-				color: var(--kh-muted);
-			}
-			.kefin-help .kh-no-results .kh-empty {
-				display: block;
-			}
 			.kefin-help [hidden] {
 				display: none !important;
 			}
 
 			/* =====================================================================
-			   Design preview: layout switcher and the alternative layouts
+			   The gallery and its previews
 			   ===================================================================== */
 			.kefin-help {
 				max-width: 78rem;
-			}
-			.kefin-help .kh-variant[data-variant="classic"] {
-				max-width: 62rem;
-				margin: 0 auto;
-			}
-			.kefin-help .kh-variant-bar {
-				display: flex;
-				flex-wrap: wrap;
-				align-items: center;
-				gap: 0.5rem 0.9rem;
-				margin: 0 0 2rem;
-				padding: 0.6rem 0.7rem;
-				border-radius: var(--kh-radius);
-				border: 1px dashed rgba(255, 255, 255, 0.18);
-				background: rgba(255, 255, 255, 0.025);
-			}
-			.kefin-help .kh-variant-label {
-				display: flex;
-				align-items: center;
-				gap: 0.35rem;
-				font-size: 0.75rem;
-				font-weight: 700;
-				letter-spacing: 0.08em;
-				text-transform: uppercase;
-				color: var(--kh-muted);
-			}
-			.kefin-help .kh-variant-label .material-icons {
-				font-size: 1.1rem;
-			}
-			.kefin-help .kh-variant-tabs {
-				display: flex;
-				flex-wrap: wrap;
-				gap: 0.3rem;
-			}
-			.kefin-help .kh-variant-tab {
-				display: inline-flex;
-				align-items: center;
-				gap: 0.35rem;
-				padding: 0.4rem 0.8rem;
-				border-radius: 999px;
-				border: 1px solid transparent;
-				background: transparent;
-				color: inherit;
-				font: inherit;
-				font-size: 0.92rem;
-				cursor: pointer;
-				opacity: 0.75;
-			}
-			.kefin-help .kh-variant-tab:hover {
-				opacity: 1;
-				background: var(--kh-surface-hover);
-			}
-			.kefin-help .kh-variant-tab[aria-selected="true"] {
-				opacity: 1;
-				background: var(--kh-accent);
-				color: var(--kh-on-accent, #fff);
-			}
-			.kefin-help .kh-variant-tab .material-icons {
-				font-size: 1.05rem;
-			}
-			.kefin-help .kh-variant-tab .kh-tag {
-				font-size: 0.62rem;
-				font-weight: 700;
-				letter-spacing: 0.06em;
-				text-transform: uppercase;
-				padding: 0.05rem 0.35rem;
-				border-radius: var(--kh-radius-xs);
-				background: rgba(255, 255, 255, 0.16);
-			}
-			.kefin-help .kh-variant-desc {
-				flex-basis: 100%;
-				margin: 0;
-				padding: 0 0.3rem;
-				font-size: 0.86rem;
-				color: var(--kh-muted);
 			}
 
 			/* Shared bits for the generated layouts */
@@ -2643,33 +2414,9 @@
 	</head>
 	<body>
 		<div class="kefin-help">
-			<!-- Design preview: switches between candidate layouts. All of them render the
-			     same topics, read from the Classic layout's markup below. -->
-			<div class="kh-variant-bar">
-				<div class="kh-variant-label">
-					<span class="material-icons" aria-hidden="true">science</span>
-					<span>Design preview</span>
-				</div>
-				<div class="kh-variant-tabs" role="tablist" aria-label="Help page layouts"></div>
-				<p class="kh-variant-desc"></p>
-			</div>
-
-			<div class="kh-variant" data-variant="classic">
-			<header class="kh-hero">
-				<h1>Help &amp; Tips</h1>
-				<p>
-					This server has extras that plain Jellyfin doesn't: a watchlist, spoiler protection, anime extras, requests and more.
-					Here's what each one does and where to find it. Click a topic to open it, or search below.
-				</p>
-				<div class="kh-search">
-					<span class="material-icons" aria-hidden="true">search</span>
-					<input type="search" placeholder="Search help, e.g. watchlist, spoilers, skip recap" aria-label="Search help" autocomplete="off" />
-					<button type="button" class="kh-search-clear" aria-label="Clear search">
-						<span class="material-icons" aria-hidden="true">close</span>
-					</button>
-				</div>
-			</header>
-
+			<!-- The topics. The page reads this markup and builds the gallery from it;
+			     it is never shown itself. -->
+			<div class="kh-topics-src" hidden>
 			<main class="kh-main">
 				<!-- ======================================================= -->
 				<section class="kh-category" id="cat-getting-around" data-icon="explore">
@@ -3145,11 +2892,10 @@
 					</div>
 				</section>
 
-				<p class="kh-empty">No help topics match that search. Try a shorter word.</p>
 			</main>
 			</div>
 
-			<div class="kh-variant" data-variant="gallery" hidden></div>
+			<div class="kh-gallery"></div>
 
 			<script>
 				(function () {
@@ -3178,13 +2924,6 @@
 						if (label) b.setAttribute('aria-label', label);
 						return b;
 					}
-					function store(key, value) {
-						try {
-							if (value === undefined) return localStorage.getItem(key);
-							localStorage.setItem(key, value);
-						} catch (e) { /* private window or blocked storage */ }
-						return null;
-					}
 					function hue(node, h) {
 						node.classList.add('kv-hue');
 						node.style.setProperty('--hue', h);
@@ -3195,13 +2934,13 @@
 					}
 
 					// ---------------------------------------------------------------
-					// Content model. Every layout reads the topics from the Classic
-					// markup, so the words live in one place.
+					// Content model, read from the topic markup (.kh-topics-src), so the
+					// words live in one place.
 					// ---------------------------------------------------------------
-					var classic = root.querySelector('.kh-variant[data-variant="classic"]');
+					var source = root.querySelector('.kh-topics-src');
 					var HUES = { 'getting-around': 205, watching: 350, shows: 268, lists: 145, home: 185, finding: 38, extras: 320 };
 					var cats = [], topics = [], byId = {};
-					each(classic, '.kh-category', function (sec) {
+					each(source, '.kh-category', function (sec) {
 						var cid = sec.id.replace(/^cat-/, '');
 						// The heading holds its icon (a Material Icons ligature) before the title;
 						// read the title without it, or "explore" comes along as text.
@@ -4091,60 +3830,6 @@
 					}
 
 					// ---------------------------------------------------------------
-					// Classic: every topic as an expanding row
-					// ---------------------------------------------------------------
-					function buildClassic() {
-						var categoriesEl = Array.prototype.slice.call(classic.querySelectorAll('.kh-category'));
-						var input = classic.querySelector('.kh-search input');
-						var clearBtn = classic.querySelector('.kh-search-clear');
-						var openBefore = null;
-
-						function apply() {
-							var q = input.value.trim();
-							if (!q) {
-								classic.classList.remove('kh-searching', 'kh-no-results');
-								topics.forEach(function (t, i) {
-									t.el.hidden = false;
-									if (openBefore) t.el.open = openBefore[i];
-								});
-								categoriesEl.forEach(function (c) { c.hidden = false; });
-								openBefore = null;
-								return;
-							}
-							if (!openBefore) openBefore = topics.map(function (t) { return t.el.open; });
-							classic.classList.add('kh-searching');
-							var hits = search(q);
-							topics.forEach(function (t) { t.el.hidden = hits.indexOf(t) === -1; });
-							// Open the matches when there are only a few; a long list stays scannable.
-							hits.forEach(function (t) { t.el.open = hits.length <= 3; });
-							categoriesEl.forEach(function (c) {
-								c.hidden = !c.querySelector('details.kh-topic:not([hidden])');
-							});
-							classic.classList.toggle('kh-no-results', !hits.length);
-						}
-						input.addEventListener('input', apply);
-						clearBtn.addEventListener('click', function () {
-							input.value = '';
-							apply();
-							input.focus();
-						});
-
-						function open(id, smooth) {
-							var t = byId[id];
-							if (!t) return;
-							if (input.value) {
-								input.value = '';
-								apply();
-							}
-							t.el.open = true;
-							t.el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
-							t.el.classList.add('kh-flash');
-							setTimeout(function () { t.el.classList.remove('kh-flash'); }, 1600);
-						}
-						return { open: open };
-					}
-
-					// ---------------------------------------------------------------
 					// Gallery: tiles by category, each with a preview; topics open in a sheet
 					// ---------------------------------------------------------------
 					function buildGallery(host) {
@@ -4285,38 +3970,11 @@
 					}
 
 					// ---------------------------------------------------------------
-					// Layout switcher
+					// The page
 					// ---------------------------------------------------------------
-					var VARIANTS = [
-						{ id: 'gallery', label: 'Gallery', icon: 'apps', build: buildGallery,
-							desc: 'Tiles by category, each with a small preview of the feature. Open a card to try a working version; ← → page through topics, Esc closes.' },
-						{ id: 'classic', label: 'Classic', icon: 'view_agenda', build: buildClassic,
-							desc: 'For comparison: every topic as an expanding row, with search.' }
-					];
-					var hosts = {};
-					each(root, '.kh-variant', function (h) { hosts[h.getAttribute('data-variant')] = h; });
-					var tabsEl = root.querySelector('.kh-variant-tabs');
-					var descEl = root.querySelector('.kh-variant-desc');
-					var apis = {}, tabs = {}, activeName = null;
-
-					VARIANTS.forEach(function (v) {
-						var t = btn('kh-variant-tab', icon(v.icon) + esc(v.label));
-						t.setAttribute('role', 'tab');
-						t.addEventListener('click', function () { activate(v.id); });
-						tabs[v.id] = t;
-						tabsEl.appendChild(t);
-					});
-					function activate(id) {
-						var v = VARIANTS.filter(function (x) { return x.id === id; })[0] || VARIANTS[0];
-						if (activeName && apis[activeName] && apis[activeName].leave) apis[activeName].leave();
-						Object.keys(hosts).forEach(function (k) { hosts[k].hidden = k !== v.id; });
-						if (!apis[v.id]) apis[v.id] = v.build(hosts[v.id]);
-						fitAll(hosts[v.id]);
-						activeName = v.id;
-						Object.keys(tabs).forEach(function (k) { tabs[k].setAttribute('aria-selected', k === v.id ? 'true' : 'false'); });
-						descEl.textContent = v.desc;
-						store('kefinHelpLayout', v.id);
-					}
+					var galleryHost = root.querySelector('.kh-gallery');
+					var gallery = buildGallery(galleryHost);
+					fitAll(galleryHost);
 
 					// ---------------------------------------------------------------
 					// Skin. The CSS takes Jellyfin's values, or the active skin's. Under
@@ -4354,15 +4012,15 @@
 					}, true);
 
 					// Links between topics. Inside Jellyfin the hash is the router, so these
-					// never navigate; the layout on show opens the topic its own way.
+					// never navigate; they open the topic in its panel.
 					root.addEventListener('click', function (e) {
 						var a = e.target.closest && e.target.closest('a[data-goto]');
 						if (!a || !root.contains(a)) return;
 						e.preventDefault();
-						apis[activeName].open(a.getAttribute('data-goto'), true);
+						gallery.open(a.getAttribute('data-goto'));
 					});
 
-					// Deep links: #/help?topic=watchlist&layout=classic inside Jellyfin, or
+					// Deep links: #/help?topic=watchlist inside Jellyfin, or
 					// help.html?topic=watchlist / help.html#watchlist when previewing the file.
 					function param(name) {
 						var re = new RegExp('[?&]' + name + '=([\\w-]+)');
@@ -4371,13 +4029,12 @@
 					}
 					// For the page host: open a topic when #/help?topic=... is shown again.
 					root.khOpenTopic = function (id) {
-						if (byId[id] && apis[activeName]) apis[activeName].open(id, true);
+						if (byId[id]) gallery.open(id);
 					};
 					var initialTopic = param('topic');
 					if (!initialTopic && /^#[\w-]+$/.test(window.location.hash || '')) initialTopic = window.location.hash.slice(1).replace(/^topic-/, '');
-					activate(param('layout') || store('kefinHelpLayout') || 'gallery');
 					if (initialTopic && byId[initialTopic]) {
-						setTimeout(function () { apis[activeName].open(initialTopic, false); }, 50);
+						setTimeout(function () { gallery.open(initialTopic); }, 50);
 					}
 				})();
 			</script>
