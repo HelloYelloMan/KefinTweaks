@@ -3755,6 +3755,9 @@
                 imageUrl = `${serverAddress}/Items/${item.Id}/Images/Primary?${imageParams}&quality=96&tag=${item.PrimaryImageTag}`;
             } else if (item.ImageTags?.Thumb) {
                 imageUrl = `${serverAddress}/Items/${item.Id}/Images/Thumb?${imageParams}&quality=96&tag=${item.ImageTags?.Thumb}`;
+            } else if (item.Type === 'Season' && item.SeriesPrimaryImageTag) {
+                // A season with no poster of its own shows its series' poster.
+                imageUrl = `${serverAddress}/Items/${item.SeriesId}/Images/Primary?${imageParams}&quality=96&tag=${item.SeriesPrimaryImageTag}`;
             }
         } else if (cardFormat === 'series poster') {
             if (item.SeriesPrimaryImageTag) {
