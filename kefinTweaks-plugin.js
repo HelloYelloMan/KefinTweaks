@@ -1801,6 +1801,23 @@ window.KefinTweaksConfig = ${JSON.stringify(config, null, 2)};`;
 	background: none !important;
 }
 
+/* A custom page that keeps the backdrop treats it as Jellyfin Enhanced's calendar
+   tab does, which is how the Home page shows it plus the calendar's own dim:
+   - every skin: the calendar's dim layer;
+   - ElegantFin shows only the blurred copy of the backdrop on tabbed pages
+     (.withSectionTabs, which Home has and this page does not), hiding the sharp
+     ::after copy; on mobile its layer keeps the tabbed pages' opacity.
+   Abyss needs nothing more: it blurs the backdrop on any library page. */
+html.kefin-custom-page-backdrop .backgroundContainer.withBackdrop {
+	background: rgba(0, 0, 0, 0.7) !important;
+}
+html.kefin-custom-page-backdrop .backdropImage::after {
+	opacity: 0;
+}
+html.kefin-custom-page-backdrop.layout-mobile .backgroundContainer.withBackdrop {
+	opacity: 0.9;
+}
+
 header.MuiPaper-root + main.MuiBox-root .customPage {
 	margin-top: 3rem;
 }
