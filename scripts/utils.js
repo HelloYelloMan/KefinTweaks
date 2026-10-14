@@ -2794,7 +2794,7 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
 	content: none !important;
 }
 
-#reactRoot.kefin-custom-page-active .backdropImage {
+#reactRoot.kefin-custom-page-active:not(.kefin-custom-page-backdrop) .backdropImage {
 	background: none !important;
 }
 
@@ -2838,6 +2838,17 @@ main.MuiBox-root .customPage.libraryPage:not(.noSecondaryNavPage)[data-kefin-cus
         const root = document.getElementById('reactRoot') || document.documentElement;
         if (!root) return;
         root.classList.toggle('kefin-custom-page-active', !!active);
+    }
+
+    // Custom pages hide Jellyfin's backdrop (the previous page's would otherwise
+    // linger behind them), except one that asks for backdrops itself by carrying
+    // backdropPage, as the Help & Tips page does. Its onShow runs before this, so
+    // the class is already there.
+    function syncCustomPageBackdropClass(entry) {
+        const root = document.getElementById('reactRoot') || document.documentElement;
+        if (!root) return;
+        const page = entry && (entry.pageEl || document.getElementById(`customPage-${entry.safeTitle}`));
+        root.classList.toggle('kefin-custom-page-backdrop', !!(page && page.classList.contains('backdropPage')));
     }
 
     function clearFallbackReadyTimer() {
@@ -3124,6 +3135,7 @@ main.MuiBox-root .customPage.libraryPage:not(.noSecondaryNavPage)[data-kefin-cus
             }
         });
         syncCustomPageActiveClass(!!matched);
+        syncCustomPageBackdropClass(matched);
         if (!matched) {
             stopCustomPageTitleGuard();
         }

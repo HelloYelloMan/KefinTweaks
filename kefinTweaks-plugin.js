@@ -1797,7 +1797,7 @@ window.KefinTweaksConfig = ${JSON.stringify(config, null, 2)};`;
 	content: none !important;
 }
 
-#reactRoot.kefin-custom-page-active .backdropImage {
+#reactRoot.kefin-custom-page-active:not(.kefin-custom-page-backdrop) .backdropImage {
 	background: none !important;
 }
 

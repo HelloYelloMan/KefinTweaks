@@ -87,19 +87,25 @@
      * then does exactly what it does for Home, setting included. globalBackdropPage
      * draws from the whole library rather than the top parent in the URL.
      *
-     * It is sent a tick later: #/help is an unknown route to Jellyfin, which
-     * renders its fallback page, and that page's own pageshow clears the
-     * backdrop. libraryMenu's pageshow handler reads e.detail.isRestored, so the
-     * event carries a detail; true also stops it scrolling the page to the top.
+     * It is sent once, after the showing settles: #/help is an unknown route to
+     * Jellyfin, which renders its fallback page, and that page's own pageshow
+     * clears the backdrop; and a navigation shows a custom page several times in
+     * a row, each pageshow fetching a fresh random set. libraryMenu's pageshow
+     * handler reads e.detail.isRestored, so the event carries a detail; true also
+     * stops it scrolling the page to the top.
+     *
+     * KefinTweaks' custom-page CSS hides the backdrop on custom pages unless the
+     * page carries backdropPage (utils.js, kefin-custom-page-backdrop).
      */
     function showBackdrops(page) {
         if (!page) return;
         page.classList.add('backdropPage', 'globalBackdropPage');
         page.setAttribute('data-backdroptype', 'movie,series');
-        setTimeout(() => {
+        clearTimeout(page._helpBackdropTimer);
+        page._helpBackdropTimer = setTimeout(() => {
             if (page.classList.contains('hide') || !document.body.contains(page)) return;
             page.dispatchEvent(new CustomEvent('pageshow', { bubbles: true, detail: { isRestored: true } }));
-        }, 0);
+        }, 150);
     }
 
     async function registerHelpPage() {
