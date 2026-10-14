@@ -1144,10 +1144,7 @@
 				display: flex;
 				gap: 0.25em;
 			}
-			.kefin-help .pv-ov-top {
-				top: 0.3em;
-				bottom: auto;
-			}
+
 			.kefin-help .pv-ov .pv-btn {
 				width: 1.9em;
 				height: 1.9em;
@@ -1764,41 +1761,6 @@
 				opacity: 0;
 				transform: scale(0.85);
 				pointer-events: none;
-			}
-
-			/* Pinning */
-			.kefin-help .pv-pinwrap {
-				flex-wrap: wrap;
-				justify-content: center;
-				align-items: flex-start;
-				gap: 1.2em;
-			}
-			.kefin-help .pv-pinsrc .pv-pinmenu {
-				position: absolute;
-				top: 2.6em;
-				left: 55%;
-				z-index: 4;
-				min-width: 12em;
-			}
-			.kefin-help .pv-home {
-				display: flex;
-				flex-direction: column;
-				gap: 0.5em;
-				min-width: 12em;
-				padding: 0.7em;
-				border-radius: 0.7em;
-				background: #15171c;
-			}
-			.kefin-help .pv-homerow b {
-				display: block;
-				margin-bottom: 0.3em;
-				font-size: 0.72em;
-			}
-			.kefin-help .pv-homerow .pv-thumb {
-				width: 4.6em;
-			}
-			.kefin-help .pv-homerow .pv-poster {
-				width: 3em;
 			}
 
 			/* Home screen rows */
@@ -2673,6 +2635,144 @@
 				color: rgba(255, 255, 255, 0.55);
 				text-align: center;
 			}
+
+			/* ---------- Previews: pin ---------- */
+			.kefin-help .pv-pin2 {
+				align-items: flex-start;
+				gap: 1.4em;
+			}
+			.kefin-help .pv-pin2-src {
+				position: relative;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 0.3em;
+			}
+			.kefin-help .pv-pin2-menu {
+				position: absolute;
+				top: 6.4em;
+				left: 4.4em;
+				z-index: 6;
+				min-width: 11em;
+			}
+			.kefin-help .pv-pin2-home {
+				display: flex;
+				flex-direction: column;
+				gap: 0.55em;
+				width: 15.5em;
+				padding: 0.7em;
+				border-radius: 0.7em;
+				background: #15171c;
+			}
+			.kefin-help .pv-pin2-row b {
+				display: block;
+				margin-bottom: 0.3em;
+				font-size: 0.72em;
+			}
+			.kefin-help .pv-pin2-row .pv-row {
+				gap: 0.4em;
+			}
+			.kefin-help .pv-pin2-row .pv-thumb {
+				width: 4.4em;
+			}
+			.kefin-help .pv-pin2-items {
+				min-height: 4.5em;
+			}
+			.kefin-help .pv-pin2-card .pv-poster {
+				width: 3em;
+			}
+			.kefin-help .pv-pin2-unpin {
+				position: absolute;
+				top: 0.2em;
+				right: 0.2em;
+				width: 1.5em;
+				height: 1.5em;
+				background: rgba(0, 0, 0, 0.6);
+				color: var(--kh-accent);
+			}
+			.kefin-help .pv-pin2-unpin .material-icons {
+				font-size: 0.9em;
+			}
+			.kefin-help .pv-pin2-move {
+				position: absolute;
+				top: 50%;
+				display: grid;
+				place-items: center;
+				width: 1.1em;
+				height: 1.6em;
+				margin-top: -0.8em;
+				border-radius: 0.3em;
+				background: rgba(0, 0, 0, 0.55);
+			}
+			.kefin-help .pv-pin2-move .material-icons {
+				font-size: 0.9em;
+			}
+			.kefin-help .pv-pin2-l {
+				left: 0.1em;
+			}
+			.kefin-help .pv-pin2-r {
+				right: 0.1em;
+			}
+			.kefin-help .pv-pin2-dlg {
+				position: absolute;
+				left: 50%;
+				top: 50%;
+				z-index: 7;
+				display: flex;
+				flex-direction: column;
+				gap: 0.45em;
+				width: 16em;
+				padding: 0.9em 1em;
+				border: 1px solid rgba(255, 255, 255, 0.1);
+				border-radius: 0.8em;
+				background: #1c1e25;
+				box-shadow: 0 1em 2.5em rgba(0, 0, 0, 0.55);
+				transform: translate(-50%, -50%);
+			}
+			.kefin-help .pv-pin2-dlg > b {
+				font-size: 0.95em;
+			}
+			.kefin-help .pv-pin2-opt {
+				display: flex;
+				flex-direction: column;
+				gap: 0.15em;
+				padding: 0.5em 0.65em;
+				border: 1px solid rgba(255, 255, 255, 0.1);
+				border-radius: 0.5em;
+				background: rgba(255, 255, 255, 0.05);
+				text-align: left;
+				cursor: pointer;
+			}
+			.kefin-help .pv-pin2-opt:hover {
+				border-color: var(--kh-accent);
+			}
+			.kefin-help .pv-pin2-opt strong {
+				font-size: 0.8em;
+			}
+			.kefin-help .pv-pin2-opt span {
+				font-size: 0.66em;
+				color: rgba(255, 255, 255, 0.65);
+			}
+			.kefin-help .pv-pin2-sel,
+			.kefin-help .pv-pin2-name {
+				width: 100%;
+				padding: 0.3em 0.45em;
+				border: 1px solid rgba(255, 255, 255, 0.15);
+				border-radius: 0.35em;
+				background: #15171c;
+				color: #eceef1;
+				font: inherit;
+				font-size: 0.78em;
+			}
+			.kefin-help .pv-pin2-new {
+				display: flex;
+				flex-direction: column;
+				gap: 0.3em;
+			}
+			.kefin-help .pv-pin2-btns {
+				justify-content: flex-end;
+				margin-top: 0.2em;
+			}
 		</style>
 	</head>
 	<body>
@@ -3131,10 +3231,15 @@
 							<div class="kh-topic-body">
 								<ol>
 									<li>Open the <span class="kh-btn"><span class="material-icons" aria-hidden="true">more_vert</span></span> menu on a poster (or right-click it) and choose <span class="kh-btn"><span class="material-icons" aria-hidden="true">push_pin</span></span> <span class="kh-ui">Pin to Home Screen</span>.</li>
-									<li>Pick a list to add it to. <span class="kh-ui">Pinned</span> is the default, or choose <span class="kh-ui">New...</span> to start another row. Then press <span class="kh-ui">Pin</span>.</li>
+									<li>For a collection, show, library, genre or person, a window asks what to pin:
+										<ul>
+											<li><span class="kh-ui">Pin …</span> adds that one thing to a list on your Home screen.</li>
+											<li><span class="kh-ui">Pin Items from …</span> gives you a whole Home row of what's inside it, e.g. every movie in a collection. This one is done straight away.</li>
+										</ul>
+										A single movie or episode skips this step.</li>
+									<li>Pick the <span class="kh-ui">List</span> to add it to. It starts on the last list you used (<span class="kh-ui">Pinned</span> the first time); <span class="kh-ui">New...</span> starts another row with a name of your choosing. Then press <span class="kh-ui">Pin</span>.</li>
 								</ol>
-								<p>For a collection, library, show, genre, actor and so on, you can instead choose <span class="kh-ui">Pin Items from …</span>. That gives you a whole Home row of what's inside it, e.g. a row of every movie in a collection.</p>
-								<p>To unpin, hover over the pinned poster and click <span class="kh-btn"><span class="material-icons" aria-hidden="true">push_pin</span></span> <span class="kh-ui">Unpin from Home Screen</span>; the arrows beside it move it left or right. A message offers <span class="kh-ui">Undo</span> if you change your mind.</p>
+								<p>Each list is its own row on your Home screen. To take something off, hover over it there and click <span class="kh-btn"><span class="material-icons" aria-hidden="true">push_pin</span></span> <span class="kh-ui">Unpin from Home Screen</span>; the arrows at its sides move it left or right. A message offers <span class="kh-ui">Undo</span> if you change your mind.</p>
 							</div>
 						</details>
 					</div>
@@ -3934,17 +4039,84 @@
 
 
 					P('pin', {
-						html: '<div class="pv-row pv-pinwrap"><div class="pv-pcard pv-pinsrc">' + poster(150) + '<div class="pv-ov pv-ov-top">' + pb('more_vert', 'pv-more pv-hot', 'More') + '</div>' +
-							'<div class="pv-menu pv-pinmenu" hidden><button type="button">' + icon('playlist_add') + 'Add to playlist</button>' +
-							'<button type="button" class="pv-dopin">' + icon('push_pin') + 'Pin to Home Screen</button><button type="button">' + icon('info') + 'Media Info</button></div></div>' +
-							'<div class="pv-home"><div class="pv-cap">Your Home screen</div><div class="pv-homerow"><b>Continue Watching</b><div class="pv-row">' + thumb(40) + thumb(200) + '</div></div>' +
-							'<div class="pv-homerow pv-pinned pv-invisible"><b>Pinned</b><div class="pv-row"><div class="pv-pcard">' + poster(150) + '<div class="pv-ov">' + pb('push_pin', 'pv-unpin pv-on', 'Unpin from Home Screen') + '</div></div></div></div></div></div>',
-						init: function (n) {
-							var menu = n.querySelector('.pv-pinmenu');
-							on(n, '.pv-more', function () { menu.hidden = !menu.hidden; });
-							on(n, '.pv-dopin', function () { menu.hidden = true; n.querySelector('.pv-pinned').classList.remove('pv-invisible'); toast(n, 'Pinned to Pinned'); });
-							on(n, '.pv-unpin', function () { n.querySelector('.pv-pinned').classList.add('pv-invisible'); toast(n, 'Unpinned'); });
-							on(n, '.pv-menu button:not(.pv-dopin)', function () { menu.hidden = true; });
+						html: '<div class="pv-row pv-pin2">' +
+							'<div class="pv-pin2-src"><div class="pv-pcard">' + poster(150) + '<div class="pv-ov">' + pb('more_vert', 'pv-pin2-more pv-hot', 'More') + '</div></div>' +
+							'<div class="pv-cap">A collection</div>' +
+							'<div class="pv-menu pv-pin2-menu" hidden>' +
+							'<button type="button">' + icon('play_arrow') + 'Play</button>' +
+							'<button type="button">' + icon('playlist_add') + 'Add to playlist</button>' +
+							'<button type="button" class="pv-pin2-act">' + icon('push_pin') + 'Pin to Home Screen</button>' +
+							'<button type="button">' + icon('info') + 'Media Info</button></div></div>' +
+							'<div class="pv-pin2-home"><div class="pv-cap">Your Home screen</div>' +
+							'<div class="pv-pin2-row"><b>Continue Watching</b><div class="pv-row">' + thumb(40) + thumb(200) + thumb(320) + '</div></div>' +
+							'<div class="pv-pin2-row pv-pin2-slot pv-invisible"><b class="pv-pin2-title">Pinned</b><div class="pv-row pv-pin2-items"></div></div></div>' +
+							// For a collection, show, library and the like, the first window asks what to pin.
+							'<div class="pv-pin2-dlg pv-pin2-choice" hidden><b>Pin To Home Screen</b>' +
+							'<button type="button" class="pv-pin2-opt" data-o="item"><strong>Pin A collection</strong><span>Pin this item to a list on your home screen.</span></button>' +
+							'<button type="button" class="pv-pin2-opt" data-o="kids"><strong>Pin Items from A collection</strong><span>Show this item\'s children in a home section.</span></button></div>' +
+							// Then which list. It starts on the last list used; "Pinned" the first time.
+							'<div class="pv-pin2-dlg pv-pin2-list" hidden><span class="pv-cap">List</span>' +
+							'<select class="pv-pin2-sel" aria-label="List"><option>Pinned</option><option>Weekend</option><option value="__new__">New...</option></select>' +
+							'<div class="pv-pin2-new" hidden><span class="pv-cap">New list name</span><input class="pv-pin2-name" type="text" placeholder="List name" aria-label="New list name" /></div>' +
+							'<div class="pv-row pv-pin2-btns"><button type="button" class="pv-pill pv-small pv-ghost pv-pin2-cancel">Cancel</button>' +
+							'<button type="button" class="pv-pill pv-small pv-pin2-go">Pin</button></div></div></div>',
+						init: function (n, live) {
+							var menu = n.querySelector('.pv-pin2-menu'), choice = n.querySelector('.pv-pin2-choice'), list = n.querySelector('.pv-pin2-list');
+							var slot = n.querySelector('.pv-pin2-slot'), items = n.querySelector('.pv-pin2-items'), title = n.querySelector('.pv-pin2-title');
+							var sel = n.querySelector('.pv-pin2-sel'), newWrap = n.querySelector('.pv-pin2-new'), nameIn = n.querySelector('.pv-pin2-name');
+							var undoTimer = null, lastRow = null;
+							function closeAll() { menu.hidden = true; choice.hidden = true; list.hidden = true; }
+							function card(h, pinned) {
+								// A pinned card: Unpin at the top-right, Move left / Move right at the sides.
+								return '<div class="pv-pcard pv-pin2-card">' + poster(h) + (pinned
+									? '<button type="button" class="pv-btn pv-mini pv-pin2-unpin" title="Unpin from Home Screen" aria-label="Unpin from Home Screen">' + icon('push_pin') + '</button>' +
+										'<span class="pv-pin2-move pv-pin2-l">' + icon('chevron_left') + '</span><span class="pv-pin2-move pv-pin2-r">' + icon('chevron_right') + '</span>'
+									: '') + '</div>';
+							}
+							function showRow(name, html) {
+								title.textContent = name;
+								items.innerHTML = html;
+								slot.classList.remove('pv-invisible');
+								lastRow = { name: name, html: html };
+							}
+							function pinItem(listName) {
+								showRow(listName, card(150, true));
+								toast(n, 'Pinned to ' + esc(listName));
+							}
+							on(n, '.pv-pin2-more', function () { var open = menu.hidden; closeAll(); menu.hidden = !open; });
+							on(n, '.pv-pin2-act', function () { closeAll(); choice.hidden = false; });
+							on(n, '.pv-pin2-menu button:not(.pv-pin2-act)', function () { closeAll(); });
+							on(n, '.pv-pin2-opt', function (b) {
+								closeAll();
+								if (b.getAttribute('data-o') === 'kids') {
+									showRow('A collection', [30, 90, 210, 270].map(function (h) { return card(h, false); }).join(''));
+									toast(n, 'Pinned children as "A collection"');
+								} else {
+									list.hidden = false;
+								}
+							});
+							sel.addEventListener('change', function () { newWrap.hidden = sel.value !== '__new__'; });
+							on(n, '.pv-pin2-cancel', closeAll);
+							on(n, '.pv-pin2-go', function () {
+								var name = sel.value === '__new__' ? (nameIn.value.trim() || 'My list') : sel.value;
+								closeAll();
+								pinItem(name);
+							});
+							items.addEventListener('click', function (e) {
+								if (!e.target.closest('.pv-pin2-unpin') || !lastRow) return;
+								var row = lastRow;
+								slot.classList.add('pv-invisible');
+								toast(n, 'Unpinned A collection');
+								// The real message has an Undo button; here the row comes back after a moment.
+								clearTimeout(undoTimer);
+								if (live) undoTimer = setTimeout(function () { showRow(row.name, row.html); }, 2600);
+							});
+							if (!live) {
+								// The picture: the menu open on Pin to Home Screen, with a pinned row already there.
+								menu.hidden = false;
+								showRow('Pinned', card(150, true));
+							}
+							return function () { clearTimeout(undoTimer); };
 						}
 					});
 
