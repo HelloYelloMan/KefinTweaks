@@ -2687,14 +2687,16 @@
 							<div class="kh-topic-body">
 								<h3>Top bar</h3>
 								<ul>
-									<li><span class="kh-ui">Libraries</span> holds every library in one menu.</li>
-									<li><span class="kh-ui">Requests</span>, <span class="kh-ui">Calendar</span> and <span class="kh-ui">Seerr</span> are for new titles; see <a href="#/help?topic=requests" data-goto="requests">Requesting something new</a>.</li>
+									<li><span class="kh-ui">Libraries</span> holds every library in one menu, so the bar stays short.</li>
+									<li><span class="kh-ui">Watchlist</span> is your watch-later list; see <a href="#/help?topic=watchlist" data-goto="watchlist">Watchlist</a>.</li>
+									<li><span class="kh-ui">Requests</span>, <span class="kh-ui">Calendar</span> and <span class="kh-ui">Seerr</span> are for things that aren&#39;t here yet; see <a href="#/help?topic=requests" data-goto="requests">Requesting something new</a>.</li>
 									<li><span class="kh-btn"><span class="material-icons" aria-hidden="true">palette</span></span> changes the skin, and <span class="kh-btn"><span class="material-icons" aria-hidden="true">casino</span></span> opens something at random.</li>
 								</ul>
 								<h3>Side menu</h3>
 								<p><span class="kh-btn"><span class="material-icons" aria-hidden="true">menu</span></span> opens a side menu with your libraries, the Watchlist and Games.</p>
 								<h3>Breadcrumbs</h3>
-								<p>Show pages have a trail such as <span class="kh-path">Shows › A show › Season 1 › 1x01</span> for jumping back up; the season part lists the other seasons. It is hidden on narrow screens.</p>
+								<p>Show pages have a trail across the top, such as <span class="kh-path">Shows › A show › Season 1 › 1x01</span>. Each part takes you back to that level.</p>
+								<p>The season part opens a list of the show&#39;s other seasons instead, for jumping straight to one. Breadcrumbs are hidden on narrow screens.</p>
 							</div>
 						</details>
 
@@ -2710,13 +2712,14 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p><span class="kh-btn"><span class="material-icons" aria-hidden="true">palette</span></span> <span class="kh-ui">Appearance</span> in the top bar picks the skin and, where a skin has them, a colour scheme. The same choice is under <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Display</span> › <span class="kh-ui">Skin</span></span>.</p>
+								<p><span class="kh-btn"><span class="material-icons" aria-hidden="true">palette</span></span> <span class="kh-ui">Appearance</span> in the top bar picks how Jellyfin looks: the skin, and for skins that have them, a colour scheme.</p>
 								<ul>
-									<li><strong>ElegantFin</strong>: the server&#39;s default.</li>
-									<li><strong>Abyss</strong>: dark, with six colour schemes.</li>
-									<li><strong>Default</strong>: plain Jellyfin.</li>
+									<li><strong>ElegantFin</strong> is the server&#39;s default look.</li>
+									<li><strong>Abyss</strong> is dark and minimal, with six colour schemes.</li>
+									<li><strong>Default</strong> is plain Jellyfin.</li>
 								</ul>
-								<div class="kh-note"><span class="material-icons" aria-hidden="true">devices</span><span>Saved in this browser only, not your account.</span></div>
+								<p>The same choice is under <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Display</span> › <span class="kh-ui">Skin</span></span>, where the gear beside it turns extra skin options on and off.</p>
+								<div class="kh-note"><span class="material-icons" aria-hidden="true">devices</span><span>Your choice is saved in this browser only, not your account, so another device starts on the server&#39;s default.</span></div>
 							</div>
 						</details>
 					</div>
@@ -2737,9 +2740,14 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p>Openings and ending credits get a <span class="kh-ui">Skip Intro</span> or <span class="kh-ui">Skip Outro</span> button. Recaps and next-episode previews are detected too, but their buttons are off until you turn them on.</p>
-								<p><span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Playback</span> › <span class="kh-ui">Media Segment Actions</span></span> sets each kind to <span class="kh-ui">Ask To Skip</span> (show the button), <span class="kh-ui">Skip</span> (skip automatically) or <span class="kh-ui">None</span>.</p>
-								<div class="kh-note"><span class="material-icons" aria-hidden="true">info</span><span>The first episode of a season has no Skip Intro button, by design. Shows whose opening changes from episode to episode may be missed.</span></div>
+								<p>The server finds openings, ending credits, recaps and next-episode previews. During an opening or the credits, a <span class="kh-ui">Skip Intro</span> or <span class="kh-ui">Skip Outro</span> button appears.</p>
+								<p>Recap and preview buttons are off to begin with. <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Playback</span> › <span class="kh-ui">Media Segment Actions</span></span> sets each kind separately:</p>
+								<ul>
+									<li><span class="kh-ui">Ask To Skip</span> shows the button.</li>
+									<li><span class="kh-ui">Skip</span> skips it automatically.</li>
+									<li><span class="kh-ui">None</span> does nothing.</li>
+								</ul>
+								<div class="kh-note"><span class="material-icons" aria-hidden="true">info</span><span>The first episode of a season has no Skip Intro button, so you see the opening once. Shows whose opening changes from episode to episode may be missed or skipped slightly off.</span></div>
 							</div>
 						</details>
 
@@ -2756,7 +2764,12 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p>After 5 seconds paused, a screen shows the title, plot, progress and finish time. A click or <kbd>Space</kbd> resumes; <span class="kh-btn"><span class="material-icons" aria-hidden="true">close</span></span> or <kbd>Esc</kbd> closes it and stays paused; <span class="kh-btn"><span class="material-icons" aria-hidden="true">arrow_back</span></span> leaves the video.</p>
+								<p>Leave a video paused for 5 seconds and a screen comes up with the title, plot, how far through you are, and the time it will finish.</p>
+								<ul>
+									<li>Click anywhere, or press <kbd>Space</kbd>, to carry on watching.</li>
+									<li><span class="kh-btn"><span class="material-icons" aria-hidden="true">close</span></span> or <kbd>Esc</kbd> closes it and stays paused.</li>
+									<li><span class="kh-btn"><span class="material-icons" aria-hidden="true">arrow_back</span></span> leaves the video.</li>
+								</ul>
 							</div>
 						</details>
 
@@ -2770,8 +2783,16 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p>A button in the player controls cycles an old-TV effect: <span class="kh-btn"><span class="material-icons" aria-hidden="true">tv_off</span></span> off, <span class="kh-btn"><span class="material-icons" aria-hidden="true">tv</span></span> <strong>super</strong> and <span class="kh-btn"><span class="material-icons" aria-hidden="true">live_tv</span></span> <strong>kurozumi</strong>. It carries over to the next episode and resets when the page reloads.</p>
-								<div class="kh-warn"><span class="material-icons" aria-hidden="true">warning</span><span>Web browser only, and it needs a capable graphics card. Subtitles are burned into the video while it is on.</span></div>
+								<p>An old-TV effect for the web player, good for older shows. A button in the player controls cycles through it:</p>
+								<table class="kh-table">
+									<tbody>
+										<tr><td><span class="kh-btn"><span class="material-icons" aria-hidden="true">tv_off</span></span></td><td>Off</td></tr>
+										<tr><td><span class="kh-btn"><span class="material-icons" aria-hidden="true">tv</span></span></td><td><strong>super</strong>: scanlines and a soft glow</td></tr>
+										<tr><td><span class="kh-btn"><span class="material-icons" aria-hidden="true">live_tv</span></span></td><td><strong>kurozumi</strong>: stronger colour and a coarser screen texture</td></tr>
+									</tbody>
+								</table>
+								<p>It carries over to the next episode, and turns off when the page reloads.</p>
+								<div class="kh-warn"><span class="material-icons" aria-hidden="true">warning</span><span>Web browser only, and it needs a reasonably capable graphics card. While it is on, subtitles are burned into the video by the server.</span></div>
 							</div>
 						</details>
 
@@ -2786,9 +2807,10 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p>While a title&#39;s theme song or video plays, faint controls in the top-right corner mute it, change its volume, or show the video full screen.</p>
-								<p>Theme songs and videos can be turned off under <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Display</span></span>.</p>
-								<div class="kh-note"><span class="material-icons" aria-hidden="true">devices</span><span>These follow your account.</span></div>
+								<p>Some titles play their theme song or a video clip while you&#39;re on their page.</p>
+								<p>While one plays, faint controls in the top-right corner let you mute it, change its volume, or watch the video full screen. They brighten when you point at them.</p>
+								<p>Theme songs and videos can be turned off altogether under <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Display</span></span>.</p>
+								<div class="kh-note"><span class="material-icons" aria-hidden="true">devices</span><span>The volume, mute and on/off choices follow your account to every device.</span></div>
 							</div>
 						</details>
 
@@ -2809,7 +2831,12 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p>A show&#39;s page lists its episodes, scrolled to the one marked <span class="kh-ui">Next Up</span>. <span class="kh-ui">Select Season</span> switches season, and <span class="kh-btn"><span class="material-icons" aria-hidden="true">grid_view</span></span> shows the whole season as a grid. Specials appear in the season they belong to.</p>
+								<p>A show&#39;s page lists its episodes right there, scrolled to where you are. The episode to watch next is marked <span class="kh-ui">Next Up</span>.</p>
+								<ul>
+									<li><span class="kh-ui">Select Season</span> switches season.</li>
+									<li><span class="kh-btn"><span class="material-icons" aria-hidden="true">grid_view</span></span> shows the whole season at once as a grid.</li>
+								</ul>
+								<p>Specials that belong at a particular point appear in that season&#39;s list, after the finale or between episodes.</p>
 							</div>
 						</details>
 
@@ -2823,7 +2850,7 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p>For shows with bonus specials (talk shows, gag shorts, recaps; mostly anime), Alternate Order takes them out of the run of story episodes.</p>
+								<p>Some shows, mostly anime, have bonus specials: talk shows, gag shorts and recaps that would otherwise play between story episodes. Alternate Order moves them out of the way.</p>
 								<table class="kh-table">
 									<tbody>
 										<tr><td><span class="kh-btn"><span class="material-icons" aria-hidden="true">low_priority</span></span> Off</td><td>The order they aired in.</td></tr>
@@ -2831,7 +2858,8 @@
 										<tr><td><span class="kh-btn kh-on"><span class="material-icons" aria-hidden="true">visibility_off</span></span> Hidden</td><td>Bonus specials are skipped; they stay in the Specials season.</td></tr>
 									</tbody>
 								</table>
-								<p>The Alternate Order button on a show&#39;s page sets it for that show; the default for every show is under <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Display</span> › <span class="kh-ui">Alternate Order</span></span>. Autoplay, season pages, Next Up and Continue Watching all follow it.</p>
+								<p>The Alternate Order button on a show&#39;s page sets it for that show, and only appears on shows that have bonus specials. The default for every show is under <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Display</span> › <span class="kh-ui">Alternate Order</span></span>.</p>
+								<p>Autoplay, season pages, Next Up and Continue Watching all follow it. With Reorder, a show you&#39;ve finished can come back to Next Up for its bonus specials.</p>
 								<div class="kh-warn"><span class="material-icons" aria-hidden="true">warning</span><span>Hidden can skip specials that carry some of the story.</span></div>
 								<span class="kh-from">From Vault Tweaks</span>
 							</div>
@@ -2847,9 +2875,10 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p>Cast rows pair each actor with the character they play. An actor with several roles has them on one shared card; point at a part to see that character&#39;s name. A show&#39;s cast only covers seasons up to the one you&#39;re on.</p>
-								<p>Character pages show who voices them, what they appear in, and links to AniList, AniDB and MyAnimeList; spoilers in descriptions stay blacked out until clicked. Actor pages get a <span class="kh-ui">Characters</span> row.</p>
-								<p>Name language, which seasons&#39; cast to show and where character data comes from are under <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Display</span> › <span class="kh-ui">Characters</span></span>.</p>
+								<p>Cast rows pair each actor with the character they play. When an actor has several roles, the characters share one card; point at a part of it to see that character&#39;s name.</p>
+								<p>On a show&#39;s page, the cast only covers seasons up to the one you&#39;re on, so later cast members don&#39;t give anything away.</p>
+								<p>Clicking a character opens their page: who voices them, what they appear in, and links to AniList, AniDB and MyAnimeList. Spoilers in descriptions stay blacked out until clicked. Actor pages get a <span class="kh-ui">Characters</span> row of everyone they&#39;ve played.</p>
+								<p>Name language, which seasons&#39; cast to show, and where character data comes from are under <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Display</span> › <span class="kh-ui">Characters</span></span>.</p>
 								<span class="kh-from">From Vault Tweaks</span>
 							</div>
 						</details>
@@ -2864,9 +2893,17 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p>On a show, movie or collection with Spoiler Guard on, everything you haven&#39;t watched is blurred and its details hidden, until you watch it. The next episode and the rest of its season keep their titles so you can find your place. It works in every Jellyfin app.</p>
+								<p>Turn Spoiler Guard on for a show, movie or collection, and everything you haven&#39;t watched yet is blurred and its details hidden. Each episode shows normally once you&#39;ve watched it.</p>
+								<p>The next episode, and the rest of its season, keep their titles so you can find your place. It works in every Jellyfin app, not just the browser.</p>
+								<h3>Turning it on</h3>
 								<p><span class="kh-btn"><span class="material-icons" aria-hidden="true">blur_off</span></span> on the title&#39;s page turns it on and off. For something not on the server yet, <span class="kh-ui">Enable Spoiler Guard</span> in its Seerr details turns it on for when it arrives.</p>
-								<p>Hidden: pictures (including the previews when scrubbing), descriptions, later seasons&#39; episode titles, air dates, ratings, guest stars, chapter names and tags. The Spoiler Guard section of the Jellyfin Enhanced panel (<kbd>?</kbd>) can keep any of these visible.</p>
+								<h3>What it hides</h3>
+								<ul>
+									<li>Pictures, including the previews when you scrub through a video.</li>
+									<li>Descriptions, and the episode titles of later seasons.</li>
+									<li>Air dates, ratings, guest stars, chapter names and tags.</li>
+								</ul>
+								<p>The Spoiler Guard section of the Jellyfin Enhanced panel (<kbd>?</kbd>) can keep any of these visible.</p>
 								<span class="kh-from">From Jellyfin Enhanced</span>
 							</div>
 						</details>
@@ -2887,8 +2924,10 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p><span class="kh-btn"><span class="material-icons" aria-hidden="true">bookmark_border</span></span> on a poster, a title&#39;s page or a Home banner adds it to your Watchlist, and turns green. Movies and episodes leave the list once watched; seasons and shows once finished.</p>
-								<p>The list is under <span class="kh-ui">Watchlist</span> in the top bar; see <a href="#/help?topic=watchlist-page" data-goto="watchlist-page">The Watchlist page</a>.</p>
+								<p><span class="kh-btn"><span class="material-icons" aria-hidden="true">bookmark_border</span></span> adds something to your Watchlist. It&#39;s on posters, on a title&#39;s page, and on the banners at the top of Home, and turns green once added.</p>
+								<p>Movies, shows, seasons, episodes, collections and playlists can all go on it.</p>
+								<div class="kh-note"><span class="material-icons" aria-hidden="true">auto_awesome</span><span>Things leave the list by themselves once watched: movies and episodes when you finish them, seasons and shows when you&#39;ve watched all of them.</span></div>
+								<p>The list itself is under <span class="kh-ui">Watchlist</span> in the top bar; see <a href="#/help?topic=watchlist-page" data-goto="watchlist-page">The Watchlist page</a>.</p>
 							</div>
 						</details>
 
@@ -2902,16 +2941,17 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
+								<p>The Watchlist page has four tabs:</p>
 								<table class="kh-table">
 									<tbody>
-										<tr><td><span class="kh-ui">Watchlist</span></td><td>What you&#39;ve saved, by type, as posters or a list.</td></tr>
-										<tr><td><span class="kh-ui">Series Progress</span></td><td>Every show you&#39;ve started and what&#39;s left of it.</td></tr>
-										<tr><td><span class="kh-ui">Movie History</span></td><td>Every movie you&#39;ve watched.</td></tr>
-										<tr><td><span class="kh-ui">Statistics</span></td><td>Hours watched, top shows and when you watch.</td></tr>
+										<tr><td><span class="kh-ui">Watchlist</span></td><td>What you&#39;ve saved, grouped by type, as posters or a list.</td></tr>
+										<tr><td><span class="kh-ui">Series Progress</span></td><td>Every show you&#39;ve started, how far through you are, and which episodes are left.</td></tr>
+										<tr><td><span class="kh-ui">Movie History</span></td><td>Every movie you&#39;ve watched, newest first.</td></tr>
+										<tr><td><span class="kh-ui">Statistics</span></td><td>Hours watched, your top shows, and charts of when you watch.</td></tr>
 									</tbody>
 								</table>
-								<p><span class="kh-btn"><span class="material-icons" aria-hidden="true">import_export</span></span> exports or imports the list, or turns it into a playlist.</p>
-								<div class="kh-warn"><span class="material-icons" aria-hidden="true">warning</span><span><span class="kh-ui">+ Mark All As Watched</span> in Series Progress cannot be undone.</span></div>
+								<p><span class="kh-btn"><span class="material-icons" aria-hidden="true">import_export</span></span> exports your list to a file, imports one, or turns the list into a playlist.</p>
+								<div class="kh-warn"><span class="material-icons" aria-hidden="true">warning</span><span><span class="kh-ui">+ Mark All As Watched</span> in Series Progress marks every episode of a show as watched, and cannot be undone.</span></div>
 							</div>
 						</details>
 
@@ -2926,8 +2966,8 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p><span class="kh-btn"><span class="material-icons" aria-hidden="true">close</span></span> on a part-watched poster takes it off Continue Watching by clearing its resume point.</p>
-								<div class="kh-warn"><span class="material-icons" aria-hidden="true">warning</span><span>There is no undo; it starts from the beginning next time.</span></div>
+								<p><span class="kh-btn"><span class="material-icons" aria-hidden="true">close</span></span> on a part-watched poster takes it off Continue Watching. It works on any part-watched poster, not only in that row.</p>
+								<div class="kh-warn"><span class="material-icons" aria-hidden="true">warning</span><span>It works by clearing where you stopped, so there is no undo: it starts from the beginning next time.</span></div>
 							</div>
 						</details>
 
@@ -2941,8 +2981,9 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p><span class="kh-ui">Pin to Home Screen</span> in a poster&#39;s <span class="kh-btn"><span class="material-icons" aria-hidden="true">more_vert</span></span> menu adds it to a list, and each list is a row on your Home screen. For a collection, show, library, genre or person you can pin <span class="kh-ui">Items from</span> it instead, for a row of everything inside.</p>
-								<p>You pick the list when pinning; <span class="kh-ui">New...</span> starts another. Pinned posters have an unpin button and arrows to reorder them.</p>
+								<p><span class="kh-ui">Pin to Home Screen</span>, in a poster&#39;s <span class="kh-btn"><span class="material-icons" aria-hidden="true">more_vert</span></span> menu, puts it on your Home screen. Pinned things go into lists, and each list is its own Home row.</p>
+								<p>For a collection, show, library, genre or person, you can choose instead to pin <span class="kh-ui">Items from</span> it: a row of everything inside, such as every movie in a collection.</p>
+								<p>You pick the list when pinning; <span class="kh-ui">New...</span> starts another one. Pinned posters have an unpin button, and arrows to move them along the row.</p>
 							</div>
 						</details>
 					</div>
@@ -2962,8 +3003,11 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p>Each Home row&#39;s title has <span class="kh-btn"><span class="material-icons" aria-hidden="true">refresh</span></span> reload, <span class="kh-btn"><span class="material-icons" aria-hidden="true">grid_view</span></span> grid or row, and <span class="kh-btn"><span class="material-icons" aria-hidden="true">settings</span></span> configure: move, hide, or change how its posters look.</p>
-								<p><span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Home</span> › <span class="kh-ui">Home Sections Order</span></span> reorders, hides and brings back every row; <span class="kh-ui">Restore Defaults</span> resets them. Your layout is yours alone and follows your account.</p>
+								<p>Your Home screen layout is your own: it follows your account, and changing it doesn&#39;t affect anyone else.</p>
+								<h3>From a row</h3>
+								<p>Each row&#39;s title has <span class="kh-btn"><span class="material-icons" aria-hidden="true">refresh</span></span> to reload it, <span class="kh-btn"><span class="material-icons" aria-hidden="true">grid_view</span></span> to switch between a scrolling row and a grid, and <span class="kh-btn"><span class="material-icons" aria-hidden="true">settings</span></span> to move it, hide it, or change how its posters look.</p>
+								<h3>All rows at once</h3>
+								<p><span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Home</span> › <span class="kh-ui">Home Sections Order</span></span> lists every row, to reorder them, hide them or bring hidden ones back. <span class="kh-ui">Restore Defaults</span> puts everything back as it started.</p>
 							</div>
 						</details>
 
@@ -2977,7 +3021,14 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p>Scrolling down Home loads more rows picked from what you watch: <em>Because you watched …</em>, <em>Because … is on your Watchlist</em>, and genre, studio and collection rows. Seasonal rows appear around Halloween, Thanksgiving and Christmas.</p>
+								<p>As you scroll down Home, more rows load, picked from what you watch:</p>
+								<ul>
+									<li><em>Because you watched …</em>, <em>Because you finished …</em>, <em>Because you liked …</em></li>
+									<li><em>Because … is on your Watchlist</em></li>
+									<li>genre, studio and collection rows, such as <em>Top Rated Comedy Movies</em></li>
+								</ul>
+								<p>They change from visit to visit, and <span class="kh-btn"><span class="material-icons" aria-hidden="true">refresh</span></span> reloads one.</p>
+								<p>Seasonal rows appear by themselves around Halloween, Thanksgiving and Christmas.</p>
 							</div>
 						</details>
 
@@ -2991,8 +3042,9 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p>The slideshow at the top of Home shows anime and anime movies that are new in the last week. Arrow keys or a swipe change slide; <kbd>Space</kbd> pauses.</p>
-								<p>Spotlight rows further down show one title at a time in the same way.</p>
+								<p>The slideshow at the top of Home shows anime and anime movies that are new, or have a new episode out, in the last week.</p>
+								<p>Arrow keys or a swipe move between slides, and <kbd>Space</kbd> pauses it. Each slide can be played, opened, favourited or added to your Watchlist.</p>
+								<p>Spotlight rows further down Home show one title at a time in the same way.</p>
 							</div>
 						</details>
 					</div>
@@ -3013,10 +3065,17 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p>Titles that aren&#39;t on the server show up in search under <span class="kh-ui">Discover on Seerr</span>, and in the <span class="kh-ui">Seerr</span> tab. <span class="kh-ui">Request</span> asks for one (for a show, choose the seasons); it appears on the server once downloaded.</p>
-								<p>Missing seasons (<span class="kh-ui">Request More</span> on a show&#39;s page), a title&#39;s <span class="kh-ui">Recommended</span> row and a collection&#39;s missing movies can be requested too.</p>
-								<p>The <span class="kh-ui">Requests</span> tab tracks downloads, your requests, reported issues and recent additions. <span class="kh-ui">Report issue</span> on a title&#39;s page flags bad video, audio or subtitles.</p>
-								<div class="kh-note"><span class="material-icons" aria-hidden="true">info</span><span>If you have a request limit, the Request window shows what&#39;s left.</span></div>
+								<p>Titles that aren&#39;t on the server show up in search under <span class="kh-ui">Discover on Seerr</span>, and can be browsed in the <span class="kh-ui">Seerr</span> tab. <span class="kh-ui">Request</span> asks for one; for a show you choose the seasons. It appears on the server once it has downloaded.</p>
+								<p>You can also request:</p>
+								<ul>
+									<li>missing seasons, with <span class="kh-ui">Request More</span> on a show&#39;s page;</li>
+									<li>titles in the <span class="kh-ui">Recommended</span> row on a title&#39;s page;</li>
+									<li>the missing movies listed on a collection&#39;s page.</li>
+								</ul>
+								<h3>Keeping track</h3>
+								<p>The <span class="kh-ui">Requests</span> tab shows downloads in progress, your requests and their status, reported issues, and recent additions.</p>
+								<p><span class="kh-ui">Report issue</span> on a title&#39;s page flags a problem such as bad video, missing audio or wrong subtitles.</p>
+								<div class="kh-note"><span class="material-icons" aria-hidden="true">info</span><span>If you have a request limit, the Request window shows how many you have left.</span></div>
 								<span class="kh-from">From Jellyfin Enhanced and Seerr</span>
 							</div>
 						</details>
@@ -3031,7 +3090,8 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p>The <span class="kh-ui">Calendar</span> tab shows upcoming episodes and releases by day, week, month or as a list. A coloured chip shows only that kind of release.</p>
+								<p>The <span class="kh-ui">Calendar</span> tab shows upcoming episodes and movie releases, by day, week or month, or as a list.</p>
+								<p>A coloured chip shows only that kind of release; click it again for everything. Entries already on the server open their page.</p>
 								<div class="kh-note"><span class="material-icons" aria-hidden="true">info</span><span>Its <span class="kh-ui">Watchlist</span> filter means your Favorites, not the Watchlist.</span></div>
 							</div>
 						</details>
@@ -3046,7 +3106,8 @@
 								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
 							</summary>
 							<div class="kh-topic-body">
-								<p><span class="kh-btn"><span class="material-icons" aria-hidden="true">casino</span></span> in the top bar, or <kbd>R</kbd>, opens a random movie or show. What it picks from is set under <span class="kh-ui">Random Button Settings</span> in the Jellyfin Enhanced panel.</p>
+								<p><span class="kh-btn"><span class="material-icons" aria-hidden="true">casino</span></span> in the top bar, or <kbd>R</kbd>, opens a random movie or show. It doesn&#39;t start playing, so you can roll again.</p>
+								<p>What it picks from (movies, shows, unwatched only) is set under <span class="kh-ui">Random Button Settings</span> in the Jellyfin Enhanced panel.</p>
 							</div>
 						</details>
 
@@ -3070,13 +3131,14 @@
 								<p>Jellyfin Enhanced&#39;s own settings, opened with <kbd>?</kbd> or from your profile menu. They follow your account.</p>
 								<table class="kh-table">
 									<tbody>
-										<tr><td><span class="kh-ui">Playback Settings</span></td><td>Pause, or switch to picture-in-picture, when you change tab; hold on the video for 2× speed.</td></tr>
-										<tr><td><span class="kh-ui">Auto-Skip Settings</span></td><td>Skip intros and endings without the button; see <a href="#/help?topic=skip" data-goto="skip">Skipping intros</a>.</td></tr>
-										<tr><td><span class="kh-ui">Subtitle Settings</span></td><td>Subtitle styles, sizes and fonts, for subtitles without their own styling.</td></tr>
-										<tr><td><span class="kh-ui">UI Settings</span></td><td>Watch progress, file size and audio languages on title pages; quality labels on posters.</td></tr>
+										<tr><td><span class="kh-ui">Playback Settings</span></td><td>Pause, or switch to picture-in-picture, when you change browser tab; hold on the video for 2× speed.</td></tr>
+										<tr><td><span class="kh-ui">Auto-Skip Settings</span></td><td>Skip intros and endings without pressing the button; see <a href="#/help?topic=skip" data-goto="skip">Skipping intros</a>.</td></tr>
+										<tr><td><span class="kh-ui">Subtitle Settings</span></td><td>Subtitle styles, sizes and fonts, for subtitles that don&#39;t bring their own styling.</td></tr>
+										<tr><td><span class="kh-ui">UI Settings</span></td><td>Watch progress, file size and audio languages on title pages, and quality labels on posters.</td></tr>
 										<tr><td><span class="kh-ui">Spoiler Guard</span></td><td>What stays visible on protected titles; see <a href="#/help?topic=spoiler-guard" data-goto="spoiler-guard">Spoiler Guard</a>.</td></tr>
 									</tbody>
 								</table>
+								<p>The panel also lists every keyboard shortcut, and has a search box.</p>
 								<span class="kh-from">From Jellyfin Enhanced</span>
 							</div>
 						</details>
