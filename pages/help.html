@@ -643,6 +643,14 @@
 			.kefin-help .kv-gal-cat {
 				margin: 0 0 2.2rem;
 			}
+			.kefin-help .kv-gal-cat h2.kv-gal-cath {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+			}
+			.kefin-help .kv-gal-cath .material-icons {
+				color: var(--kv-c);
+			}
 			.kefin-help .kv-gal-cat h2 {
 				margin: 0 0 0.8rem;
 				font-size: 1.15rem;
@@ -3464,7 +3472,11 @@
 					var cats = [], topics = [], byId = {};
 					each(classic, '.kh-category', function (sec) {
 						var cid = sec.id.replace(/^cat-/, '');
-						var cat = { id: cid, title: sec.querySelector('h2').textContent.trim(), icon: sec.getAttribute('data-icon') || 'help', hue: HUES[cid] || 200, topics: [] };
+						// The heading holds its icon (a Material Icons ligature) before the title;
+						// read the title without it, or "explore" comes along as text.
+						var h2 = sec.querySelector('h2').cloneNode(true);
+						each(h2, '.material-icons', function (i) { i.remove(); });
+						var cat = { id: cid, title: h2.textContent.trim(), icon: sec.getAttribute('data-icon') || 'help', hue: HUES[cid] || 200, topics: [] };
 						each(sec, 'details.kh-topic', function (d) {
 							var t = {
 								id: d.id.replace(/^topic-/, ''),
@@ -4421,7 +4433,7 @@
 						var tiles = {};
 						var catEls = cats.map(function (c) {
 							var sec = el('section', 'kv-gal-cat');
-							sec.appendChild(el('h2', null, esc(c.title)));
+							sec.appendChild(hue(el('h2', 'kv-gal-cath', icon(c.icon) + esc(c.title)), c.hue));
 							var grid = el('div', 'kv-gal-grid');
 							c.topics.forEach(function (t) {
 								// A div, not a button: the preview inside holds buttons of its own.
