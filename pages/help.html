@@ -1339,11 +1339,7 @@
 				min-width: 5.5em;
 				white-space: nowrap;
 			}
-			/* Alternate Order: the chips can take two lines and the label changes
-			   length; both keep their room so the buttons never move. */
-			.kefin-help .pv-gresult {
-				min-height: 1.4em;
-			}
+
 			.kefin-help .pv-ao {
 				align-content: flex-start;
 				min-height: 4.6em;
@@ -1933,18 +1929,6 @@
 			@keyframes pv-roll {
 				from { transform: rotate(-200deg) scale(0.6); }
 				to { transform: none; }
-			}
-
-			/* Games */
-			.kefin-help .pv-lut {
-				display: flex;
-				width: 100%;
-				height: 4em;
-				border-radius: 0.6em;
-				overflow: hidden;
-			}
-			.kefin-help .pv-lut i {
-				flex: 1;
 			}
 
 			/* ---------- Previews: tu ---------- */
@@ -2826,7 +2810,7 @@
 								</ul>
 								<h3>The side menu</h3>
 								<p>
-									On a wide screen, the <span class="kh-btn"><span class="material-icons" aria-hidden="true">menu</span></span> <span class="kh-ui">Open Menu</span> button opens a side menu with your libraries, the Watchlist and <a href="#/help?topic=games" data-goto="games">Games</a>. On phones the same menu is behind the menu icon.
+									On a wide screen, the <span class="kh-btn"><span class="material-icons" aria-hidden="true">menu</span></span> <span class="kh-ui">Open Menu</span> button opens a side menu with your libraries, the Watchlist and Games. On phones the same menu is behind the menu icon.
 								</p>
 								<h3>Breadcrumbs</h3>
 								<p>
@@ -3392,26 +3376,9 @@
 				</section>
 
 				<!-- ======================================================= -->
-				<section class="kh-category" id="cat-extras" data-icon="sports_esports">
-					<h2><span class="material-icons" aria-hidden="true">sports_esports</span>Extras</h2>
+				<section class="kh-category" id="cat-extras" data-icon="extension">
+					<h2><span class="material-icons" aria-hidden="true">extension</span>Extras</h2>
 					<div class="kh-topics">
-						<details class="kh-topic" id="topic-games" data-keywords="games quiz movie lut 3x3 guess play fun">
-							<summary>
-								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">sports_esports</span></span>
-								<span class="kh-topic-head">
-									<span class="kh-topic-title">Games</span>
-									<span class="kh-topic-summary">Guess-the-movie games made from the library</span>
-								</span>
-								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
-							</summary>
-							<div class="kh-topic-body">
-								<p>Open <span class="kh-btn"><span class="material-icons" aria-hidden="true">sports_esports</span></span> <span class="kh-ui">Games</span> in the side menu.</p>
-								<ul>
-									<li><strong>Movie LUT Game</strong>: guess the movie from a strip of colours taken from its frames.</li>
-									<li><strong>3x3 Game</strong>: nine movie backdrops; name as many as you can in 60 seconds. You get 3 re-rolls.</li>
-								</ul>
-							</div>
-						</details>
 						<details class="kh-topic" id="topic-enhanced-panel" data-keywords="jellyfin enhanced panel settings tune subtitle style auto pause picture in picture long press 2x speed watch progress file size audio language tags quality">
 							<summary>
 								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">tune</span></span>
@@ -4251,41 +4218,6 @@
 					});
 
 					// ----- Extras -----
-					var LUTS = [
-						['A desert movie', [32, 28, 36, 24, 30, 40, 20, 34]],
-						['An ocean movie', [200, 190, 210, 185, 220, 195, 205, 180]],
-						['A neon city movie', [300, 320, 280, 190, 310, 330, 290, 200]]
-					];
-					P('games', {
-						html: '<div class="pv-col pv-w"><div class="pv-cap">Movie LUT Game: which movie are these colours from?</div><div class="pv-lut"></div>' +
-							'<div class="pv-row pv-center pv-opts">' + LUTS.map(function (l, i) {
-								return '<button type="button" class="pv-pill pv-small pv-ghost pv-opt' + (i === 1 ? ' pv-hot' : '') + '" data-i="' + i + '">' + l[0] + '</button>';
-							}).join('') + '</div>' +
-							'<div class="pv-label pv-gresult"></div></div>',
-						init: function (n, live) {
-							var answer = 0, timer = null;
-							function round() {
-								answer = Math.floor(Math.random() * LUTS.length);
-								if (!live) answer = 1;
-								var hs = LUTS[answer][1];
-								var stripes = '';
-								for (var i = 0; i < 24; i++) {
-									var h = hs[i % hs.length] + (i * 7) % 15;
-									stripes += '<i style="background:hsl(' + h + ' ' + (45 + (i * 13) % 35) + '% ' + (25 + (i * 17) % 45) + '%)"></i>';
-								}
-								n.querySelector('.pv-lut').innerHTML = stripes;
-								n.querySelector('.pv-gresult').textContent = '';
-							}
-							on(n, '.pv-opt', function (b) {
-								var right = +b.getAttribute('data-i') === answer;
-								n.querySelector('.pv-gresult').textContent = right ? 'Correct!' : 'Not quite: it was ' + LUTS[answer][0].toLowerCase();
-								clearTimeout(timer);
-								timer = setTimeout(round, 1800);
-							});
-							round();
-							return function () { clearTimeout(timer); };
-						}
-					});
 
 
 					P('enhanced-panel', {
