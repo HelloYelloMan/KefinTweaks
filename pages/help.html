@@ -136,69 +136,6 @@
 				display: block;
 			}
 
-			/* ---------- Featured topics ---------- */
-			.kefin-help .kh-featured {
-				margin: 0.4rem 0 2.25rem;
-			}
-			.kefin-help .kh-featured-label {
-				margin: 0 0 0.7rem;
-				font-size: 0.8rem;
-				font-weight: 700;
-				letter-spacing: 0.08em;
-				text-transform: uppercase;
-				color: var(--kh-muted);
-			}
-			.kefin-help .kh-featured-grid {
-				display: grid;
-				grid-template-columns: repeat(auto-fill, minmax(16.5rem, 1fr));
-				gap: 0.65rem;
-			}
-			.kefin-help .kh-feature {
-				display: flex;
-				align-items: center;
-				gap: 0.85rem;
-				padding: 0.9rem 1rem;
-				border-radius: var(--kh-radius);
-				background: var(--kh-surface);
-				border: 1px solid var(--kh-border);
-				color: inherit;
-				text-decoration: none;
-				transition: background 0.15s, border-color 0.15s, transform 0.15s;
-			}
-			.kefin-help .kh-feature:hover,
-			.kefin-help .kh-feature:focus-visible {
-				background: var(--kh-surface-hover);
-				border-color: var(--kh-accent);
-				transform: translateY(-1px);
-				outline: none;
-			}
-			.kefin-help .kh-feature-icon {
-				flex: none;
-				display: grid;
-				place-items: center;
-				width: 2.75rem;
-				height: 2.75rem;
-				border-radius: var(--kh-radius-sm);
-				background: var(--kh-accent);
-				color: var(--kh-on-accent, #fff);
-			}
-			.kefin-help .kh-feature-text {
-				min-width: 0;
-			}
-			.kefin-help .kh-feature-title {
-				display: block;
-				font-weight: 650;
-			}
-			.kefin-help .kh-feature-blurb {
-				display: block;
-				color: var(--kh-muted);
-				font-size: 0.88rem;
-				line-height: 1.35;
-			}
-			.kefin-help .kh-searching .kh-featured {
-				display: none;
-			}
-
 			/* ---------- Categories and topics ---------- */
 			.kefin-help .kh-category {
 				margin: 0 0 2.25rem;
@@ -771,69 +708,6 @@
 				}
 			}
 
-			/* ---------- Featured: large preview cards, 3 x 2 ---------- */
-			.kefin-help .kv-featgrid {
-				display: grid;
-				grid-template-columns: repeat(3, minmax(0, 1fr));
-				gap: 1rem;
-				margin: 0 0 2.6rem;
-			}
-			@media (max-width: 1000px) {
-				.kefin-help .kv-featgrid {
-					grid-template-columns: repeat(2, minmax(0, 1fr));
-				}
-			}
-			@media (max-width: 640px) {
-				.kefin-help .kv-featgrid {
-					grid-template-columns: 1fr;
-				}
-			}
-			.kefin-help .kv-feat {
-				display: flex;
-				flex-direction: column;
-				border-radius: var(--kh-radius);
-				overflow: hidden;
-				border: 1px solid var(--kh-border);
-				background: var(--kh-surface);
-				color: inherit;
-				text-decoration: none;
-				transition: transform 0.15s, border-color 0.15s;
-			}
-			.kefin-help .kv-feat:hover,
-			.kefin-help .kv-feat:focus-visible {
-				transform: translateY(-2px);
-				border-color: var(--kv-c);
-				outline: none;
-			}
-			.kefin-help .kv-feat .pv {
-				height: 15.5rem;
-				min-height: 0;
-				font-size: 0.74rem; /* until fitPreview has measured it */
-				border-radius: 0;
-				border-bottom: 1px solid var(--kh-border);
-			}
-			.kefin-help .kv-feat-text {
-				display: flex;
-				flex-direction: column;
-				gap: 0.2rem;
-				padding: 0.95rem 1.15rem 1.15rem;
-			}
-			.kefin-help .kv-feat-head {
-				display: flex;
-				align-items: center;
-				gap: 0.45rem;
-				font-weight: 700;
-				font-size: 1.2rem;
-			}
-			.kefin-help .kv-feat-head .material-icons {
-				font-size: 1.3rem;
-				color: color-mix(in srgb, var(--kv-c) 70%, white);
-			}
-			.kefin-help .kv-feat-sum {
-				font-size: 0.9rem;
-				color: var(--kh-muted);
-			}
-
 			/* ---------- Tiles with a small preview ---------- */
 			.kefin-help .kv-gal-grid {
 				grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
@@ -1061,16 +935,12 @@
 				pointer-events: none;
 			}
 			.kefin-help .pv-live .pv-hot::after,
-			.kefin-help .kv-feat:hover .pv-hot::after,
-			.kefin-help .kv-feat:focus-visible .pv-hot::after,
 			.kefin-help .kv-tile:hover .pv-hot::after,
 			.kefin-help .kv-tile:focus-visible .pv-hot::after {
 				opacity: 0.85;
 			}
 			@media (prefers-reduced-motion: no-preference) {
 				.kefin-help .pv-live .pv-hot::after,
-				.kefin-help .kv-feat:hover .pv-hot::after,
-				.kefin-help .kv-feat:focus-visible .pv-hot::after,
 				.kefin-help .kv-tile:hover .pv-hot::after,
 				.kefin-help .kv-tile:focus-visible .pv-hot::after {
 					animation: kv-pulse 1.8s ease-out infinite;
@@ -2798,53 +2668,6 @@
 						<span class="material-icons" aria-hidden="true">close</span>
 					</button>
 				</div>
-				<nav class="kh-featured" aria-label="Featured">
-					<h2 class="kh-featured-label">Featured</h2>
-					<div class="kh-featured-grid">
-						<a class="kh-feature" href="#/help?topic=spoiler-guard" data-goto="spoiler-guard">
-							<span class="kh-feature-icon"><span class="material-icons" aria-hidden="true">blur_on</span></span>
-							<span class="kh-feature-text">
-								<span class="kh-feature-title">Spoiler Guard</span>
-								<span class="kh-feature-blurb">Blur and hide episodes you haven't seen yet</span>
-							</span>
-						</a>
-						<a class="kh-feature" href="#/help?topic=alternate-order" data-goto="alternate-order">
-							<span class="kh-feature-icon"><span class="material-icons" aria-hidden="true">low_priority</span></span>
-							<span class="kh-feature-text">
-								<span class="kh-feature-title">Alternate Order</span>
-								<span class="kh-feature-blurb">Move anime bonus specials to the end of the season</span>
-							</span>
-						</a>
-						<a class="kh-feature" href="#/help?topic=appearance" data-goto="appearance">
-							<span class="kh-feature-icon"><span class="material-icons" aria-hidden="true">palette</span></span>
-							<span class="kh-feature-text">
-								<span class="kh-feature-title">Skins</span>
-								<span class="kh-feature-blurb">Change how Jellyfin looks on this device</span>
-							</span>
-						</a>
-						<a class="kh-feature" href="#/help?topic=watchlist" data-goto="watchlist">
-							<span class="kh-feature-icon"><span class="material-icons" aria-hidden="true">bookmark</span></span>
-							<span class="kh-feature-text">
-								<span class="kh-feature-title">Watchlist</span>
-								<span class="kh-feature-blurb">Save things for later; they clear once watched</span>
-							</span>
-						</a>
-						<a class="kh-feature" href="#/help?topic=theme-media" data-goto="theme-media">
-							<span class="kh-feature-icon"><span class="material-icons" aria-hidden="true">music_video</span></span>
-							<span class="kh-feature-text">
-								<span class="kh-feature-title">Theme songs</span>
-								<span class="kh-feature-blurb">Mute, turn down or switch off a title's theme</span>
-							</span>
-						</a>
-						<a class="kh-feature" href="#/help?topic=pause-screen" data-goto="pause-screen">
-							<span class="kh-feature-icon"><span class="material-icons" aria-hidden="true">pause_circle</span></span>
-							<span class="kh-feature-text">
-								<span class="kh-feature-title">Pause screen</span>
-								<span class="kh-feature-blurb">Plot, progress and finish time when you pause</span>
-							</span>
-						</a>
-					</div>
-				</nav>
 			</header>
 
 			<main class="kh-main">
@@ -3516,7 +3339,6 @@
 						return b;
 					}
 
-					var FEATURED = ['spoiler-guard', 'alternate-order', 'appearance', 'watchlist', 'theme-media', 'pause-screen'];
 
 					// Questions as people would ask them, so a search for "music" finds the theme topic.
 					var QUESTIONS = [
@@ -4290,7 +4112,7 @@
 					});
 
 					// ---------------------------------------------------------------
-					// Fitting. Each preview has a fixed area (tile, featured card, topic
+					// Fitting. Each preview has a fixed area (tile or topic
 					// panel). Previews are drawn in em, so the font-size scales a whole
 					// one; this picks the font-size at which the preview's content fills
 					// the area's height (or its width, if that runs out first). It runs
@@ -4376,30 +4198,10 @@
 						return node;
 					}
 
-					// Large featured card: a preview, then the headline. Used by Gallery and Classic.
-					function featureCard(id) {
-						var t = byId[id];
-						var a = hue(el('a', 'kv-feat'), t.cat.hue);
-						a.href = '#/help?topic=' + id;
-						a.setAttribute('data-goto', id);
-						var p = previewEl(id, false);
-						if (p) a.appendChild(p);
-						a.appendChild(el('span', 'kv-feat-text', '<span class="kv-feat-head">' + icon(t.icon) + esc(t.title) +
-							'</span><span class="kv-feat-sum">' + esc(t.summary) + '</span>'));
-						return a;
-					}
-					function featureGrid() {
-						var g = el('div', 'kv-featgrid');
-						FEATURED.forEach(function (id) { if (byId[id]) g.appendChild(featureCard(id)); });
-						return g;
-					}
-
 					// ---------------------------------------------------------------
-					// Classic: featured cards and expanding topics
+					// Classic: every topic as an expanding row
 					// ---------------------------------------------------------------
 					function buildClassic() {
-						var oldGrid = classic.querySelector('.kh-featured-grid');
-						if (oldGrid) oldGrid.parentNode.replaceChild(featureGrid(), oldGrid);
 						var categoriesEl = Array.prototype.slice.call(classic.querySelectorAll('.kh-category'));
 						var input = classic.querySelector('.kh-search input');
 						var clearBtn = classic.querySelector('.kh-search-clear');
@@ -4451,7 +4253,7 @@
 					}
 
 					// ---------------------------------------------------------------
-					// Gallery: featured previews, tiles by category, topics open in a sheet
+					// Gallery: tiles by category, each with a preview; topics open in a sheet
 					// ---------------------------------------------------------------
 					function buildGallery(host) {
 						var head = el('div', 'kv-gal-head',
@@ -4460,8 +4262,6 @@
 							'<input class="kv-input" type="search" placeholder="Search help" aria-label="Search help" autocomplete="off" />');
 						head.appendChild(sw);
 						host.appendChild(head);
-						var featured = featureGrid();
-						host.appendChild(featured);
 
 						var tiles = {};
 						var catEls = cats.map(function (c) {
@@ -4504,7 +4304,6 @@
 							var hits = si.value.trim() ? search(si.value) : null;
 							topics.forEach(function (t) { tiles[t.id].hidden = hits ? hits.indexOf(t) === -1 : false; });
 							catEls.forEach(function (s) { s.hidden = !s.querySelector('.kv-tile:not([hidden])'); });
-							featured.hidden = !!hits;
 							empty.hidden = !hits || hits.length > 0;
 						});
 
@@ -4598,9 +4397,9 @@
 					// ---------------------------------------------------------------
 					var VARIANTS = [
 						{ id: 'gallery', label: 'Gallery', icon: 'apps', build: buildGallery,
-							desc: 'Six large featured previews, then tiles by category, most with a small preview of the feature. Open a card to try a working version; ← → page through topics, Esc closes.' },
+							desc: 'Tiles by category, each with a small preview of the feature. Open a card to try a working version; ← → page through topics, Esc closes.' },
 						{ id: 'classic', label: 'Classic', icon: 'view_agenda', build: buildClassic,
-							desc: 'For comparison: the featured previews, then every topic as an expanding row, with search.' }
+							desc: 'For comparison: every topic as an expanding row, with search.' }
 					];
 					var hosts = {};
 					each(root, '.kh-variant', function (h) { hosts[h.getAttribute('data-variant')] = h; });
