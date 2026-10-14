@@ -59,6 +59,7 @@
         virtualSpecials: true,    // Collection pages: Studios row, no "Special - " prefix, breadcrumbs
         collectionSectionRows: true, // Collection pages: sections as rows, like the flat season row
         crtShader: true,          // CRT toggle on the video OSD: the mpv retro chain in WebGL2 (off until clicked)
+        help: true,               // Help & Tips page (pages/help.html) at #/help, from a user menu entry
     };
 
     const THIRD_PARTY_SCRIPTS = {
@@ -648,6 +649,13 @@
             css: null,
             dependencies: [],
             description: 'Restores theme song/video playback in the web client while a remote/cast player (e.g. mpv-shim) is the selected target.'
+        },
+        {
+            name: 'help',
+            script: 'help.js',
+            css: null,
+            dependencies: ['utils'],
+            description: 'Adds a Help entry to the user menu, opening a page that explains the features this server adds'
         },
         {
             name: 'crtShader',

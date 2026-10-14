@@ -59,26 +59,6 @@
         return res.text();
     }
 
-    // FORK-ONLY: the Help & Tips page at #/help. No menu link yet: while its
-    // design is being settled it is reachable by its address only. Hosted here
-    // because Games is already enabled and loads pages the same way; a feature
-    // of its own would need registering in the loader and enabling in config.
-    async function registerHelpPage(utils, root) {
-        try {
-            const raw = await fetchPageHtml(root, 'pages/help.html');
-            utils.addCustomPage('#/help', 'Help', buildContentHtmlFromDocument(raw, 'kefin-custom-page-help'), (page) => {
-                // #/help?topic=watchlist opens that topic. The page's own script does
-                // this on its first show; this covers every show after that.
-                const m = (window.location.hash || '').match(/[?&]topic=([\w-]+)/);
-                const help = page && page.querySelector('.kefin-help');
-                if (m && help && typeof help.khOpenTopic === 'function') help.khOpenTopic(m[1]);
-            });
-            LOG('Help page registered at #/help');
-        } catch (e) {
-            ERR('Error registering the Help page:', e);
-        }
-    }
-
     async function registerGamesPages() {
         const utils = window.KefinTweaksUtils;
         if (!utils?.addCustomMenuLink || !utils?.addCustomPage) {
@@ -91,9 +71,6 @@
             WARN('kefinTweaksRoot not configured; cannot register Games pages');
             return false;
         }
-
-        // Separate from the games, so a failure in either leaves the other working.
-        registerHelpPage(utils, root);
 
         try {
             const [gamesRaw, movieLutRaw, threeRaw, thumbRoundRaw] = await Promise.all([

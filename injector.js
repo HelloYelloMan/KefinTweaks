@@ -260,6 +260,7 @@
         virtualSpecials: true,    // Collection pages: Studios row, no "Special - " prefix, breadcrumbs
         collectionSectionRows: true, // Collection pages: sections as rows, like the flat season row
         crtShader: true,          // CRT toggle on the video OSD: the mpv retro chain in WebGL2 (off until clicked)
+        help: true,               // Help & Tips page (pages/help.html) at #/help, from a user menu entry
 
         // Note: Core functionality scripts (utils, cardBuilder, localStorageCache, modal) 
         // are automatically enabled when needed by other scripts
@@ -776,6 +777,13 @@
             css: null,
             dependencies: [],
             description: "Memoises Jellyfin Enhanced's getSidebarContainer(), which reads offsetParent (a forced full-document style flush) on every body mutation. Measured at 3.2s of style recalc across 104 calls when navigating into a series page. No-ops if Jellyfin Enhanced is absent."
+        },
+        {
+            name: 'help',
+            script: 'help.js',
+            css: null,
+            dependencies: ['utils'],
+            description: 'Adds a Help entry to the user menu, opening a page that explains the features this server adds'
         },
         {
             name: 'crtShader',
