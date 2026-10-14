@@ -274,6 +274,15 @@ div#discovery-loading-indicator:not(.show)::after {
 	display: none !important;
 }
 
+/* Custom Tabs on 12.1: its script can take the legacy path before the modern
+   header exists and create class-less #customTab_N containers straight under
+   #indexPage -- the Seerr tab's login iframe then shows for ~1 s on every
+   refresh until the modern path removes them. The real tab content is under
+   main, so this matches only the strays. */
+#indexPage > [id^="customTab_"]:not(.tabContent) {
+	display: none !important;
+}
+
 .homeSectionsContainer .card[data-type="TvChannel"] a.cardImageContainer:not([style])::after {
 	content: attr(aria-label);
 	font-size: 2rem;
