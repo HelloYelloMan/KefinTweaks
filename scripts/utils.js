@@ -2798,6 +2798,12 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
 	background: none !important;
 }
 
+/* A custom page that keeps the backdrop dims it the way Jellyfin Enhanced's
+   calendar does, so the page stays readable over it. */
+html.kefin-custom-page-backdrop .backgroundContainer.withBackdrop {
+	background: rgba(0, 0, 0, 0.7) !important;
+}
+
 
 header.MuiPaper-root + main.MuiBox-root .customPage {
 	margin-top: 3rem;
@@ -2844,11 +2850,14 @@ main.MuiBox-root .customPage.libraryPage:not(.noSecondaryNavPage)[data-kefin-cus
     // linger behind them), except one that asks for backdrops itself by carrying
     // backdropPage, as the Help & Tips page does. Its onShow runs before this, so
     // the class is already there.
+    // The class also goes on <html>: .backgroundContainer, the layer that dims
+    // the backdrop, sits beside #reactRoot, out of reach of a class on it.
     function syncCustomPageBackdropClass(entry) {
-        const root = document.getElementById('reactRoot') || document.documentElement;
-        if (!root) return;
         const page = entry && (entry.pageEl || document.getElementById(`customPage-${entry.safeTitle}`));
-        root.classList.toggle('kefin-custom-page-backdrop', !!(page && page.classList.contains('backdropPage')));
+        const on = !!(page && page.classList.contains('backdropPage'));
+        const root = document.getElementById('reactRoot');
+        if (root) root.classList.toggle('kefin-custom-page-backdrop', on);
+        document.documentElement.classList.toggle('kefin-custom-page-backdrop', on);
     }
 
     function clearFallbackReadyTimer() {
