@@ -162,11 +162,6 @@
             // above this line and ours below it, instead of interleaved.
             // ================================================================
             {
-                name: 'Hide Media Tags Row',
-                url: `${getKefinTweaksRoot()}skins/optional/global/hideMediaTags.css`,
-                enabled: false
-            },
-            {
                 // Skin-agnostic: targets Jellyfin's .homeSectionsContainer and the
                 // .verticalSection / .spotlight-section elements KefinTweaks' own
                 // cardBuilder builds, so it applies under any skin or none. Gated to
@@ -274,6 +269,11 @@
                     }
                 ],
                 colorSchemes: [],
+                // ElegantFin hides Jellyfin's own Tags line under the overview
+                // (.itemTags{display:none}), so Media Tags (scripts/mediaTags.js)
+                // adds a Tags row to the details table on this skin and no other.
+                // Default and Abyss show that line, and a row there would repeat it.
+                mediaTagsRow: true,
                 optionalIncludes: [
                     {
                         name: 'Media Bar Support',
@@ -322,6 +322,14 @@
                     {
                         name: 'OLED Dark Theme',
                         url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/OLEDTheme.css`,
+                        enabled: false
+                    },
+                    {
+                        // Media Tags draws its row only on this skin (mediaTagsRow
+                        // above), so the switch to hide it again lives here, not in
+                        // the global list where it started.
+                        name: 'Hide Media Tags Row',
+                        url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/hideMediaTags.css`,
                         enabled: false
                     },
                     {

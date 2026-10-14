@@ -95,7 +95,7 @@
                     desc: 'Removes the "Special - " Jellyfin puts before the title of every episode in a Specials season - cards, season pages and episode pages. The wording is localized, so it is learned once from your server rather than assumed.' },
                 { key: 'mediaTags', script: 'mediaTags',
                     label: 'Tags row',
-                    desc: 'Adds a Tags row to the details table on item pages, between Genres and Studios, each tag linking to its items. Jellyfin only shows tags in a separate line under the overview, which some skins (ElegantFin) hide.' }
+                    desc: 'ElegantFin only. Adds a Tags row to the details table on item pages, between Genres and Studios, each tag linking to its items.' }
             ]
         }
     ];

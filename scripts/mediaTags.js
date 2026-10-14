@@ -5,8 +5,13 @@
 // Why JS (not CSS): Jellyfin builds .itemDetailsGroup only from a fixed set of
 // metadata types — Author, Creator, Director, Writer, Studio, Genre — via the
 // ItemDetailsMetadataList component. Tags are NOT in that set; they render only
-// into the separate .itemTags paragraph (which ElegantFin hides). So there is no
+// into the separate .itemTags paragraph under the overview. So there is no
 // hidden tags row in the table for CSS to reveal — one has to be created.
+//
+// ElegantFin only: it hides that paragraph, while Default and Abyss show it and
+// a row there would list the tags twice. The skin declares it in skinConfig.js
+// (`mediaTagsRow: true` on its entry), the way Abyss declares requiresBaseTheme;
+// skinWantsRow() reads that from the active skin's merged config.
 //
 // Approach: clone the existing Genres row (so the injected row inherits the exact
 // markup/classes/styling of the metadata table on any skin), relabel it "Tags",
@@ -16,12 +21,10 @@
 // .itemTags (correct hrefs, no route reconstruction). Links are joined with ", "
 // text nodes, matching how Jellyfin renders genres/studios (`.join(', ')`).
 //
-// Position: inserted immediately BEFORE the Genres row, i.e. between Studios and
-// Genres. Keeping Genres last also means our row is `:not(:last-child)`, so it
-// picks up the inter-row border ElegantFin draws that way. .itemDetailsGroup is a
-// plain container React only mounts into (each row is its own mount), so inserting
-// a child is safe; on item change Jellyfin clears the group (innerHTML='') and we
-// re-inject on the next view.
+// Position: directly after the Genres row (see injectTagsRow). .itemDetailsGroup
+// is a plain container React only mounts into (each row is its own mount), so
+// inserting a child is safe; on item change Jellyfin clears the group
+// (innerHTML='') and we re-inject on the next view.
 
 (function () {
     'use strict';
@@ -36,6 +39,17 @@
     // .itemTags is populated during the same render pass, so wait for both.
     const POLL_INTERVAL_MS = 150;
     const POLL_TIMEOUT_MS = 5000;
+
+    // The active skin's entry in the merged skin list (admin over defaults) says
+    // whether it wants the row: `mediaTagsRow: true`, set on ElegantFin only.
+    function skinWantsRow() {
+        const name = window.KefinTweaksSkinManager?.getSelectedSkinName?.();
+        if (!name) return false;
+        const skins = window.KefinTweaksSkinConfig
+            || window.KefinTweaksDefaultSkinsConfig?.skins || [];
+        const skin = skins.find(s => s.name === name);
+        return skin?.mediaTagsRow === true;
+    }
 
     function getTagLinks(page) {
         const itemTags = page.querySelector('.itemTags');
@@ -61,6 +75,9 @@
         // Remove any row we injected on a previous pass (recycled page / re-render).
         const prev = group.querySelector('.' + INJECTED_CLASS);
         if (prev) prev.remove();
+
+        // After the removal above, so a row drawn under another skin goes too.
+        if (!skinWantsRow()) return true;
 
         const tagLinks = getTagLinks(page);
         if (!tagLinks.length) return true; // no tags on this item — nothing to add, but we're "done"
