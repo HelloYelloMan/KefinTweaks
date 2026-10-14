@@ -1600,6 +1600,10 @@
             finalCardFormat = currentCardFormat;
         }
 
+        // A multi-query switch builds its cards here, not through sectionHelper's
+        // finish step, so look up the series poster ratios here too.
+        await attachParentPosterRatios(freshItems, { ...sectionConfig, cardFormat: finalCardFormat });
+
         const displayTitle = getSectionTitleForMultiQuery(sectionConfig);
         const activeViewMoreUrl = getActiveViewMoreUrl(sectionConfig);
 
@@ -1987,6 +1991,10 @@
             if (currentCardFormat) {
                 finalCardFormat = currentCardFormat;
             }
+
+            // The refresh button builds its cards here, not through sectionHelper's
+            // finish step, so look up the series poster ratios here too.
+            await attachParentPosterRatios(freshItems, { ...sectionConfig, cardFormat: finalCardFormat });
 
             let content = null;
             if (sectionConfig.spotlight || sectionConfig.renderMode === 'Spotlight') {
@@ -3925,10 +3933,14 @@
             /* A card that shows its SERIES poster -- an episode, or a season
              * with no poster of its own (its URL names the season but carries
              * the series' tag) -- takes the series poster's ratio, looked up by
-             * attachParentPosterRatios before the row was built. */
+             * attachParentPosterRatios before the row was built. Poster-shaped
+             * cards only: an episode in a backdrop or thumb row that falls back
+             * to the series poster keeps its 16:9 box, whether or not another
+             * row happened to put that series in the map. */
             const seasonShowsSeries = item.Type === 'Season' && !item.ImageTags?.Primary;
             const ownPrimary = !seasonShowsSeries && imageUrl.includes(`/Items/${item.Id}/Images/Primary`);
-            const seriesPoster = !ownPrimary && !!item.SeriesId && (imageUrl.includes(`/Items/${item.SeriesId}/Images/Primary`)
+            const seriesPoster = !ownPrimary && padderClass === 'cardPadder-portrait' && !!item.SeriesId
+                && (imageUrl.includes(`/Items/${item.SeriesId}/Images/Primary`)
                 || (seasonShowsSeries && imageUrl.includes(`/Items/${item.Id}/Images/Primary`)));
             const ratio = ownPrimary ? item?.PrimaryImageAspectRatio
                 : (seriesPoster ? parentPosterRatio.get(item.SeriesId) : undefined);
