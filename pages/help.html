@@ -1177,6 +1177,12 @@
 			.kefin-help .pv-ep-desc {
 				font-style: italic;
 			}
+			.kefin-help .pv-ep-title,
+			.kefin-help .pv-ep-desc {
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
 
 			.kefin-help .pv-strip .pv-ep.pv-played::before {
 				content: "\2713";
@@ -1330,7 +1336,21 @@
 			}
 
 			.kefin-help .pv-hint {
+				min-width: 5.5em;
 				white-space: nowrap;
+			}
+			/* Alternate Order: the chips can take two lines and the label changes
+			   length; both keep their room so the buttons never move. */
+			.kefin-help .pv-gresult {
+				min-height: 1.4em;
+			}
+			.kefin-help .pv-ao {
+				align-content: flex-start;
+				min-height: 4.6em;
+			}
+			.kefin-help .pv-ao-label {
+				min-width: 10.5em;
+				text-align: left;
 			}
 
 			/* CRT */
@@ -1603,6 +1623,14 @@
 				font-size: 0.64em;
 				color: rgba(255, 255, 255, 0.6);
 			}
+			.kefin-help .pv-person b,
+			.kefin-help .pv-person span {
+				display: block;
+				max-width: 100%;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
 			.kefin-help .pv-charpage {
 				display: flex;
 				flex-direction: column;
@@ -1743,11 +1771,9 @@
 				flex: none;
 			}
 			.kefin-help .pv-cwcard.pv-gone {
-				width: 0;
-				margin-right: -0.55em;
-				overflow: hidden;
 				opacity: 0;
 				transform: scale(0.85);
+				pointer-events: none;
 			}
 
 			/* Playlist */
@@ -1893,7 +1919,7 @@
 				display: flex;
 				align-items: center;
 				gap: 0.8em;
-				min-width: 15em;
+				width: 15em;
 				padding: 0.7em 1em;
 				border-radius: 0.7em;
 				background: #1a1c22;
@@ -2009,8 +2035,11 @@
 				padding: 0.15em 0.6em;
 				border-radius: 999px;
 				background: rgba(0, 0, 0, 0.45);
+				display: inline-block;
+				min-width: 3.6em;
 				font-size: 0.72em;
 				font-variant-numeric: tabular-nums;
+				text-align: center;
 			}
 			/* Spoiler Guard: the real button is tinted lavender when on */
 			.kefin-help .pv-btn.pv-tu-guard-on {
@@ -3639,7 +3668,7 @@
 					P('alternate-order', {
 						head: 'Bonus episodes, out of the way',
 						html: '<div class="pv-col"><div class="pv-chips pv-ao"></div>' +
-							'<div class="pv-row pv-center">' + pb('favorite_border', '', 'Favorite') + pb('low_priority', 'pv-ao-btn pv-hot', 'Alternate Order') + '<span class="pv-label"></span></div></div>',
+							'<div class="pv-row pv-center">' + pb('favorite_border', '', 'Favorite') + pb('low_priority', 'pv-ao-btn pv-hot', 'Alternate Order') + '<span class="pv-label pv-ao-label"></span></div></div>',
 						init: function (n) {
 							var modes = ['Off', 'Reorder', 'Hidden'], m = 0;
 							var aired = ['Ep 10', 'Bonus', 'Ep 11', 'Bonus', 'Ep 12'];
@@ -4231,7 +4260,7 @@
 							'<div class="pv-row pv-center pv-opts">' + LUTS.map(function (l, i) {
 								return '<button type="button" class="pv-pill pv-small pv-ghost pv-opt' + (i === 1 ? ' pv-hot' : '') + '" data-i="' + i + '">' + l[0] + '</button>';
 							}).join('') + '</div>' +
-							'<div class="pv-label pv-result"></div></div>',
+							'<div class="pv-label pv-gresult"></div></div>',
 						init: function (n, live) {
 							var answer = 0, timer = null;
 							function round() {
@@ -4244,11 +4273,11 @@
 									stripes += '<i style="background:hsl(' + h + ' ' + (45 + (i * 13) % 35) + '% ' + (25 + (i * 17) % 45) + '%)"></i>';
 								}
 								n.querySelector('.pv-lut').innerHTML = stripes;
-								n.querySelector('.pv-result').textContent = '';
+								n.querySelector('.pv-gresult').textContent = '';
 							}
 							on(n, '.pv-opt', function (b) {
 								var right = +b.getAttribute('data-i') === answer;
-								n.querySelector('.pv-result').textContent = right ? 'Correct!' : 'Not quite: it was ' + LUTS[answer][0].toLowerCase();
+								n.querySelector('.pv-gresult').textContent = right ? 'Correct!' : 'Not quite: it was ' + LUTS[answer][0].toLowerCase();
 								clearTimeout(timer);
 								timer = setTimeout(round, 1800);
 							});
@@ -4300,6 +4329,9 @@
 						if (availH <= 0 || availW <= 0) return; // hidden: fitted when it is shown
 						var fs = parseFloat(cs.fontSize) || 16;
 						node.classList.add('pv-fitting');
+						// Measure free of the size locked by the last fit (see below).
+						content.style.width = '';
+						content.style.height = '';
 						// The content's width depends on the font-size too, so settle in a few steps.
 						for (var i = 0; i < 4; i++) {
 							// Most previews stretch to the area's width, which says nothing about
@@ -4314,6 +4346,15 @@
 							if (Math.abs(k - 1) < 0.02) break;
 							fs = Math.max(FIT_MIN_PX, Math.min(FIT_MAX_PX, fs * k));
 							node.style.fontSize = fs + 'px';
+						}
+						// Lock the content to the size it was fitted at. The area centres it, so
+						// anything inside that later grows or shrinks (a name, a label, a page
+						// swapped in) would otherwise re-centre the whole preview and move
+						// everything else. Locked, it stays put and changes happen inside it.
+						var cfs = parseFloat(getComputedStyle(content).fontSize) || fs;
+						if (content.offsetWidth && content.offsetHeight) {
+							content.style.width = (content.offsetWidth / cfs) + 'em';
+							content.style.height = (content.offsetHeight / cfs) + 'em';
 						}
 						void node.offsetWidth; // settle the final size before transitions return
 						node.classList.remove('pv-fitting');
