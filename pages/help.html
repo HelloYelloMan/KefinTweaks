@@ -1564,20 +1564,6 @@
 				width: 3.7em;
 			}
 
-			/* Specials */
-			.kefin-help .pv-copy {
-				display: flex;
-				flex-direction: column;
-				align-items: center;
-				gap: 0.35em;
-			}
-			.kefin-help .pv-link {
-				color: rgba(255, 255, 255, 0.5);
-			}
-			.kefin-help .pv-link .material-icons {
-				font-size: 1.6em;
-			}
-
 			/* Characters */
 			.kefin-help .pv-cast {
 				align-items: flex-start;
@@ -1778,34 +1764,6 @@
 				opacity: 0;
 				transform: scale(0.85);
 				pointer-events: none;
-			}
-
-			/* Playlist */
-			.kefin-help .pv-list {
-				display: flex;
-				flex-direction: column;
-				gap: 0.25em;
-				width: 100%;
-			}
-			.kefin-help .pv-li {
-				display: flex;
-				align-items: center;
-				gap: 0.55em;
-				padding: 0.35em 0.5em;
-				border-radius: 0.5em;
-				background: #17191e;
-			}
-			.kefin-help .pv-li b {
-				font-size: 0.82em;
-			}
-			.kefin-help .pv-li.pv-next {
-				outline: 1px solid var(--kh-accent);
-			}
-			.kefin-help .pv-tick {
-				color: var(--kh-good);
-			}
-			.kefin-help .pv-tick .material-icons {
-				font-size: 1.1em;
 			}
 
 			/* Pinning */
@@ -2979,30 +2937,7 @@
 									<li>For shows with several seasons, the <span class="kh-ui">Select Season</span> button next to the row title switches season.</li>
 									<li>The <span class="kh-btn"><span class="material-icons" aria-hidden="true">grid_view</span></span> button (hover over the row title) shows every episode at once as a grid instead of a scrolling row.</li>
 								</ul>
-								<p>Specials that belong in a particular spot are placed in the season where they air. See <a href="#/help?topic=specials" data-goto="specials">Specials</a>.</p>
-							</div>
-						</details>
-
-						<details class="kh-topic" id="topic-specials" data-keywords="specials season 0 ova oad movie virtual specials extras tags watched sync">
-							<summary>
-								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">star</span></span>
-								<span class="kh-topic-head">
-									<span class="kh-topic-title">Specials, OVAs and movies in a show</span>
-									<span class="kh-topic-summary">Where specials appear, and why watching one marks another</span>
-								</span>
-								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
-							</summary>
-							<div class="kh-topic-body">
-								<ul>
-									<li>All of a show's specials are in its <strong>Specials</strong> season.</li>
-									<li>Specials that should be watched at a certain point also appear in that season's episode list, e.g. after the finale or between two episodes.</li>
-									<li>Some specials are grouped into their own collection, with a breadcrumb trail back to the show they belong to.</li>
-								</ul>
-								<h3>Watched in one place, watched everywhere</h3>
-								<p>Some movies exist in two places, for example in Movies and also as a show's special. Watching either copy marks both as watched (and keeps your resume point in step), so it won't show up as unwatched in the other place.</p>
-								<h3>Tags</h3>
-								<p>A title's details list a <span class="kh-ui">Tags</span> line. Click any tag to see everything else with it.</p>
-								<p>Want bonus specials moved or hidden? See <a href="#/help?topic=alternate-order" data-goto="alternate-order">Alternate Order</a>.</p>
+								<p>Specials that belong in a particular spot are placed in the season where they air.</p>
 							</div>
 						</details>
 
@@ -3181,26 +3116,6 @@
 							<div class="kh-topic-body">
 								<p>Hover over a part-watched poster and click <span class="kh-btn"><span class="material-icons" aria-hidden="true">close</span></span> <span class="kh-ui">Remove from Continue Watching</span> in its top corner. It works on any part-watched poster, not just in the Continue Watching row.</p>
 								<div class="kh-warn"><span class="material-icons" aria-hidden="true">warning</span><span>This forgets where you stopped, and there's no undo. Next time it starts from the beginning.</span></div>
-							</div>
-						</details>
-
-						<details class="kh-topic" id="topic-playlists" data-keywords="playlist playlists queue sort resume play from beginning add to playlist">
-							<summary>
-								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">playlist_play</span></span>
-								<span class="kh-topic-head">
-									<span class="kh-topic-title">Playlists</span>
-									<span class="kh-topic-summary">Make a list to play in order, and pick up where you left off</span>
-								</span>
-								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
-							</summary>
-							<div class="kh-topic-body">
-								<p>Add anything to a playlist from its <span class="kh-btn"><span class="material-icons" aria-hidden="true">more_vert</span></span> menu › <span class="kh-ui">Add to playlist</span>.</p>
-								<h3>On a playlist's page</h3>
-								<ul>
-									<li>Clicking an item opens its page; it doesn't start playing. Use the <span class="kh-btn"><span class="material-icons" aria-hidden="true">play_arrow</span></span> on a row to play from there onwards.</li>
-									<li>The main button says <span class="kh-ui">Resume</span> once you've started, and carries on from the first thing you haven't watched. <span class="kh-btn"><span class="material-icons" aria-hidden="true">replay</span></span> <span class="kh-ui">Play from Beginning</span> starts over.</li>
-									<li><span class="kh-btn"><span class="material-icons" aria-hidden="true">sort</span></span> <span class="kh-ui">Sort Playlist</span> reorders it, e.g. by release date. Play follows that order. The sort is remembered by this browser.</li>
-								</ul>
 							</div>
 						</details>
 
@@ -3944,22 +3859,6 @@
 						}
 					});
 
-					P('specials', {
-						html: '<div class="pv-col pv-w"><div class="pv-row pv-center pv-copies">' +
-							'<div class="pv-copy"><div class="pv-cap">Movies</div><div class="pv-pcard">' + poster(195) + '<div class="pv-ov">' + pb('check', 'pv-pl pv-hot', 'Mark played') + '</div></div></div>' +
-							'<span class="pv-link">' + icon('sync_alt') + '</span>' +
-							'<div class="pv-copy"><div class="pv-cap">Show › Specials</div><div class="pv-pcard">' + poster(195) + '<div class="pv-ov">' + pb('check', 'pv-pl', 'Mark played') + '</div></div></div></div>' +
-							'<div class="pv-chips"><span class="pv-epchip">Ep 11</span><span class="pv-epchip">Ep 12</span><span class="pv-epchip pv-bonus">The Movie</span></div>' +
-							'<div class="pv-cap">Placed after the finale, where it belongs</div></div>',
-						init: function (n) {
-							var played = false;
-							on(n, '.pv-pl', function () {
-								played = !played;
-								each(n, '.pv-pl', function (b) { b.classList.toggle('pv-green', played); });
-								toast(n, played ? 'Marked watched in both places' : 'Unwatched in both places');
-							});
-						}
-					});
 
 					P('characters', {
 						html: '<div class="pv-col pv-w"><div class="pv-row pv-cast">' +
@@ -4033,33 +3932,6 @@
 						}
 					});
 
-					P('playlists', {
-						html: '<div class="pv-col pv-w"><div class="pv-row pv-full">' + pill(icon('play_arrow') + 'Resume', 'pv-main') + pb('replay', 'pv-restart', 'Play from Beginning') +
-							'<span class="pv-grow"></span>' + pill('Sort: Default', 'pv-ghost pv-small pv-sort pv-hot') + '</div><div class="pv-list"></div></div>',
-						init: function (n) {
-							var items = [
-								{ n: 'Part 1', y: 2001, a: 3, p: true }, { n: 'Part 2', y: 2004, a: 1, p: true },
-								{ n: 'Part 3', y: 2003, a: 4 }, { n: 'Part 4', y: 2009, a: 2 }
-							];
-							var sorts = [['Default', null], ['Release Date', 'y'], ['Date Added', 'a']], si = 0;
-							function render() {
-								var list = items.slice();
-								if (sorts[si][1]) list.sort(function (a, b) { return a[sorts[si][1]] - b[sorts[si][1]]; });
-								var next = list.filter(function (x) { return !x.p; })[0];
-								n.querySelector('.pv-sort').textContent = 'Sort: ' + sorts[si][0];
-								n.querySelector('.pv-list').innerHTML = list.map(function (x) {
-									return '<div class="pv-li' + (x === next ? ' pv-next' : '') + '">' + pb('play_arrow', 'pv-mini pv-rowplay', 'Play from here') +
-										'<b>' + x.n + '</b><span class="pv-cap">' + x.y + '</span><span class="pv-grow"></span>' +
-										(x.p ? '<span class="pv-tick">' + icon('check') + '</span>' : x === next ? '<span class="pv-cap">Up next</span>' : '') + '</div>';
-								}).join('');
-								on(n, '.pv-rowplay', function (b) { toast(n, 'Playing from ' + b.parentNode.querySelector('b').textContent + ' onwards'); });
-							}
-							on(n, '.pv-sort', function () { si = (si + 1) % sorts.length; render(); });
-							on(n, '.pv-main', function () { toast(n, 'Carrying on from the first one you haven\'t watched'); });
-							on(n, '.pv-restart', function () { toast(n, 'Starting again from the top'); });
-							render();
-						}
-					});
 
 					P('pin', {
 						html: '<div class="pv-row pv-pinwrap"><div class="pv-pcard pv-pinsrc">' + poster(150) + '<div class="pv-ov pv-ov-top">' + pb('more_vert', 'pv-more pv-hot', 'More') + '</div>' +
