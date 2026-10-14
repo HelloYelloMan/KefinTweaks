@@ -1,0 +1,4138 @@
+<!doctype html>
+<html lang="en" class="kh-standalone">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Help</title>
+		<!-- Standalone preview only: inside Jellyfin the icon font is already loaded,
+		     and the page loader keeps only the style and script blocks. -->
+		<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
+		<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" />
+		<style>
+			/* Standalone preview background. Never matches inside Jellyfin, where
+			   <html> has no kh-standalone class, so the skin's backdrop shows. */
+			.kh-standalone body {
+				margin: 0;
+				background: #101010;
+				color: #fff;
+				font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+			}
+
+			/* Design tokens. Jellyfin's own values first (its theme publishes them as
+			   --jf-* variables), with the dark theme's values as fallbacks. */
+			.kefin-help {
+				--kh-accent: var(--jf-palette-primary-main, #00a4dc);
+				--kh-on-accent: var(--jf-palette-primary-contrastText, rgba(0, 0, 0, 0.87));
+				--kh-text: var(--jf-palette-text-primary, #fff);
+				--kh-muted: var(--jf-palette-text-secondary, rgba(255, 255, 255, 0.7));
+				--kh-surface: var(--jf-palette-action-hover, rgba(255, 255, 255, 0.08));
+				--kh-surface-hover: var(--jf-palette-action-focus, rgba(255, 255, 255, 0.12));
+				--kh-surface-strong: var(--jf-palette-action-focus, rgba(255, 255, 255, 0.12));
+				--kh-border: var(--jf-palette-divider, rgba(255, 255, 255, 0.12));
+				--kh-sheet-bg: var(--jf-palette-background-paper, #202020);
+				--kh-radius: var(--jf-card-borderRadius, 0.2em);
+				--kh-radius-sm: var(--jf-card-borderRadius, 0.2em);
+				--kh-radius-xs: var(--jf-card-borderRadius, 0.2em);
+				--kh-good: rgb(34, 197, 94);
+				box-sizing: border-box;
+				max-width: 62rem;
+				margin: 0 auto;
+				padding: 2rem 1rem 4rem;
+				line-height: 1.55;
+				font-size: 1rem;
+			}
+			.kefin-help *,
+			.kefin-help *::before,
+			.kefin-help *::after {
+				box-sizing: border-box;
+			}
+			/* The active skin's values (skinManager marks it on <html data-kefin-skin>). */
+			html[data-kefin-skin="ElegantFin"] .kefin-help {
+				--kh-accent: var(--accentColor, #5d55e7);
+				--kh-on-accent: #fff;
+				--kh-text: var(--textColor, #d1d5db);
+				--kh-muted: var(--dimTextColor, #9ca3af);
+				--kh-surface: var(--selectorBackgroundColorAlpha, rgba(56, 66, 82, 0.5));
+				--kh-surface-hover: var(--selectorBackgroundColor, #384252);
+				--kh-surface-strong: var(--selectorBackgroundColor, #384252);
+				--kh-border: var(--borderColor, #47505c);
+				--kh-sheet-bg: var(--lighterGradientPoint, #1d2635);
+				--kh-radius: var(--largeRadius, 1em);
+				--kh-radius-sm: var(--smallRadius, 0.5em);
+				--kh-radius-xs: var(--smallerRadius, 0.375em);
+			}
+			html[data-kefin-skin="Abyss"] .kefin-help {
+				--kh-accent: rgb(var(--abyss-accent, 245, 245, 247));
+				--kh-surface: rgba(var(--abyss-glass-tint, 42, 42, 42), 0.35);
+				--kh-surface-hover: rgba(var(--abyss-glass-tint, 42, 42, 42), 0.6);
+				--kh-surface-strong: rgba(255, 255, 255, 0.1);
+				--kh-border: rgba(255, 255, 255, 0.08);
+				--kh-sheet-bg: rgba(var(--abyss-glass-tint, 42, 42, 42), 0.82);
+				--kh-radius: var(--abyss-radius, 12px);
+				--kh-radius-sm: calc(var(--abyss-radius, 12px) * 0.66);
+				--kh-radius-xs: calc(var(--abyss-radius, 12px) * 0.4);
+			}
+			html[data-kefin-skin="Abyss"] .kefin-help .kv-sheet {
+				backdrop-filter: blur(var(--abyss-glass-blur, 15px));
+			}
+
+			/* ---------- Header ---------- */
+			.kefin-help .kh-hero h1 {
+				margin: 0 0 0.3em;
+				font-size: clamp(1.7rem, 4vw, 2.3rem);
+				font-weight: 700;
+				letter-spacing: 0.01em;
+			}
+			.kefin-help .kh-hero p {
+				margin: 0 0 1.4rem;
+				color: var(--kh-muted);
+				max-width: 46rem;
+			}
+			.kefin-help .kh-search {
+				position: relative;
+				margin-bottom: 1rem;
+			}
+			.kefin-help .kh-search .material-icons {
+				position: absolute;
+				left: 0.85rem;
+				top: 50%;
+				transform: translateY(-50%);
+				color: var(--kh-muted);
+				pointer-events: none;
+			}
+			.kefin-help .kh-search input {
+				width: 100%;
+				padding: 0.8rem 2.8rem 0.8rem 2.9rem;
+				border-radius: var(--kh-radius-sm);
+				border: 1px solid var(--kh-border);
+				background: var(--kh-surface);
+				color: inherit;
+				font: inherit;
+				outline: none;
+			}
+			.kefin-help .kh-search input:focus {
+				border-color: var(--kh-accent);
+				background: var(--kh-surface-hover);
+			}
+			.kefin-help .kh-search-clear {
+				position: absolute;
+				right: 0.5rem;
+				top: 50%;
+				transform: translateY(-50%);
+				border: 0;
+				background: transparent;
+				color: var(--kh-muted);
+				cursor: pointer;
+				padding: 0.3rem;
+				border-radius: 50%;
+				display: none;
+			}
+			.kefin-help .kh-search-clear .material-icons {
+				position: static;
+				transform: none;
+				display: block;
+			}
+			.kefin-help .kh-searching .kh-search-clear {
+				display: block;
+			}
+
+			/* ---------- Featured topics ---------- */
+			.kefin-help .kh-featured {
+				margin: 0.4rem 0 2.25rem;
+			}
+			.kefin-help .kh-featured-label {
+				margin: 0 0 0.7rem;
+				font-size: 0.8rem;
+				font-weight: 700;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				color: var(--kh-muted);
+			}
+			.kefin-help .kh-featured-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(16.5rem, 1fr));
+				gap: 0.65rem;
+			}
+			.kefin-help .kh-feature {
+				display: flex;
+				align-items: center;
+				gap: 0.85rem;
+				padding: 0.9rem 1rem;
+				border-radius: var(--kh-radius);
+				background: var(--kh-surface);
+				border: 1px solid var(--kh-border);
+				color: inherit;
+				text-decoration: none;
+				transition: background 0.15s, border-color 0.15s, transform 0.15s;
+			}
+			.kefin-help .kh-feature:hover,
+			.kefin-help .kh-feature:focus-visible {
+				background: var(--kh-surface-hover);
+				border-color: var(--kh-accent);
+				transform: translateY(-1px);
+				outline: none;
+			}
+			.kefin-help .kh-feature-icon {
+				flex: none;
+				display: grid;
+				place-items: center;
+				width: 2.75rem;
+				height: 2.75rem;
+				border-radius: var(--kh-radius-sm);
+				background: var(--kh-accent);
+				color: var(--kh-on-accent, #fff);
+			}
+			.kefin-help .kh-feature-text {
+				min-width: 0;
+			}
+			.kefin-help .kh-feature-title {
+				display: block;
+				font-weight: 650;
+			}
+			.kefin-help .kh-feature-blurb {
+				display: block;
+				color: var(--kh-muted);
+				font-size: 0.88rem;
+				line-height: 1.35;
+			}
+			.kefin-help .kh-searching .kh-featured {
+				display: none;
+			}
+
+			/* ---------- Categories and topics ---------- */
+			.kefin-help .kh-category {
+				margin: 0 0 2.25rem;
+				scroll-margin-top: 5.5rem;
+			}
+			.kefin-help .kh-category > h2 {
+				display: flex;
+				align-items: center;
+				gap: 0.55rem;
+				margin: 0 0 0.85rem;
+				font-size: 1.3rem;
+				font-weight: 650;
+			}
+			.kefin-help .kh-category > h2 .material-icons {
+				color: var(--kh-accent);
+			}
+			.kefin-help .kh-topics {
+				display: flex;
+				flex-direction: column;
+				gap: 0.6rem;
+			}
+			.kefin-help details.kh-topic {
+				background: var(--kh-surface);
+				border: 1px solid var(--kh-border);
+				border-radius: var(--kh-radius);
+				scroll-margin-top: 5.5rem;
+				transition: border-color 0.2s;
+			}
+			.kefin-help details.kh-topic[open] {
+				background: var(--kh-surface-hover);
+			}
+			.kefin-help details.kh-topic.kh-flash {
+				border-color: var(--kh-accent);
+			}
+			.kefin-help .kh-topic > summary {
+				list-style: none;
+				display: flex;
+				align-items: center;
+				gap: 0.85rem;
+				padding: 0.85rem 1rem;
+				cursor: pointer;
+				border-radius: var(--kh-radius);
+			}
+			.kefin-help .kh-topic > summary::-webkit-details-marker {
+				display: none;
+			}
+			.kefin-help .kh-topic > summary:hover {
+				background: var(--kh-surface-hover);
+			}
+			.kefin-help .kh-topic > summary:focus-visible {
+				outline: 2px solid var(--kh-accent);
+				outline-offset: -2px;
+			}
+			.kefin-help .kh-topic-icon {
+				flex: none;
+				display: grid;
+				place-items: center;
+				width: 2.4rem;
+				height: 2.4rem;
+				border-radius: var(--kh-radius-sm);
+				background: var(--kh-surface-strong);
+				color: var(--kh-accent);
+			}
+			.kefin-help .kh-topic-head {
+				flex: 1;
+				min-width: 0;
+			}
+			.kefin-help .kh-topic-title {
+				display: block;
+				font-weight: 600;
+				font-size: 1.04rem;
+			}
+			.kefin-help .kh-topic-summary {
+				display: block;
+				color: var(--kh-muted);
+				font-size: 0.9rem;
+			}
+			.kefin-help .kh-chevron {
+				flex: none;
+				color: var(--kh-muted);
+				transition: transform 0.2s;
+			}
+			.kefin-help details[open] > summary .kh-chevron {
+				transform: rotate(180deg);
+			}
+			.kefin-help .kh-topic-body {
+				padding: 0.2rem 1.15rem 1.15rem 4.4rem;
+			}
+			@media (max-width: 600px) {
+				.kefin-help .kh-topic-body {
+					padding-left: 1.15rem;
+				}
+			}
+			.kefin-help .kh-topic-body > :first-child {
+				margin-top: 0;
+			}
+			.kefin-help .kh-topic-body > :last-child {
+				margin-bottom: 0;
+			}
+			.kefin-help .kh-topic-body h3 {
+				margin: 1.2rem 0 0.4rem;
+				font-size: 0.8rem;
+				font-weight: 700;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				color: var(--kh-muted);
+			}
+			.kefin-help .kh-topic-body p,
+			.kefin-help .kh-topic-body ul,
+			.kefin-help .kh-topic-body ol {
+				margin: 0 0 0.7rem;
+			}
+			.kefin-help .kh-topic-body ul,
+			.kefin-help .kh-topic-body ol {
+				padding-left: 1.3rem;
+			}
+			.kefin-help .kh-topic-body li {
+				margin: 0.25rem 0;
+			}
+			.kefin-help .kh-topic-body a {
+				color: var(--kh-accent);
+			}
+			.kefin-help .kh-from {
+				display: inline-block;
+				margin-top: 0.9rem;
+				font-size: 0.78rem;
+				color: var(--kh-muted);
+			}
+
+			/* ---------- Inline UI replicas ---------- */
+			/* A round icon button, drawn the way it looks in Jellyfin. */
+			.kefin-help .kh-btn {
+				display: inline-grid;
+				place-items: center;
+				width: 1.9em;
+				height: 1.9em;
+				margin: 0 0.1em;
+				border-radius: 50%;
+				background: var(--kh-surface-strong);
+				vertical-align: -0.55em;
+			}
+			.kefin-help .kh-btn .material-icons,
+			.kefin-help .kh-btn .material-icons-outlined {
+				font-size: 1.15em;
+			}
+			.kefin-help .kh-btn.kh-on {
+				color: var(--kh-accent);
+			}
+			.kefin-help .kh-btn.kh-green {
+				color: var(--kh-good);
+			}
+			/* A text label exactly as it appears on a button or menu. */
+			.kefin-help .kh-ui {
+				display: inline-block;
+				padding: 0.02em 0.45em;
+				border-radius: var(--kh-radius-xs);
+				background: var(--kh-surface-strong);
+				font-weight: 600;
+				font-size: 0.92em;
+				white-space: nowrap;
+			}
+			.kefin-help kbd {
+				display: inline-block;
+				min-width: 1.7em;
+				padding: 0.05em 0.45em;
+				border-radius: var(--kh-radius-xs);
+				border: 1px solid var(--kh-border);
+				border-bottom-width: 3px;
+				background: var(--kh-surface);
+				font: 600 0.85em/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+				text-align: center;
+			}
+			.kefin-help .kh-path .material-icons {
+				font-size: 1em;
+				vertical-align: -0.12em;
+				color: var(--kh-muted);
+			}
+			.kefin-help .kh-note,
+			.kefin-help .kh-warn {
+				display: flex;
+				gap: 0.6rem;
+				padding: 0.7rem 0.85rem;
+				margin: 0.8rem 0 0.7rem;
+				border-radius: var(--kh-radius-sm);
+				background: var(--kh-surface);
+				border-left: 3px solid var(--kh-accent);
+				font-size: 0.93rem;
+			}
+			.kefin-help .kh-warn {
+				border-left-color: #f0a020;
+			}
+			.kefin-help .kh-note > .material-icons,
+			.kefin-help .kh-warn > .material-icons {
+				flex: none;
+				font-size: 1.2rem;
+				color: var(--kh-accent);
+			}
+			.kefin-help .kh-warn > .material-icons {
+				color: #f0a020;
+			}
+
+			/* Definition-style rows: control on the left, what it does on the right. */
+			.kefin-help .kh-table {
+				width: 100%;
+				border-collapse: collapse;
+				margin: 0.3rem 0 0.8rem;
+				font-size: 0.94rem;
+			}
+			.kefin-help .kh-table th,
+			.kefin-help .kh-table td {
+				padding: 0.45rem 0.6rem;
+				text-align: left;
+				vertical-align: top;
+				border-bottom: 1px solid var(--kh-border);
+			}
+			.kefin-help .kh-table th {
+				font-size: 0.78rem;
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+				color: var(--kh-muted);
+				font-weight: 700;
+			}
+			.kefin-help .kh-table td:first-child {
+				white-space: nowrap;
+				width: 1%;
+			}
+			@media (max-width: 600px) {
+				.kefin-help .kh-table td:first-child {
+					white-space: normal;
+				}
+			}
+
+			.kefin-help .kh-empty {
+				display: none;
+				padding: 2rem 1rem;
+				text-align: center;
+				color: var(--kh-muted);
+			}
+			.kefin-help .kh-no-results .kh-empty {
+				display: block;
+			}
+			.kefin-help [hidden] {
+				display: none !important;
+			}
+
+			/* =====================================================================
+			   Design preview: layout switcher and the alternative layouts
+			   ===================================================================== */
+			.kefin-help {
+				max-width: 78rem;
+			}
+			.kefin-help .kh-variant[data-variant="classic"] {
+				max-width: 62rem;
+				margin: 0 auto;
+			}
+			.kefin-help .kh-variant-bar {
+				display: flex;
+				flex-wrap: wrap;
+				align-items: center;
+				gap: 0.5rem 0.9rem;
+				margin: 0 0 2rem;
+				padding: 0.6rem 0.7rem;
+				border-radius: var(--kh-radius);
+				border: 1px dashed rgba(255, 255, 255, 0.18);
+				background: rgba(255, 255, 255, 0.025);
+			}
+			.kefin-help .kh-variant-label {
+				display: flex;
+				align-items: center;
+				gap: 0.35rem;
+				font-size: 0.75rem;
+				font-weight: 700;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				color: var(--kh-muted);
+			}
+			.kefin-help .kh-variant-label .material-icons {
+				font-size: 1.1rem;
+			}
+			.kefin-help .kh-variant-tabs {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 0.3rem;
+			}
+			.kefin-help .kh-variant-tab {
+				display: inline-flex;
+				align-items: center;
+				gap: 0.35rem;
+				padding: 0.4rem 0.8rem;
+				border-radius: 999px;
+				border: 1px solid transparent;
+				background: transparent;
+				color: inherit;
+				font: inherit;
+				font-size: 0.92rem;
+				cursor: pointer;
+				opacity: 0.75;
+			}
+			.kefin-help .kh-variant-tab:hover {
+				opacity: 1;
+				background: var(--kh-surface-hover);
+			}
+			.kefin-help .kh-variant-tab[aria-selected="true"] {
+				opacity: 1;
+				background: var(--kh-accent);
+				color: var(--kh-on-accent, #fff);
+			}
+			.kefin-help .kh-variant-tab .material-icons {
+				font-size: 1.05rem;
+			}
+			.kefin-help .kh-variant-tab .kh-tag {
+				font-size: 0.62rem;
+				font-weight: 700;
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+				padding: 0.05rem 0.35rem;
+				border-radius: var(--kh-radius-xs);
+				background: rgba(255, 255, 255, 0.16);
+			}
+			.kefin-help .kh-variant-desc {
+				flex-basis: 100%;
+				margin: 0;
+				padding: 0 0.3rem;
+				font-size: 0.86rem;
+				color: var(--kh-muted);
+			}
+
+			/* Shared bits for the generated layouts */
+			.kefin-help .kv-h1 {
+				margin: 0 0 0.3em;
+				font-size: clamp(1.7rem, 4vw, 2.3rem);
+				font-weight: 700;
+			}
+			.kefin-help .kv-lead {
+				margin: 0 0 1.4rem;
+				color: var(--kh-muted);
+				max-width: 46rem;
+			}
+			.kefin-help .kv-input {
+				width: 100%;
+				padding: 0.75rem 1rem 0.75rem 2.8rem;
+				border-radius: var(--kh-radius-sm);
+				border: 1px solid var(--kh-border);
+				background: var(--kh-surface);
+				color: inherit;
+				font: inherit;
+				outline: none;
+			}
+			.kefin-help .kv-input:focus {
+				border-color: var(--kh-accent);
+				background: var(--kh-surface-hover);
+			}
+			.kefin-help .kv-inputwrap {
+				position: relative;
+			}
+			.kefin-help .kv-inputwrap > .material-icons {
+				position: absolute;
+				left: 0.85rem;
+				top: 50%;
+				transform: translateY(-50%);
+				color: var(--kh-muted);
+				pointer-events: none;
+			}
+			.kefin-help .kv-hue {
+				--kv-c: hsl(var(--hue, 200) 70% 56%);
+				--kv-c2: hsl(calc(var(--hue, 200) + 40) 65% 38%);
+			}
+			.kefin-help .kv-chip {
+				display: inline-flex;
+				align-items: center;
+				gap: 0.3rem;
+				padding: 0.12rem 0.55rem 0.12rem 0.4rem;
+				border-radius: 999px;
+				font-size: 0.76rem;
+				font-weight: 600;
+				background: color-mix(in srgb, var(--kv-c) 22%, transparent);
+				color: color-mix(in srgb, var(--kv-c) 70%, white);
+			}
+			.kefin-help .kv-chip .material-icons {
+				font-size: 0.95rem;
+			}
+			.kefin-help .kv-body {
+				line-height: 1.6;
+			}
+			.kefin-help .kv-body.kh-topic-body {
+				padding: 0;
+			}
+			.kefin-help .kv-iconbtn {
+				display: inline-grid;
+				place-items: center;
+				width: 2.4rem;
+				height: 2.4rem;
+				border-radius: 50%;
+				border: 0;
+				background: var(--kh-surface-strong);
+				color: inherit;
+				cursor: pointer;
+			}
+			.kefin-help .kv-iconbtn:hover {
+				background: rgba(255, 255, 255, 0.18);
+			}
+			.kefin-help .kv-iconbtn:disabled {
+				opacity: 0.3;
+				cursor: default;
+			}
+			.kefin-help .kv-pill {
+				display: inline-flex;
+				align-items: center;
+				gap: 0.4rem;
+				padding: 0.6rem 1.1rem;
+				border-radius: 999px;
+				border: 0;
+				background: var(--kh-accent);
+				color: var(--kh-on-accent, #fff);
+				font: inherit;
+				font-weight: 600;
+				cursor: pointer;
+				text-decoration: none;
+			}
+			.kefin-help .kv-pill.kv-ghost {
+				background: var(--kh-surface-strong);
+				color: inherit;
+			}
+			.kefin-help .kv-empty {
+				padding: 2rem 1rem;
+				text-align: center;
+				color: var(--kh-muted);
+			}
+
+			/* ---------- Gallery: tiles + sheet ---------- */
+			.kefin-help .kv-gal-head {
+				display: flex;
+				flex-wrap: wrap;
+				align-items: end;
+				justify-content: space-between;
+				gap: 1rem;
+				margin-bottom: 2rem;
+			}
+			.kefin-help .kv-gal-head .kv-inputwrap {
+				flex: 0 1 22rem;
+			}
+			.kefin-help .kv-gal-cat {
+				margin: 0 0 2.2rem;
+			}
+			.kefin-help .kv-gal-cat h2 {
+				margin: 0 0 0.8rem;
+				font-size: 1.15rem;
+			}
+			.kefin-help .kv-gal-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
+				gap: 0.8rem;
+			}
+			.kefin-help .kv-tile {
+				position: relative;
+				display: flex;
+				flex-direction: column;
+				gap: 0.7rem;
+				padding: 1.1rem;
+				min-height: 9.5rem;
+				border-radius: var(--kh-radius);
+				border: 1px solid var(--kh-border);
+				background:
+					radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--kv-c) 26%, transparent), transparent 60%),
+					var(--kh-surface);
+				color: inherit;
+				font: inherit;
+				text-align: left;
+				cursor: pointer;
+				transition: transform 0.15s, border-color 0.15s;
+			}
+			.kefin-help .kv-tile:hover,
+			.kefin-help .kv-tile:focus-visible {
+				transform: translateY(-2px);
+				border-color: var(--kv-c);
+				outline: none;
+			}
+			.kefin-help .kv-tile-icon {
+				display: grid;
+				place-items: center;
+				width: 2.6rem;
+				height: 2.6rem;
+				border-radius: var(--kh-radius-sm);
+				background: linear-gradient(135deg, var(--kv-c), var(--kv-c2));
+				color: #fff;
+			}
+			.kefin-help .kv-tile-title {
+				font-weight: 650;
+				font-size: 1.02rem;
+			}
+			.kefin-help .kv-tile-sum {
+				font-size: 0.86rem;
+				line-height: 1.4;
+				color: var(--kh-muted);
+			}
+			.kefin-help .kv-sheet-backdrop {
+				position: fixed;
+				inset: 0;
+				z-index: 1100;
+				display: grid;
+				place-items: center;
+				padding: 4vh 1rem;
+				background: rgba(0, 0, 0, 0.6);
+				backdrop-filter: blur(4px);
+			}
+			.kefin-help .kv-sheet {
+				display: flex;
+				flex-direction: column;
+				width: min(46rem, 100%);
+				max-height: 92vh;
+				border-radius: var(--kh-radius);
+				border: 1px solid var(--kh-border);
+				background: var(--kh-sheet-bg);
+				color: var(--kh-text);
+				box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+				overflow: hidden;
+			}
+			.kefin-help .kv-sheet-head {
+				display: flex;
+				align-items: center;
+				gap: 0.9rem;
+				padding: 1.1rem 1.2rem;
+				background: linear-gradient(120deg, color-mix(in srgb, var(--kv-c) 30%, transparent), transparent 70%);
+				border-bottom: 1px solid var(--kh-border);
+			}
+			.kefin-help .kv-sheet-head h2 {
+				margin: 0;
+				font-size: 1.3rem;
+			}
+			.kefin-help .kv-sheet-head p {
+				margin: 0.1rem 0 0;
+				font-size: 0.88rem;
+				color: var(--kh-muted);
+			}
+			.kefin-help .kv-sheet-head .kv-iconbtn {
+				margin-left: auto;
+				flex: none;
+			}
+			.kefin-help .kv-sheet-body {
+				overflow: auto;
+				padding: 1.3rem 1.4rem;
+			}
+			.kefin-help .kv-sheet-foot {
+				display: flex;
+				justify-content: space-between;
+				gap: 0.5rem;
+				padding: 0.7rem 1rem;
+				border-top: 1px solid var(--kh-border);
+				font-size: 0.85rem;
+				color: var(--kh-muted);
+				align-items: center;
+			}
+			@media (max-width: 600px) {
+				.kefin-help .kv-sheet-backdrop {
+					place-items: end stretch;
+					padding: 0;
+				}
+				.kefin-help .kv-sheet {
+					width: 100%;
+					max-height: 88vh;
+					border-radius: var(--kh-radius) var(--kh-radius) 0 0;
+				}
+			}
+
+			/* ---------- Featured: large preview cards, 3 x 2 ---------- */
+			.kefin-help .kv-featgrid {
+				display: grid;
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+				gap: 1rem;
+				margin: 0 0 2.6rem;
+			}
+			@media (max-width: 1000px) {
+				.kefin-help .kv-featgrid {
+					grid-template-columns: repeat(2, minmax(0, 1fr));
+				}
+			}
+			@media (max-width: 640px) {
+				.kefin-help .kv-featgrid {
+					grid-template-columns: 1fr;
+				}
+			}
+			.kefin-help .kv-feat {
+				display: flex;
+				flex-direction: column;
+				border-radius: var(--kh-radius);
+				overflow: hidden;
+				border: 1px solid var(--kh-border);
+				background: var(--kh-surface);
+				color: inherit;
+				text-decoration: none;
+				transition: transform 0.15s, border-color 0.15s;
+			}
+			.kefin-help .kv-feat:hover,
+			.kefin-help .kv-feat:focus-visible {
+				transform: translateY(-2px);
+				border-color: var(--kv-c);
+				outline: none;
+			}
+			.kefin-help .kv-feat .pv {
+				height: 15.5rem;
+				min-height: 0;
+				font-size: 0.74rem;
+				border-radius: 0;
+				border-bottom: 1px solid var(--kh-border);
+			}
+			.kefin-help .kv-feat-text {
+				display: flex;
+				flex-direction: column;
+				gap: 0.2rem;
+				padding: 0.95rem 1.15rem 1.15rem;
+			}
+			.kefin-help .kv-feat-eyebrow {
+				display: flex;
+				align-items: center;
+				gap: 0.35rem;
+				font-size: 0.8rem;
+				font-weight: 600;
+				color: color-mix(in srgb, var(--kv-c) 70%, white);
+			}
+			.kefin-help .kv-feat-eyebrow .material-icons {
+				font-size: 1rem;
+			}
+			.kefin-help .kv-feat-head {
+				font-weight: 700;
+				font-size: 1.2rem;
+			}
+			.kefin-help .kv-feat-sum {
+				font-size: 0.9rem;
+				color: var(--kh-muted);
+			}
+
+			/* ---------- Tiles with a small preview ---------- */
+			.kefin-help .kv-gal-grid {
+				grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+			}
+			.kefin-help .kv-tile-text {
+				display: flex;
+				flex-direction: column;
+				gap: 0.7rem;
+			}
+			.kefin-help .kv-tile-title,
+			.kefin-help .kv-tile-sum {
+				display: block;
+			}
+			.kefin-help .kv-tile.kv-tile-pv {
+				padding: 0;
+				gap: 0;
+				overflow: hidden;
+			}
+			.kefin-help .kv-tile-pv .pv {
+				height: 11rem;
+				min-height: 0;
+				padding: 0.9rem;
+				font-size: 0.56rem;
+				border-radius: 0;
+				border-bottom: 1px solid var(--kh-border);
+			}
+			.kefin-help .kv-tile-pv .kv-tile-text {
+				flex-direction: row;
+				align-items: flex-start;
+				gap: 0.75rem;
+				padding: 0.85rem 0.95rem 1rem;
+			}
+			.kefin-help .kv-tile-pv .kv-tile-icon {
+				flex: none;
+				width: 2.2rem;
+				height: 2.2rem;
+			}
+			.kefin-help .kv-sheet-stage {
+				margin: 0 0 1.4rem;
+			}
+			.kefin-help .kv-sheet-stage .pv {
+				min-height: 16rem;
+				font-size: 0.95rem;
+			}
+			.kefin-help .kv-try {
+				display: flex;
+				align-items: center;
+				gap: 0.35rem;
+				margin: 0.5rem 0 0;
+				font-size: 0.8rem;
+				color: var(--kh-muted);
+			}
+			.kefin-help .kv-try .material-icons {
+				font-size: 1.05rem;
+			}
+
+			/* =====================================================================
+			   Previews: small working models of each feature. Sized in em, so the
+			   container's font-size scales the whole model.
+			   ===================================================================== */
+			.kefin-help .pv {
+				position: relative;
+				display: grid;
+				place-items: center;
+				padding: 1.4em;
+				min-height: 14em;
+				border-radius: var(--kh-radius);
+				overflow: hidden;
+				color: #eceef1;
+				line-height: 1.35;
+				text-align: left;
+				background:
+					radial-gradient(90% 100% at 0% 0%, color-mix(in srgb, var(--kv-c, var(--kh-accent)) 22%, transparent), transparent 70%),
+					#0d0e11;
+			}
+			/* In the grid a preview is a picture: nothing in it takes a click. */
+			.kefin-help .pv.pv-card {
+				pointer-events: none;
+				user-select: none;
+			}
+			.kefin-help .pv button {
+				font: inherit;
+				color: inherit;
+				margin: 0;
+			}
+			.kefin-help .pv b {
+				font-weight: 650;
+			}
+			.kefin-help .pv-col {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 0.8em;
+				width: 100%;
+			}
+			.kefin-help .pv-w {
+				max-width: 27em;
+			}
+			.kefin-help .pv-row {
+				display: flex;
+				align-items: center;
+				gap: 0.55em;
+			}
+			.kefin-help .pv-center {
+				justify-content: center;
+				flex-wrap: wrap;
+			}
+			.kefin-help .pv-full {
+				width: 100%;
+			}
+			.kefin-help .pv-grow {
+				flex: 1;
+			}
+			.kefin-help .pv-left {
+				align-self: flex-start;
+			}
+			.kefin-help .pv-cap {
+				font-size: 0.74em;
+				color: rgba(255, 255, 255, 0.62);
+			}
+			.kefin-help .pv-label {
+				font-size: 0.82em;
+				font-weight: 600;
+				color: rgba(255, 255, 255, 0.85);
+			}
+			.kefin-help .pv-btn {
+				position: relative;
+				display: inline-grid;
+				place-items: center;
+				flex: none;
+				width: 2.4em;
+				height: 2.4em;
+				padding: 0;
+				border: 0;
+				border-radius: 50%;
+				background: rgba(255, 255, 255, 0.1);
+				cursor: pointer;
+				transition: background 0.15s, color 0.15s;
+			}
+			.kefin-help .pv-btn .material-icons {
+				font-size: 1.25em;
+			}
+			.kefin-help .pv-btn:hover {
+				background: rgba(255, 255, 255, 0.18);
+			}
+			.kefin-help .pv-btn.pv-mini {
+				width: 1.9em;
+				height: 1.9em;
+			}
+			.kefin-help .pv-btn.pv-mini .material-icons {
+				font-size: 1.05em;
+			}
+			.kefin-help .pv-on {
+				color: var(--kh-accent) !important;
+			}
+			.kefin-help .pv-green {
+				color: var(--kh-good) !important;
+			}
+			.kefin-help .pv-red {
+				color: #ff5a6e !important;
+			}
+			.kefin-help .pv-pill {
+				position: relative;
+				display: inline-flex;
+				align-items: center;
+				gap: 0.35em;
+				padding: 0.45em 0.95em;
+				border: 0;
+				border-radius: 999px;
+				background: var(--kh-accent);
+				color: var(--kh-on-accent, #fff) !important;
+				font-size: 0.85em !important;
+				font-weight: 700;
+				white-space: nowrap;
+				cursor: pointer;
+			}
+			.kefin-help .pv-pill .material-icons {
+				font-size: 1.2em;
+			}
+			.kefin-help .pv-pill.pv-ghost,
+			.kefin-help .pv-pill.pv-wait {
+				background: rgba(255, 255, 255, 0.12);
+				color: #eceef1 !important;
+			}
+			.kefin-help .pv-pill.pv-small {
+				padding: 0.35em 0.75em;
+				font-size: 0.74em !important;
+			}
+			.kefin-help .pv-pill.pv-ok {
+				color: #fff !important;
+				background: var(--kh-good);
+				cursor: default;
+			}
+			.kefin-help .pv-pill.pv-wait {
+				background: rgba(255, 255, 255, 0.16);
+			}
+
+			/* The pulsing ring: always on in an open topic until clicked; on hover in the grid. */
+			.kefin-help .pv-hot::after {
+				content: "";
+				position: absolute;
+				inset: -0.3em;
+				border-radius: inherit;
+				border: 0.14em solid var(--kh-accent);
+				opacity: 0;
+				pointer-events: none;
+			}
+			.kefin-help .pv-live .pv-hot::after,
+			.kefin-help .kv-feat:hover .pv-hot::after,
+			.kefin-help .kv-feat:focus-visible .pv-hot::after,
+			.kefin-help .kv-tile:hover .pv-hot::after,
+			.kefin-help .kv-tile:focus-visible .pv-hot::after {
+				opacity: 0.85;
+			}
+			@media (prefers-reduced-motion: no-preference) {
+				.kefin-help .pv-live .pv-hot::after,
+				.kefin-help .kv-feat:hover .pv-hot::after,
+				.kefin-help .kv-feat:focus-visible .pv-hot::after,
+				.kefin-help .kv-tile:hover .pv-hot::after,
+				.kefin-help .kv-tile:focus-visible .pv-hot::after {
+					animation: kv-pulse 1.8s ease-out infinite;
+				}
+				@keyframes kv-pulse {
+					from { transform: scale(0.9); opacity: 0.9; }
+					to { transform: scale(1.35); opacity: 0; }
+				}
+			}
+			.kefin-help .pv-toast {
+				position: absolute;
+				left: 50%;
+				bottom: 0.8em;
+				z-index: 9;
+				padding: 0.45em 0.95em;
+				border-radius: 999px;
+				background: #2b2e36;
+				box-shadow: 0 0.4em 1.2em rgba(0, 0, 0, 0.45);
+				font-size: 0.76em;
+				white-space: nowrap;
+				opacity: 0;
+				transform: translate(-50%, 0.5em);
+				transition: opacity 0.2s, transform 0.2s;
+				pointer-events: none;
+			}
+			.kefin-help .pv-toast.pv-show {
+				opacity: 1;
+				transform: translate(-50%, 0);
+			}
+
+			/* Artwork stand-ins */
+			.kefin-help .pv-thumb {
+				position: relative;
+				width: 7.4em;
+				aspect-ratio: 16 / 9;
+				border-radius: 0.5em;
+				background:
+					radial-gradient(60% 80% at 30% 30%, hsl(var(--h, 30) 75% 60%), transparent 70%),
+					radial-gradient(60% 80% at 80% 75%, hsl(calc(var(--h, 30) + 150) 60% 45%), transparent 70%),
+					hsl(var(--h, 30) 25% 18%);
+				transition: filter 0.35s;
+			}
+			.kefin-help .pv-blur {
+				filter: blur(0.45em) saturate(0.7);
+			}
+			.kefin-help .pv-poster {
+				display: block;
+				flex: none;
+				width: 4.6em;
+				aspect-ratio: 2 / 3;
+				border-radius: 0.45em;
+				background: linear-gradient(160deg, hsl(var(--h, 200) 60% 55%), hsl(calc(var(--h, 200) + 50) 55% 28%));
+			}
+			.kefin-help .pv-pcard {
+				position: relative;
+			}
+			.kefin-help .pv-pcard .pv-poster {
+				width: 5.2em;
+			}
+			.kefin-help .pv-ov {
+				position: absolute;
+				right: 0.3em;
+				bottom: 0.3em;
+				display: flex;
+				gap: 0.25em;
+			}
+			.kefin-help .pv-ov-top {
+				top: 0.3em;
+				bottom: auto;
+			}
+			.kefin-help .pv-ov .pv-btn {
+				width: 1.9em;
+				height: 1.9em;
+				background: rgba(0, 0, 0, 0.6);
+			}
+			.kefin-help .pv-ov .pv-btn .material-icons {
+				font-size: 1.05em;
+			}
+
+			/* Episodes */
+			.kefin-help .pv-eps {
+				align-items: flex-start;
+			}
+			.kefin-help .pv-ep {
+				position: relative;
+				width: 7.4em;
+			}
+			.kefin-help .pv-ep .pv-thumb {
+				width: 100%;
+			}
+			.kefin-help .pv-ep .pv-watch {
+				position: absolute;
+				top: 0.3em;
+				right: 0.3em;
+				background: rgba(0, 0, 0, 0.6);
+			}
+			.kefin-help .pv-ep.pv-played .pv-watch {
+				color: var(--kh-good);
+			}
+			.kefin-help .pv-ep-title {
+				margin-top: 0.35em;
+				color: #fff;
+				font-weight: 600;
+			}
+			.kefin-help .pv-ep-desc {
+				font-style: italic;
+			}
+			.kefin-help .pv-badge {
+				position: absolute;
+				top: 0.35em;
+				left: 0.35em;
+				z-index: 1;
+				padding: 0.15em 0.5em;
+				border-radius: 0.35em;
+				background: var(--kh-accent);
+				color: var(--kh-on-accent, #fff);
+				font-size: 0.62em;
+				font-weight: 700;
+			}
+			.kefin-help .pv-strip .pv-ep.pv-played::before {
+				content: "\2713";
+				position: absolute;
+				top: 0.3em;
+				right: 0.3em;
+				z-index: 1;
+				display: grid;
+				place-items: center;
+				width: 1.4em;
+				height: 1.4em;
+				border-radius: 50%;
+				background: var(--kh-good);
+				font-size: 0.7em;
+				font-weight: 700;
+			}
+			.kefin-help .pv-chips {
+				display: flex;
+				flex-wrap: wrap;
+				justify-content: center;
+				gap: 0.35em;
+			}
+			.kefin-help .pv-epchip {
+				padding: 0.35em 0.6em;
+				border: 0;
+				border-radius: 0.45em;
+				background: #262932;
+				font-size: 0.78em;
+				font-weight: 600;
+				transition: background 0.25s;
+			}
+			.kefin-help button.pv-epchip {
+				cursor: pointer;
+			}
+			.kefin-help .pv-epchip.pv-bonus {
+				background: color-mix(in srgb, var(--kh-accent) 42%, #262932);
+			}
+			.kefin-help .pv-epchip.pv-gone {
+				background: transparent;
+				border: 1px dashed rgba(255, 255, 255, 0.25);
+				color: rgba(255, 255, 255, 0.55);
+			}
+
+			/* Search result (Requests) */
+			.kefin-help .pv-search {
+				display: flex;
+				align-items: center;
+				gap: 0.45em;
+				width: 100%;
+				padding: 0.5em 0.85em;
+				border-radius: 999px;
+				background: #262932;
+				font-size: 0.85em;
+				color: rgba(255, 255, 255, 0.75);
+			}
+			.kefin-help .pv-search .material-icons {
+				font-size: 1.2em;
+			}
+			.kefin-help .pv-result {
+				display: flex;
+				align-items: center;
+				gap: 0.7em;
+				width: 100%;
+				padding: 0.55em;
+				border-radius: 0.7em;
+				background: #1c1e24;
+			}
+			.kefin-help .pv-result .pv-poster {
+				width: 2.6em;
+			}
+			.kefin-help .pv-result b {
+				font-size: 0.85em;
+			}
+
+			/* Theme media */
+			.kefin-help .pv-theme {
+				width: 100%;
+				max-width: 21em;
+				border-radius: 0.8em;
+				overflow: hidden;
+				background: linear-gradient(160deg, hsl(18 60% 33%), hsl(280 40% 16%));
+				transition: max-width 0.3s;
+			}
+			.kefin-help .pv-theme.pv-full {
+				max-width: 30em;
+			}
+			.kefin-help .pv-theme-top {
+				display: flex;
+				justify-content: flex-end;
+				align-items: center;
+				gap: 0.35em;
+				padding: 0.5em;
+			}
+			.kefin-help .pv-vol {
+				width: 6em;
+				accent-color: #fff;
+			}
+			.kefin-help .pv-theme-body {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 0.6em;
+				padding: 0.6em 0 1.1em;
+			}
+			.kefin-help .pv-eq {
+				display: flex;
+				align-items: flex-end;
+				gap: 0.28em;
+				height: 3.2em;
+			}
+			.kefin-help .pv-eq i {
+				width: 0.45em;
+				height: calc(100% * var(--vol, 0.6));
+				border-radius: 0.2em;
+				background: rgba(255, 255, 255, 0.78);
+				transform-origin: bottom;
+				transition: height 0.2s;
+			}
+			@media (prefers-reduced-motion: no-preference) {
+				.kefin-help .pv-live .pv-eq i {
+					animation: pv-eq 0.9s ease-in-out infinite alternate;
+				}
+				.kefin-help .pv-live .pv-eq i:nth-child(2n) { animation-delay: -0.3s; }
+				.kefin-help .pv-live .pv-eq i:nth-child(3n) { animation-delay: -0.6s; }
+				.kefin-help .pv-live .pv-silent .pv-eq i {
+					animation: none;
+				}
+				@keyframes pv-eq {
+					from { transform: scaleY(0.35); }
+					to { transform: scaleY(1); }
+				}
+			}
+
+			/* Player */
+			.kefin-help .pv-player {
+				position: relative;
+				width: 100%;
+				max-width: 25em;
+				aspect-ratio: 16 / 9;
+				border-radius: 0.6em;
+				overflow: hidden;
+				background: #000;
+			}
+			.kefin-help .pv-frame {
+				position: absolute;
+				inset: 0;
+				background:
+					radial-gradient(60% 80% at 30% 30%, hsl(var(--h, 30) 75% 60%), transparent 70%),
+					radial-gradient(60% 80% at 80% 75%, hsl(calc(var(--h, 30) + 150) 60% 45%), transparent 70%),
+					hsl(var(--h, 30) 25% 18%);
+			}
+			.kefin-help .pv-ctl {
+				position: absolute;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				z-index: 4;
+				display: flex;
+				align-items: center;
+				gap: 0.5em;
+				padding: 0.55em 0.7em;
+				background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+			}
+			.kefin-help .pv-ctl .pv-btn {
+				width: 2em;
+				height: 2em;
+				background: rgba(255, 255, 255, 0.12);
+			}
+			.kefin-help .pv-bar {
+				position: relative;
+				flex: 1;
+				height: 0.32em;
+				border-radius: 0.3em;
+				background: rgba(255, 255, 255, 0.25);
+			}
+			.kefin-help .pv-bar i {
+				position: absolute;
+				left: 0;
+				top: 0;
+				bottom: 0;
+				width: var(--p, 30%);
+				border-radius: inherit;
+				background: var(--kh-accent);
+				transition: width 0.5s;
+			}
+			.kefin-help .pv-seg {
+				position: absolute;
+				top: -0.15em;
+				bottom: -0.15em;
+				left: 5%;
+				width: 17%;
+				border-radius: 0.2em;
+				background: rgba(255, 255, 255, 0.3);
+			}
+			.kefin-help .pv-tag {
+				position: absolute;
+				top: 0.6em;
+				left: 0.6em;
+				z-index: 2;
+				padding: 0.2em 0.55em;
+				border-radius: 0.35em;
+				background: rgba(0, 0, 0, 0.55);
+				font-size: 0.7em;
+			}
+			.kefin-help .pv-pill.pv-skip {
+				position: absolute;
+				right: 0.8em;
+				bottom: 2.9em;
+				z-index: 5;
+			}
+			.kefin-help .pv-ps {
+				position: absolute;
+				inset: 0;
+				z-index: 3;
+				display: flex;
+				flex-direction: column;
+				justify-content: flex-end;
+				padding: 1em 1.1em 2.9em;
+				background: linear-gradient(180deg, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.88));
+				opacity: 0;
+				pointer-events: none;
+				transition: opacity 0.4s;
+				cursor: pointer;
+			}
+			.kefin-help .pv-ps.pv-show {
+				opacity: 1;
+				pointer-events: auto;
+			}
+			.kefin-help .pv-ps b {
+				font-size: 1.05em;
+			}
+			.kefin-help .pv-ps small {
+				display: block;
+				margin: 0.25em 0 0.6em;
+				font-size: 0.72em;
+				color: rgba(255, 255, 255, 0.75);
+			}
+			.kefin-help .pv-ps .pv-bar {
+				flex: none;
+			}
+			.kefin-help .pv-meta {
+				display: flex;
+				justify-content: space-between;
+				margin-top: 0.35em;
+				font-size: 0.72em;
+				color: rgba(255, 255, 255, 0.8);
+			}
+			.kefin-help .pv-hint {
+				white-space: nowrap;
+			}
+
+			/* CRT */
+			.kefin-help .pv-scene {
+				background:
+					radial-gradient(circle at 70% 34%, hsl(42 95% 66%) 0 9%, transparent 10%),
+					linear-gradient(180deg, hsl(25 80% 56%), hsl(330 50% 36%) 60%, hsl(260 40% 20%));
+				transition: filter 0.3s, transform 0.3s;
+			}
+			.kefin-help .pv-hills {
+				position: absolute;
+				left: -10%;
+				right: -10%;
+				bottom: -32%;
+				height: 66%;
+				border-radius: 50% 50% 0 0;
+				background: hsl(250 35% 14%);
+			}
+			.kefin-help .pv-scan {
+				position: absolute;
+				inset: 0;
+				z-index: 1;
+				pointer-events: none;
+			}
+			.kefin-help .pv-crt {
+				transition: border-radius 0.3s;
+			}
+			.kefin-help .pv-crt[data-crt="super"] .pv-scan {
+				background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.35) 0 0.08em, transparent 0.08em 0.24em);
+			}
+			.kefin-help .pv-crt[data-crt="super"] .pv-scene {
+				filter: saturate(1.25) contrast(1.08);
+			}
+			.kefin-help .pv-crt[data-crt="kurozumi"] {
+				border-radius: 1.8em / 1.3em;
+			}
+			.kefin-help .pv-crt[data-crt="kurozumi"] .pv-scan {
+				background:
+					repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.5) 0 0.1em, transparent 0.1em 0.28em),
+					radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.7) 100%);
+			}
+			.kefin-help .pv-crt[data-crt="kurozumi"] .pv-scene {
+				filter: saturate(1.45) contrast(1.15) blur(0.03em);
+				transform: scale(1.05);
+			}
+
+			/* Keyboard */
+			.kefin-help .pv-keys {
+				display: grid;
+				grid-template-columns: repeat(4, 1fr);
+				gap: 0.45em;
+				width: 100%;
+			}
+			.kefin-help .pv-key {
+				position: relative;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 0.3em;
+				padding: 0.5em 0.3em;
+				border: 1px solid rgba(255, 255, 255, 0.1);
+				border-radius: 0.6em;
+				background: #1a1c22;
+				cursor: pointer;
+			}
+			.kefin-help .pv-key kbd {
+				min-width: 1.9em;
+				padding: 0.15em 0.4em;
+				border: 1px solid rgba(255, 255, 255, 0.2);
+				border-bottom-width: 0.2em;
+				border-radius: 0.35em;
+				background: #262932;
+				font: 700 0.9em/1.4 ui-monospace, Menlo, Consolas, monospace;
+				text-align: center;
+			}
+			.kefin-help .pv-key span {
+				font-size: 0.66em;
+				color: rgba(255, 255, 255, 0.65);
+			}
+			.kefin-help .pv-key.pv-pressed {
+				animation: pv-press 0.4s ease-out;
+			}
+			@keyframes pv-press {
+				from { background: var(--kh-accent); }
+				to { background: #1a1c22; }
+			}
+			.kefin-help .pv-status {
+				width: 100%;
+				padding: 0.5em 0.8em;
+				border-radius: 0.6em;
+				background: #000;
+				font: 0.78em ui-monospace, Menlo, Consolas, monospace;
+				text-align: center;
+				color: #cde;
+				white-space: pre;
+			}
+			.kefin-help .pv-what {
+				min-height: 1.4em;
+			}
+
+			/* Top bar and menus */
+			.kefin-help .pv-topbar {
+				display: flex;
+				align-items: center;
+				gap: 0.45em;
+				width: 100%;
+				padding: 0.5em 0.7em;
+				border-radius: 0.6em;
+				background: #181a20;
+				font-size: 0.82em;
+			}
+			.kefin-help .pv-topbar > .material-icons {
+				font-size: 1.25em;
+				color: rgba(255, 255, 255, 0.7);
+			}
+			.kefin-help .pv-logo {
+				flex: none;
+				width: 1.4em;
+				height: 1.4em;
+				border-radius: 0.35em;
+				background: linear-gradient(135deg, #aa5cc3, #00a4dc);
+			}
+			.kefin-help .pv-tab {
+				position: relative;
+				padding: 0.3em 0.55em;
+				border: 0;
+				border-radius: 999px;
+				background: transparent;
+				color: rgba(255, 255, 255, 0.75);
+				white-space: nowrap;
+			}
+			.kefin-help button.pv-tab {
+				cursor: pointer;
+				color: #fff;
+				background: rgba(255, 255, 255, 0.06);
+			}
+			.kefin-help .pv-tab-on {
+				background: rgba(255, 255, 255, 0.14);
+				color: #fff;
+			}
+			.kefin-help .pv-menu {
+				display: flex;
+				flex-direction: column;
+				align-self: flex-start;
+				min-width: 10em;
+				padding: 0.35em;
+				border-radius: 0.6em;
+				background: #22252c;
+				box-shadow: 0 0.6em 1.6em rgba(0, 0, 0, 0.45);
+				font-size: 0.82em;
+			}
+			.kefin-help .pv-menu > div,
+			.kefin-help .pv-menu > button {
+				display: flex;
+				align-items: center;
+				gap: 0.5em;
+				padding: 0.4em 0.6em;
+				border: 0;
+				border-radius: 0.4em;
+				background: transparent;
+				color: rgba(255, 255, 255, 0.85);
+				text-align: left;
+				cursor: pointer;
+				white-space: nowrap;
+			}
+			.kefin-help .pv-menu > *:hover {
+				background: rgba(255, 255, 255, 0.08);
+			}
+			.kefin-help .pv-menu .material-icons {
+				font-size: 1.15em;
+			}
+			.kefin-help .pv-crumbs {
+				align-self: flex-start;
+				font-size: 0.8em;
+				color: rgba(255, 255, 255, 0.7);
+			}
+			.kefin-help .pv-crumb {
+				padding: 0.15em 0.45em;
+				border: 0;
+				border-radius: 0.4em;
+				background: rgba(255, 255, 255, 0.1);
+				cursor: pointer;
+			}
+
+			/* Appearance */
+			.kefin-help .pv-mock {
+				--acc: #9db8ff;
+				width: 100%;
+				padding: 0.7em;
+				border-radius: 0.7em;
+				border: 1px solid rgba(255, 255, 255, 0.07);
+				background: #15171c;
+			}
+			.kefin-help .pv-mock-bar {
+				display: flex;
+				align-items: center;
+				margin-bottom: 0.6em;
+			}
+			.kefin-help .pv-acc {
+				color: var(--acc);
+				transition: color 0.3s;
+			}
+			.kefin-help .pv-acc .material-icons {
+				font-size: 1.3em;
+			}
+			.kefin-help .pv-mock .pv-poster {
+				width: 3.6em;
+				outline: 0.14em solid transparent;
+				outline-offset: 0.12em;
+				transition: outline-color 0.3s;
+			}
+			.kefin-help .pv-mock .pv-poster:first-child {
+				outline-color: var(--acc);
+			}
+			.kefin-help .pv-mock-side {
+				display: flex;
+				flex-direction: column;
+				gap: 0.45em;
+				margin-left: 0.4em;
+			}
+			.kefin-help .pv-mock-side b {
+				color: var(--acc);
+				transition: color 0.3s;
+			}
+			.kefin-help .pv-mock-btn {
+				padding: 0.3em 0.9em;
+				border-radius: 999px;
+				background: var(--acc);
+				color: #111;
+				font-size: 0.8em;
+				font-weight: 700;
+				text-align: center;
+				transition: background 0.3s;
+			}
+			.kefin-help .pv-swatch {
+				position: relative;
+				width: 1.7em;
+				height: 1.7em;
+				padding: 0;
+				border: 0.15em solid transparent;
+				border-radius: 50%;
+				background: var(--sw);
+				cursor: pointer;
+			}
+			.kefin-help .pv-swatch.pv-sel {
+				border-color: #fff;
+			}
+
+			/* Rows */
+			.kefin-help .pv-rowhead {
+				display: flex;
+				align-items: center;
+				gap: 0.5em;
+				width: 100%;
+			}
+			.kefin-help .pv-rowhead b {
+				font-size: 0.9em;
+			}
+			.kefin-help .pv-strip {
+				display: flex;
+				gap: 0.45em;
+				width: 100%;
+				overflow: hidden;
+			}
+			.kefin-help .pv-strip.pv-wrap {
+				flex-wrap: wrap;
+			}
+			.kefin-help .pv-strip .pv-ep {
+				flex: none;
+				width: 6.6em;
+			}
+			.kefin-help .pv-strip .pv-ep .pv-cap {
+				margin-top: 0.25em;
+			}
+			.kefin-help .pv-strip.pv-small .pv-thumb {
+				flex: none;
+				width: 4.6em;
+			}
+			.kefin-help .pv-strip.pv-posters .pv-poster {
+				width: 3.7em;
+			}
+
+			/* Specials */
+			.kefin-help .pv-copy {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 0.35em;
+			}
+			.kefin-help .pv-link {
+				color: rgba(255, 255, 255, 0.5);
+			}
+			.kefin-help .pv-link .material-icons {
+				font-size: 1.6em;
+			}
+
+			/* Characters */
+			.kefin-help .pv-cast {
+				align-items: flex-start;
+				gap: 0.45em;
+			}
+			.kefin-help .pv-person {
+				position: relative;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				width: 5em;
+				padding: 0;
+				border: 0;
+				border-radius: 0.6em;
+				background: transparent;
+				text-align: center;
+			}
+			.kefin-help button.pv-person {
+				cursor: pointer;
+			}
+			.kefin-help .pv-person i {
+				display: block;
+				width: 100%;
+				aspect-ratio: 2 / 3;
+				margin-bottom: 0.35em;
+				border-radius: 0.5em;
+				background: linear-gradient(160deg, hsl(var(--h, 340) 55% 55%), hsl(calc(var(--h, 340) + 40) 55% 32%));
+			}
+			.kefin-help .pv-person i.pv-actor {
+				background: linear-gradient(160deg, hsl(210 20% 52%), hsl(220 18% 28%));
+			}
+			.kefin-help .pv-person i.pv-split {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 0.12em;
+				overflow: hidden;
+				background: none;
+			}
+			.kefin-help .pv-split em {
+				display: block;
+				background: linear-gradient(160deg, hsl(var(--h) 55% 55%), hsl(calc(var(--h) + 40) 55% 30%));
+			}
+			.kefin-help .pv-person b {
+				font-size: 0.72em;
+			}
+			.kefin-help .pv-person span {
+				font-size: 0.64em;
+				color: rgba(255, 255, 255, 0.6);
+			}
+			.kefin-help .pv-charpage {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 0.5em;
+				width: 100%;
+				padding: 0.9em;
+				border-radius: 0.7em;
+				background: #1a1c22;
+				text-align: center;
+			}
+
+			/* Watchlist page */
+			.kefin-help .pv-tabs {
+				display: flex;
+				flex-wrap: wrap;
+				justify-content: center;
+				gap: 0.3em;
+			}
+			.kefin-help .pv-tabbtn {
+				position: relative;
+				padding: 0.35em 0.75em;
+				border: 0;
+				border-radius: 999px;
+				background: rgba(255, 255, 255, 0.08);
+				font-size: 0.78em;
+				cursor: pointer;
+			}
+			.kefin-help .pv-tabbtn.pv-tab-on {
+				background: var(--kh-accent);
+				color: var(--kh-on-accent, #fff);
+			}
+			.kefin-help .pv-tabbody {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 0.6em;
+				width: 100%;
+				min-height: 8em;
+			}
+			.kefin-help .pv-tabbody .pv-poster {
+				width: 3.6em;
+			}
+			.kefin-help .pv-prog {
+				width: 100%;
+			}
+			.kefin-help .pv-prog b {
+				font-size: 0.82em;
+			}
+			.kefin-help .pv-ok-badge {
+				padding: 0.1em 0.4em;
+				border-radius: 0.3em;
+				background: var(--kh-good);
+				font-size: 0.65em;
+			}
+			.kefin-help .pv-segbar {
+				display: flex;
+				gap: 0.15em;
+				margin: 0.3em 0;
+			}
+			.kefin-help .pv-segbar i {
+				flex: 1;
+				height: 0.4em;
+				border-radius: 0.15em;
+				background: rgba(255, 255, 255, 0.18);
+			}
+			.kefin-help .pv-segbar i.pv-w-on {
+				background: var(--kh-good);
+			}
+			.kefin-help .pv-hist {
+				display: flex;
+				align-items: center;
+				gap: 0.6em;
+				width: 100%;
+			}
+			.kefin-help .pv-hist .pv-poster {
+				width: 2.2em;
+			}
+			.kefin-help .pv-hist b {
+				font-size: 0.82em;
+			}
+			.kefin-help .pv-stats {
+				display: flex;
+				gap: 0.5em;
+				width: 100%;
+			}
+			.kefin-help .pv-stats div {
+				flex: 1;
+				padding: 0.5em;
+				border-radius: 0.5em;
+				background: #1a1c22;
+				text-align: center;
+			}
+			.kefin-help .pv-stats b {
+				display: block;
+				font-size: 1.1em;
+			}
+			.kefin-help .pv-stats span {
+				font-size: 0.66em;
+				color: rgba(255, 255, 255, 0.6);
+			}
+			.kefin-help .pv-chart {
+				display: flex;
+				align-items: flex-end;
+				gap: 0.35em;
+				width: 100%;
+				height: 4em;
+			}
+			.kefin-help .pv-chart i {
+				flex: 1;
+				border-radius: 0.2em 0.2em 0 0;
+				background: var(--kh-accent);
+				opacity: 0.8;
+			}
+
+			/* Continue Watching */
+			.kefin-help .pv-cw {
+				align-items: flex-start;
+			}
+			.kefin-help .pv-cwcard {
+				position: relative;
+				display: flex;
+				flex-direction: column;
+				gap: 0.35em;
+				width: 7.4em;
+				transition: opacity 0.3s, transform 0.3s, width 0.3s, margin 0.3s;
+			}
+			.kefin-help .pv-cwcard .pv-thumb {
+				width: 100%;
+			}
+			.kefin-help .pv-cwcard .pv-x {
+				position: absolute;
+				top: 0.3em;
+				right: 0.3em;
+				background: rgba(0, 0, 0, 0.6);
+			}
+			.kefin-help .pv-cwcard .pv-bar {
+				flex: none;
+			}
+			.kefin-help .pv-cwcard.pv-gone {
+				width: 0;
+				margin-right: -0.55em;
+				overflow: hidden;
+				opacity: 0;
+				transform: scale(0.85);
+			}
+
+			/* Playlist */
+			.kefin-help .pv-list {
+				display: flex;
+				flex-direction: column;
+				gap: 0.25em;
+				width: 100%;
+			}
+			.kefin-help .pv-li {
+				display: flex;
+				align-items: center;
+				gap: 0.55em;
+				padding: 0.35em 0.5em;
+				border-radius: 0.5em;
+				background: #17191e;
+			}
+			.kefin-help .pv-li b {
+				font-size: 0.82em;
+			}
+			.kefin-help .pv-li.pv-next {
+				outline: 1px solid var(--kh-accent);
+			}
+			.kefin-help .pv-tick {
+				color: var(--kh-good);
+			}
+			.kefin-help .pv-tick .material-icons {
+				font-size: 1.1em;
+			}
+
+			/* Pinning */
+			.kefin-help .pv-pinwrap {
+				flex-wrap: wrap;
+				justify-content: center;
+				align-items: flex-start;
+				gap: 1.2em;
+			}
+			.kefin-help .pv-pinsrc .pv-pinmenu {
+				position: absolute;
+				top: 2.6em;
+				left: 55%;
+				z-index: 4;
+				min-width: 12em;
+			}
+			.kefin-help .pv-home {
+				display: flex;
+				flex-direction: column;
+				gap: 0.5em;
+				min-width: 12em;
+				padding: 0.7em;
+				border-radius: 0.7em;
+				background: #15171c;
+			}
+			.kefin-help .pv-homerow b {
+				display: block;
+				margin-bottom: 0.3em;
+				font-size: 0.72em;
+			}
+			.kefin-help .pv-homerow .pv-thumb {
+				width: 4.6em;
+			}
+			.kefin-help .pv-homerow .pv-poster {
+				width: 3em;
+			}
+
+			/* Home screen rows */
+			.kefin-help .pv-homeedit {
+				gap: 0.5em;
+			}
+			.kefin-help .pv-hrow {
+				position: relative;
+				width: 100%;
+				padding: 0.5em 0.6em;
+				border-radius: 0.6em;
+				background: #15171c;
+			}
+			.kefin-help .pv-hrow .pv-rowhead {
+				margin-bottom: 0.4em;
+			}
+			.kefin-help .pv-pop {
+				position: absolute;
+				top: 2.4em;
+				right: 0.5em;
+				z-index: 3;
+				display: flex;
+				gap: 0.25em;
+				padding: 0.3em;
+				border-radius: 0.6em;
+				background: #262932;
+				box-shadow: 0 0.5em 1.4em rgba(0, 0, 0, 0.45);
+			}
+			.kefin-help .pv-undo {
+				display: flex;
+				align-items: center;
+				gap: 0.6em;
+				font-size: 0.8em;
+			}
+
+			/* Media Bar */
+			.kefin-help .pv-mbar {
+				position: relative;
+				width: 100%;
+				max-width: 27em;
+				aspect-ratio: 2 / 1;
+				border-radius: 0.7em;
+				overflow: hidden;
+			}
+			.kefin-help .pv-slide {
+				position: absolute;
+				inset: 0;
+				background:
+					radial-gradient(70% 90% at 75% 30%, hsl(var(--h, 250) 70% 55%), transparent 70%),
+					linear-gradient(90deg, hsl(var(--h, 250) 30% 10%) 30%, hsl(calc(var(--h, 250) + 40) 40% 25%));
+			}
+			.kefin-help .pv-mbar-ui {
+				position: absolute;
+				left: 1em;
+				right: 35%;
+				bottom: 2.7em;
+				display: flex;
+				flex-direction: column;
+				gap: 0.35em;
+			}
+			.kefin-help .pv-mtitle {
+				font-size: 1.15em;
+			}
+			.kefin-help .pv-mnav {
+				position: absolute;
+				left: 0;
+				right: 0;
+				bottom: 0.45em;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				gap: 0.4em;
+			}
+			.kefin-help .pv-mbar .pv-btn {
+				background: rgba(0, 0, 0, 0.4);
+			}
+			.kefin-help .pv-dots {
+				display: flex;
+				gap: 0.3em;
+			}
+			.kefin-help .pv-dots i {
+				width: 0.45em;
+				height: 0.45em;
+				border-radius: 0.3em;
+				background: rgba(255, 255, 255, 0.35);
+				transition: width 0.3s, background 0.3s;
+			}
+			.kefin-help .pv-dots i.pv-dot-on {
+				width: 1.1em;
+				background: #fff;
+			}
+
+			/* Calendar */
+			.kefin-help .pv-segctl {
+				display: inline-flex;
+				padding: 0.2em;
+				border-radius: 999px;
+				background: #1c1e24;
+			}
+			.kefin-help .pv-segctl button {
+				position: relative;
+				padding: 0.3em 0.75em;
+				border: 0;
+				border-radius: 999px;
+				background: transparent;
+				font-size: 0.75em;
+				cursor: pointer;
+			}
+			.kefin-help .pv-segctl .pv-seg-on {
+				background: var(--kh-accent);
+				color: var(--kh-on-accent, #fff);
+			}
+			.kefin-help .pv-legend {
+				flex-wrap: wrap;
+				gap: 0.35em;
+				width: 100%;
+			}
+			.kefin-help .pv-lg {
+				padding: 0.2em 0.6em;
+				border: 1px solid currentColor;
+				border-radius: 999px;
+				background: transparent;
+				font-size: 0.68em;
+				cursor: pointer;
+				opacity: 0.4;
+			}
+			.kefin-help .pv .pv-lg.pv-k-anime,
+			.kefin-help .pv .pv-ev.pv-k-anime,
+			.kefin-help .pv i.pv-k-anime {
+				color: hsl(330 75% 72%);
+			}
+			.kefin-help .pv .pv-lg.pv-k-episode,
+			.kefin-help .pv .pv-ev.pv-k-episode,
+			.kefin-help .pv i.pv-k-episode {
+				color: hsl(200 75% 66%);
+			}
+			.kefin-help .pv .pv-lg.pv-k-digital,
+			.kefin-help .pv .pv-ev.pv-k-digital,
+			.kefin-help .pv i.pv-k-digital {
+				color: hsl(45 85% 62%);
+			}
+			.kefin-help .pv-lg.pv-lg-on {
+				opacity: 1;
+			}
+			.kefin-help .pv-cal {
+				width: 100%;
+			}
+			.kefin-help .pv-week {
+				display: grid;
+				grid-template-columns: repeat(7, 1fr);
+				gap: 0.25em;
+			}
+			.kefin-help .pv-week > div {
+				display: flex;
+				flex-direction: column;
+				gap: 0.25em;
+				min-height: 6em;
+				padding: 0.3em;
+				border-radius: 0.4em;
+				background: #16181d;
+			}
+			.kefin-help .pv-week b {
+				font-size: 0.62em;
+				color: rgba(255, 255, 255, 0.6);
+			}
+			.kefin-help .pv-ev {
+				display: block;
+				padding: 0.2em 0.3em;
+				border-radius: 0.3em;
+				background: color-mix(in srgb, currentColor 22%, transparent);
+				font-size: 0.56em;
+				line-height: 1.25;
+			}
+			.kefin-help .pv-month {
+				display: grid;
+				grid-template-columns: repeat(7, 1fr);
+				gap: 0.2em;
+			}
+			.kefin-help .pv-month > div {
+				min-height: 2.4em;
+				padding: 0.25em;
+				border-radius: 0.3em;
+				background: #16181d;
+				font-size: 0.6em;
+				color: rgba(255, 255, 255, 0.6);
+			}
+			.kefin-help .pv-month span {
+				display: flex;
+				gap: 0.2em;
+				margin-top: 0.2em;
+			}
+			.kefin-help .pv-month i {
+				width: 0.55em;
+				height: 0.55em;
+				border-radius: 50%;
+				background: currentColor;
+			}
+			.kefin-help .pv-agenda {
+				display: flex;
+				flex-direction: column;
+				gap: 0.3em;
+			}
+			.kefin-help .pv-agenda > div {
+				display: flex;
+				align-items: center;
+				gap: 0.6em;
+			}
+			.kefin-help .pv-agenda b {
+				width: 2.5em;
+				font-size: 0.7em;
+				color: rgba(255, 255, 255, 0.6);
+			}
+			.kefin-help .pv-agenda .pv-ev {
+				font-size: 0.75em;
+			}
+
+			/* Random */
+			.kefin-help .pv-rand {
+				display: flex;
+				align-items: center;
+				gap: 0.8em;
+				min-width: 15em;
+				padding: 0.7em 1em;
+				border-radius: 0.7em;
+				background: #1a1c22;
+			}
+			.kefin-help .pv-rand .pv-poster {
+				width: 3.4em;
+			}
+			.kefin-help .pv-dice.pv-roll .material-icons {
+				animation: pv-roll 0.5s ease-out;
+			}
+			@keyframes pv-roll {
+				from { transform: rotate(-200deg) scale(0.6); }
+				to { transform: none; }
+			}
+
+			/* Games */
+			.kefin-help .pv-lut {
+				display: flex;
+				width: 100%;
+				height: 4em;
+				border-radius: 0.6em;
+				overflow: hidden;
+			}
+			.kefin-help .pv-lut i {
+				flex: 1;
+			}
+
+		</style>
+	</head>
+	<body>
+		<div class="kefin-help">
+			<!-- Design preview: switches between candidate layouts. All of them render the
+			     same topics, read from the Classic layout's markup below. -->
+			<div class="kh-variant-bar">
+				<div class="kh-variant-label">
+					<span class="material-icons" aria-hidden="true">science</span>
+					<span>Design preview</span>
+				</div>
+				<div class="kh-variant-tabs" role="tablist" aria-label="Help page layouts"></div>
+				<p class="kh-variant-desc"></p>
+			</div>
+
+			<div class="kh-variant" data-variant="classic">
+			<header class="kh-hero">
+				<h1>Help &amp; Tips</h1>
+				<p>
+					This server has extras that plain Jellyfin doesn't: a watchlist, spoiler protection, anime extras, requests and more.
+					Here's what each one does and where to find it. Click a topic to open it, or search below.
+				</p>
+				<div class="kh-search">
+					<span class="material-icons" aria-hidden="true">search</span>
+					<input type="search" placeholder="Search help, e.g. watchlist, spoilers, skip recap" aria-label="Search help" autocomplete="off" />
+					<button type="button" class="kh-search-clear" aria-label="Clear search">
+						<span class="material-icons" aria-hidden="true">close</span>
+					</button>
+				</div>
+				<nav class="kh-featured" aria-label="Featured">
+					<h2 class="kh-featured-label">Featured</h2>
+					<div class="kh-featured-grid">
+						<a class="kh-feature" href="#/help?topic=spoiler-guard" data-goto="spoiler-guard">
+							<span class="kh-feature-icon"><span class="material-icons" aria-hidden="true">blur_on</span></span>
+							<span class="kh-feature-text">
+								<span class="kh-feature-title">Spoiler Guard</span>
+								<span class="kh-feature-blurb">Blur and hide episodes you haven't seen yet</span>
+							</span>
+						</a>
+						<a class="kh-feature" href="#/help?topic=alternate-order" data-goto="alternate-order">
+							<span class="kh-feature-icon"><span class="material-icons" aria-hidden="true">low_priority</span></span>
+							<span class="kh-feature-text">
+								<span class="kh-feature-title">Alternate Order</span>
+								<span class="kh-feature-blurb">Move anime bonus specials to the end of the season</span>
+							</span>
+						</a>
+						<a class="kh-feature" href="#/help?topic=requests" data-goto="requests">
+							<span class="kh-feature-icon"><span class="material-icons" aria-hidden="true">add_circle</span></span>
+							<span class="kh-feature-text">
+								<span class="kh-feature-title">Requesting</span>
+								<span class="kh-feature-blurb">Ask for a movie or show that isn't here yet</span>
+							</span>
+						</a>
+						<a class="kh-feature" href="#/help?topic=watchlist" data-goto="watchlist">
+							<span class="kh-feature-icon"><span class="material-icons" aria-hidden="true">bookmark</span></span>
+							<span class="kh-feature-text">
+								<span class="kh-feature-title">Watchlist</span>
+								<span class="kh-feature-blurb">Save things for later; they clear once watched</span>
+							</span>
+						</a>
+						<a class="kh-feature" href="#/help?topic=theme-media" data-goto="theme-media">
+							<span class="kh-feature-icon"><span class="material-icons" aria-hidden="true">music_video</span></span>
+							<span class="kh-feature-text">
+								<span class="kh-feature-title">Theme songs</span>
+								<span class="kh-feature-blurb">Mute, turn down or switch off a title's theme</span>
+							</span>
+						</a>
+						<a class="kh-feature" href="#/help?topic=pause-screen" data-goto="pause-screen">
+							<span class="kh-feature-icon"><span class="material-icons" aria-hidden="true">pause_circle</span></span>
+							<span class="kh-feature-text">
+								<span class="kh-feature-title">Pause screen</span>
+								<span class="kh-feature-blurb">Plot, progress and finish time when you pause</span>
+							</span>
+						</a>
+					</div>
+				</nav>
+			</header>
+
+			<main class="kh-main">
+				<!-- ======================================================= -->
+				<section class="kh-category" id="cat-getting-around" data-icon="explore">
+					<h2><span class="material-icons" aria-hidden="true">explore</span>Getting around</h2>
+					<div class="kh-topics">
+						<details class="kh-topic" id="topic-navigation" data-keywords="menu top bar header libraries tabs drawer hamburger breadcrumbs navigation">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">menu</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Finding your way around</span>
+									<span class="kh-topic-summary">The extra top-bar buttons, the side menu and breadcrumbs</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<h3>The top bar</h3>
+								<ul>
+									<li><span class="kh-ui">Libraries</span> opens a list of every library (Movies, Shows, Anime and so on). They're kept in one menu so the bar stays tidy.</li>
+									<li><span class="kh-ui">Watchlist</span> is your personal watch-later list. See <a href="#/help?topic=watchlist" data-goto="watchlist">Watchlist</a>.</li>
+									<li><span class="kh-ui">Requests</span>, <span class="kh-ui">Calendar</span> and <span class="kh-ui">Seerr</span> are for asking for new things and seeing what's coming. See <a href="#/help?topic=requests" data-goto="requests">Requesting something new</a>.</li>
+									<li>The <span class="kh-btn"><span class="material-icons" aria-hidden="true">palette</span></span> <span class="kh-ui">Appearance</span> button changes how Jellyfin looks. See <a href="#/help?topic=appearance" data-goto="appearance">Skins and colour schemes</a>.</li>
+									<li><span class="kh-btn"><span class="material-icons" aria-hidden="true">casino</span></span> opens something at random. See <a href="#/help?topic=random" data-goto="random">The Random button</a>.</li>
+								</ul>
+								<h3>The side menu</h3>
+								<p>
+									On a wide screen, the <span class="kh-btn"><span class="material-icons" aria-hidden="true">menu</span></span> <span class="kh-ui">Open Menu</span> button opens a side menu with your libraries, the Watchlist and <a href="#/help?topic=games" data-goto="games">Games</a>. On phones the same menu is behind the menu icon.
+								</p>
+								<h3>Breadcrumbs</h3>
+								<p>
+									On a show's pages a trail appears at the top, such as <span class="kh-path">Shows › Frieren › Season 1 › 1x01</span>. Click any part to jump back to it. Parts with a <span class="kh-ui">▾</span> open a quick list, so you can hop straight to another season or episode.
+								</p>
+								<div class="kh-note"><span class="material-icons" aria-hidden="true">info</span><span>Breadcrumbs only appear when the window is wider than a tablet.</span></div>
+							</div>
+						</details>
+
+
+
+						<details class="kh-topic" id="topic-appearance" data-keywords="skin theme colour color scheme appearance abyss elegantfin look palette dark">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">palette</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Skins and colour schemes</span>
+									<span class="kh-topic-summary">Change how Jellyfin looks on this device</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<p>Click <span class="kh-btn"><span class="material-icons" aria-hidden="true">palette</span></span> <span class="kh-ui">Appearance</span> in the top bar and pick a <span class="kh-ui">Skin</span>. Some skins also offer <span class="kh-ui">Color Schemes</span>.</p>
+								<ul>
+									<li><strong>ElegantFin</strong> is the server's normal look.</li>
+									<li><strong>Abyss</strong> has colour schemes: Default, Warm White, Soft Blue, Teal, Rose and Jellyfin Purple. It is designed for Jellyfin's <em>Dark</em> theme.</li>
+									<li><strong>Default</strong> is plain Jellyfin.</li>
+								</ul>
+								<p>The same choice is also on <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Display</span> › <span class="kh-ui">Skin</span></span>, where the gear next to it turns extra skin options on and off.</p>
+								<div class="kh-note"><span class="material-icons" aria-hidden="true">devices</span><span>Your skin is remembered by this browser, not your account. A different device or browser starts with the server's normal look.</span></div>
+							</div>
+						</details>
+					</div>
+				</section>
+
+				<!-- ======================================================= -->
+				<section class="kh-category" id="cat-watching" data-icon="play_circle">
+					<h2><span class="material-icons" aria-hidden="true">play_circle</span>Watching</h2>
+					<div class="kh-topics">
+
+						<details class="kh-topic" id="topic-skip" data-keywords="skip intro opening credits outro ending recap preview intro skipper media segment auto skip">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">fast_forward</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Skipping intros, credits and recaps</span>
+									<span class="kh-topic-summary">The Skip button, and how to turn on recap and preview skipping</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<p>
+									The server finds the opening, ending credits, recaps and next-episode previews in episodes and movies. When one starts, a <span class="kh-ui">Skip Intro</span> or <span class="kh-ui">Skip Outro</span> button appears in the bottom corner. It hides after 8 seconds; move the mouse or tap to bring it back.
+								</p>
+								<h3>Choose what happens for each part</h3>
+								<p>Go to <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Playback</span> › <span class="kh-ui">Media Segment Actions</span></span>. Each kind has its own setting:</p>
+								<ul>
+									<li><span class="kh-ui">Ask To Skip</span> shows the Skip button.</li>
+									<li><span class="kh-ui">Skip</span> skips it automatically.</li>
+									<li><span class="kh-ui">None</span> does nothing.</li>
+								</ul>
+								<div class="kh-note"><span class="material-icons" aria-hidden="true">tips_and_updates</span><span>Intros and outros are set to <em>Ask To Skip</em> from the start. <strong>Recaps and previews are set to <em>None</em></strong>, so you won't see a Skip button for them until you change those two settings.</span></div>
+								<h3>Why there's sometimes no button</h3>
+								<ul>
+									<li><strong>The first episode of a season</strong> usually has no Skip Intro button. That's on purpose, so you see the opening at least once.</li>
+									<li>Detection works by spotting the same music across episodes. Shows whose opening changes a lot, or one-off specials, may have no button or a slightly wrong one.</li>
+								</ul>
+							</div>
+						</details>
+
+
+
+
+						<details class="kh-topic" id="topic-pause-screen" data-keywords="pause screen paused overlay info ends at">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">pause_circle</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">The pause screen</span>
+									<span class="kh-topic-summary">The information screen that appears when you pause</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<p>Pause and leave it for 5 seconds, and a screen appears with the title, plot, how much you've watched, and what time it will finish (<span class="kh-ui">Ends at</span>).</p>
+								<ul>
+									<li>Click or tap anywhere, or press <kbd>Space</kbd> or <kbd>Enter</kbd>, to carry on watching.</li>
+									<li><kbd>Esc</kbd> or <span class="kh-btn"><span class="material-icons" aria-hidden="true">close</span></span> closes it and stays paused.</li>
+									<li><span class="kh-btn"><span class="material-icons" aria-hidden="true">arrow_back</span></span> leaves the video.</li>
+								</ul>
+							</div>
+						</details>
+
+						<details class="kh-topic" id="topic-crt" data-keywords="crt shader retro old tv scanlines filter effect super kurozumi">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">tv</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">CRT mode</span>
+									<span class="kh-topic-summary">Make older shows look like they're on an old tube TV</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<p>In the player, click the TV button just left of the <span class="kh-btn"><span class="material-icons" aria-hidden="true">settings</span></span> button. Each click moves to the next style:</p>
+								<table class="kh-table">
+									<tbody>
+										<tr><td><span class="kh-btn"><span class="material-icons" aria-hidden="true">tv_off</span></span></td><td>Off</td></tr>
+										<tr><td><span class="kh-btn"><span class="material-icons" aria-hidden="true">tv</span></span></td><td><strong>super</strong></td></tr>
+										<tr><td><span class="kh-btn"><span class="material-icons" aria-hidden="true">live_tv</span></span></td><td><strong>kurozumi</strong></td></tr>
+									</tbody>
+								</table>
+								<p>The first time, the icon pulses for a moment while the effect gets ready. It stays on for the next episode, but turns off if you reload the page.</p>
+								<div class="kh-warn"><span class="material-icons" aria-hidden="true">warning</span><span>CRT mode works in a web browser only and needs a reasonably powerful graphics card. While it's on, subtitles are drawn into the video by the server.</span></div>
+							</div>
+						</details>
+
+
+						<details class="kh-topic" id="topic-theme-media" data-keywords="theme song theme music theme video background volume mute fullscreen title page">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">music_video</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Theme songs and videos</span>
+									<span class="kh-topic-summary">Control the music or clip that plays on a title's page</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<p>Some titles play their theme song or a video clip while you're on their page. When a theme video is playing, faint controls sit near the top-right corner; hover over them to see them clearly:</p>
+								<table class="kh-table">
+									<tbody>
+										<tr><td><span class="kh-ui">Mute theme</span></td><td>Silence it.</td></tr>
+										<tr><td><span class="kh-ui">Theme volume</span></td><td>Make it quieter or louder.</td></tr>
+										<tr><td><span class="kh-ui">Fullscreen theme</span></td><td>Watch the clip full screen.</td></tr>
+									</tbody>
+								</table>
+								<p>Don't want them at all? Switch theme songs and theme videos off under <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Display</span></span>.</p>
+								<div class="kh-note"><span class="material-icons" aria-hidden="true">devices</span><span>The volume, mute and these switches are saved to your account, so they're the same on every device you sign in on.</span></div>
+							</div>
+						</details>
+
+						<details class="kh-topic" id="topic-shortcuts" data-keywords="keyboard shortcuts keys hotkeys">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">keyboard</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Keyboard shortcuts</span>
+									<span class="kh-topic-summary">Extra keys for skipping, speed, subtitles and more</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<h3>In the player</h3>
+								<table class="kh-table">
+									<tbody>
+										<tr><td><kbd>O</kbd></td><td>Skip the intro or ending that's playing</td></tr>
+										<tr><td><kbd>S</kbd></td><td>Open the subtitle menu</td></tr>
+										<tr><td><kbd>C</kbd> / <kbd>V</kbd></td><td>Next subtitle track / next audio track</td></tr>
+										<tr><td><kbd>+</kbd> <kbd>-</kbd></td><td>Faster / slower (0.25× to 2×); <kbd>R</kbd> resets to normal speed</td></tr>
+										<tr><td><kbd>0</kbd>–<kbd>9</kbd></td><td>Jump to 0%–90% of the way through</td></tr>
+										<tr><td><kbd>Z</kbd></td><td>Go back to where you were before your last jump</td></tr>
+										<tr><td><kbd>,</kbd> <kbd>.</kbd></td><td>Step one frame back / forward</td></tr>
+										<tr><td><kbd>A</kbd></td><td>Change how the picture fills the screen</td></tr>
+										<tr><td><kbd>I</kbd></td><td>Show playback info</td></tr>
+									</tbody>
+								</table>
+								<h3>Anywhere</h3>
+								<table class="kh-table">
+									<tbody>
+										<tr><td><kbd>?</kbd></td><td>Open the Jellyfin Enhanced panel, which lists every shortcut</td></tr>
+										<tr><td><kbd>/</kbd></td><td>Search</td></tr>
+										<tr><td><kbd>Shift</kbd>+<kbd>H</kbd></td><td>Home</td></tr>
+										<tr><td><kbd>R</kbd></td><td>Open a random movie or show</td></tr>
+										<tr><td><kbd>Q</kbd></td><td>Quick Connect</td></tr>
+									</tbody>
+								</table>
+								<p>Shortcuts don't work while you're typing in a box. To change a key, open the panel with <kbd>?</kbd>, go to Shortcuts, click a key and press the new one.</p>
+							</div>
+						</details>
+					</div>
+				</section>
+
+				<!-- ======================================================= -->
+				<section class="kh-category" id="cat-shows" data-icon="live_tv">
+					<h2><span class="material-icons" aria-hidden="true">live_tv</span>Shows and anime</h2>
+					<div class="kh-topics">
+						<details class="kh-topic" id="topic-series-page" data-keywords="series page episodes row next up badge select season seasons">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">video_library</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">A show's page</span>
+									<span class="kh-topic-summary">The episode row, the Next Up badge and switching seasons</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<p>A show's page lists its episodes directly, already scrolled to where you are:</p>
+								<ul>
+									<li>The episode you should watch next has a <span class="kh-ui">Next Up</span> badge in its corner.</li>
+									<li>For shows with several seasons, the <span class="kh-ui">Select Season</span> button next to the row title switches season.</li>
+									<li>The <span class="kh-btn"><span class="material-icons" aria-hidden="true">grid_view</span></span> button (hover over the row title) shows every episode at once as a grid instead of a scrolling row.</li>
+								</ul>
+								<p>Specials that belong in a particular spot are placed in the season where they air. See <a href="#/help?topic=specials" data-goto="specials">Specials</a>.</p>
+							</div>
+						</details>
+
+						<details class="kh-topic" id="topic-specials" data-keywords="specials season 0 ova oad movie virtual specials extras tags watched sync">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">star</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Specials, OVAs and movies in a show</span>
+									<span class="kh-topic-summary">Where specials appear, and why watching one marks another</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<ul>
+									<li>All of a show's specials are in its <strong>Specials</strong> season.</li>
+									<li>Specials that should be watched at a certain point also appear in that season's episode list, e.g. after the finale or between two episodes.</li>
+									<li>Some specials are grouped into their own collection, with a breadcrumb trail back to the show they belong to.</li>
+								</ul>
+								<h3>Watched in one place, watched everywhere</h3>
+								<p>Some movies exist in two places, for example in Movies and also as a show's special. Watching either copy marks both as watched (and keeps your resume point in step), so it won't show up as unwatched in the other place.</p>
+								<h3>Tags</h3>
+								<p>A title's details list a <span class="kh-ui">Tags</span> line. Click any tag to see everything else with it.</p>
+								<p>Want bonus specials moved or hidden? See <a href="#/help?topic=alternate-order" data-goto="alternate-order">Alternate Order</a>.</p>
+							</div>
+						</details>
+
+						<details class="kh-topic" id="topic-alternate-order" data-keywords="alternate order bonus features specials reorder hide recap talk show gag shorts end of season low_priority">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">low_priority</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Alternate Order</span>
+									<span class="kh-topic-summary">Move bonus specials to the end of each season, or hide them</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<p>
+									Some anime have lots of <strong>bonus features</strong>: talk shows, gag shorts and recaps that would otherwise play between story episodes. Alternate Order keeps them out of the way.
+								</p>
+								<table class="kh-table">
+									<thead><tr><th>Mode</th><th>What happens</th></tr></thead>
+									<tbody>
+										<tr><td><span class="kh-btn"><span class="material-icons" aria-hidden="true">low_priority</span></span> Off</td><td>The normal order. Bonus specials play where they aired.</td></tr>
+										<tr><td><span class="kh-btn kh-on"><span class="material-icons" aria-hidden="true">low_priority</span></span> Reorder</td><td>Bonus specials play <strong>at the end of their season</strong>, after the last episode.</td></tr>
+										<tr><td><span class="kh-btn kh-on"><span class="material-icons" aria-hidden="true">visibility_off</span></span> Hidden</td><td>Bonus specials are skipped. They're still in the Specials season if you want one.</td></tr>
+									</tbody>
+								</table>
+								<h3>Change it for one show</h3>
+								<p>On the show's page (or any of its seasons), click the Alternate Order button just after the <span class="kh-btn"><span class="material-icons" aria-hidden="true">favorite_border</span></span> heart. Each click moves Off → Reorder → Hidden → Off. Hover over it to see which mode it's in; it turns blue when it's on.</p>
+								<p>The button only appears on shows that have bonus features. That's mostly anime.</p>
+								<h3>Change it for every show</h3>
+								<p>Go to <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Display</span> › <span class="kh-ui">Alternate Order</span></span> and pick <span class="kh-ui">Default for every series</span>: <span class="kh-ui">Disabled by default</span>, <span class="kh-ui">Alternate order</span> or <span class="kh-ui">Hide bonus features</span>. It saves straight away.</p>
+								<h3>What follows your choice</h3>
+								<ul>
+									<li>Autoplay and the next-episode queue.</li>
+									<li>Season pages and their Play button.</li>
+									<li>Next Up and Continue Watching. With <em>Reorder</em>, a show you've finished can come back to Next Up for its bonus specials.</li>
+								</ul>
+								<div class="kh-warn"><span class="material-icons" aria-hidden="true">warning</span><span><em>Hide bonus features</em> occasionally hides something with a bit of story in it. The Specials season itself is never changed.</span></div>
+								<span class="kh-from">From Vault Tweaks</span>
+							</div>
+						</details>
+
+						<details class="kh-topic" id="topic-characters" data-keywords="characters cast voice actor seiyuu character page names japanese english versions anilist anidb">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">face</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Characters</span>
+									<span class="kh-topic-summary">See who each actor plays, and browse a character's page</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<h3>In the cast row</h3>
+								<p>On a show, season, episode or movie page, each actor in <span class="kh-ui">Cast &amp; Crew</span> has the character they play right before them. If they play several, the characters share one card in tiles; hover over a tile to see its name.</p>
+								<p>On a show's page, the cast only includes people from seasons up to the one you're on, so actors from later seasons don't spoil anything.</p>
+								<h3>Character pages</h3>
+								<p>Click a character for their page: picture, description (<span class="kh-ui">Show more</span> for the rest), <span class="kh-ui">Voiced by</span>, <span class="kh-ui">Appears in</span> and links to AniList, AniDB and MyAnimeList.</p>
+								<div class="kh-note"><span class="material-icons" aria-hidden="true">visibility</span><span>Words that would spoil the story are blacked out. Click one to reveal it.</span></div>
+								<p>An actor's own page also gets a <span class="kh-ui">Characters</span> row listing everyone they've played.</p>
+								<h3>Your settings</h3>
+								<p>Under <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Display</span> › <span class="kh-ui">Characters</span></span>. Changes save straight away and show on the next page you open.</p>
+								<table class="kh-table">
+									<tbody>
+										<tr><td><span class="kh-ui">Series cast</span></td><td>Which seasons' cast a show's page shows: first, current, all, or <em>Progressive</em> (up to the season you're on; the normal setting).</td></tr>
+										<tr><td><span class="kh-ui">Preferred character names</span></td><td><em>Japanese names</em>, <em>English names</em>, or <em>English (Weebified)</em>, which uses the names fans use, like "Sensei".</td></tr>
+										<tr><td><span class="kh-ui">Character source</span></td><td>For anime: <em>AniList</em> (one picture per character) or <em>AniDB</em> (each title's own version of the character).</td></tr>
+										<tr><td><span class="kh-ui">Spoiler versions</span></td><td>With AniDB: show spoiler versions of a character only once you've watched that far, or never.</td></tr>
+									</tbody>
+								</table>
+								<p>Reality and game shows also get a <em>Season&nbsp;X cast</em> row with that season's contestants.</p>
+								<span class="kh-from">From Vault Tweaks</span>
+							</div>
+						</details>
+
+						<details class="kh-topic" id="topic-spoiler-guard" data-keywords="spoiler guard blur hide spoilers episode titles descriptions thumbnails blur_on">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">blur_on</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Spoiler Guard</span>
+									<span class="kh-topic-summary">Blur pictures and hide details of episodes you haven't seen</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<p>Turn Spoiler Guard on for a show and every episode you haven't watched yet has its picture blurred and its details hidden. Once you watch an episode, it shows normally.</p>
+								<h3>Turning it on</h3>
+								<p>On a show, movie or collection page, click <span class="kh-btn"><span class="material-icons" aria-hidden="true">blur_off</span></span> (<span class="kh-ui">Spoiler Guard: Off</span>) in the row of buttons, just before <span class="kh-btn"><span class="material-icons" aria-hidden="true">more_horiz</span></span>. It changes to <span class="kh-btn kh-on"><span class="material-icons" aria-hidden="true">blur_on</span></span> <span class="kh-ui">Spoiler Guard: On</span>.</p>
+								<ul>
+									<li>On a collection it protects every movie inside it.</li>
+									<li>For something not on the server yet, open it from search and use <span class="kh-ui">Enable Spoiler Guard</span>; it switches on when the title arrives.</li>
+									<li>The button is on the show's page, not on season or episode pages.</li>
+								</ul>
+								<h3>What gets hidden</h3>
+								<ul>
+									<li>Episode pictures are blurred, and so are the preview pictures when you drag along the progress bar.</li>
+									<li>Episode titles become <em>Season 1, Episode 5</em>, and descriptions read <em>Spoiler Guard activated</em>.</li>
+									<li>Air dates, ratings, guest stars, chapter names and tags are hidden.</li>
+									<li>Posters for later seasons stay blurred until you start that season.</li>
+								</ul>
+								<p>The <strong>next episode</strong> you're due to watch, and the rest of that season, keep their titles so you can find your place. Their descriptions stay hidden.</p>
+								<div class="kh-note"><span class="material-icons" aria-hidden="true">devices</span><span>Spoiler Guard works in every Jellyfin app, not just the browser, and follows your account.</span></div>
+								<h3>Choosing what's hidden</h3>
+								<p>Press <kbd>?</kbd> to open the Jellyfin Enhanced panel and find <span class="kh-ui">Spoiler Guard</span>. Under <span class="kh-ui">Show me this even with Spoiler Guard on</span>, untick anything you don't mind seeing, e.g. <span class="kh-ui">Episode titles</span> or <span class="kh-ui">Cast list</span>.</p>
+								<div class="kh-note"><span class="material-icons" aria-hidden="true">refresh</span><span>After turning it on or off, pictures change straight away but titles and descriptions may need you to leave the page and come back.</span></div>
+								<span class="kh-from">From Jellyfin Enhanced</span>
+							</div>
+						</details>
+					</div>
+				</section>
+
+				<!-- ======================================================= -->
+				<section class="kh-category" id="cat-lists" data-icon="bookmarks">
+					<h2><span class="material-icons" aria-hidden="true">bookmarks</span>Your lists</h2>
+					<div class="kh-topics">
+						<details class="kh-topic" id="topic-watchlist" data-keywords="watchlist watch later bookmark save list add remove">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">bookmark</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Watchlist</span>
+									<span class="kh-topic-summary">Save things to watch later</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<h3>Adding and removing</h3>
+								<ul>
+									<li><strong>On a poster:</strong> hover over it and click <span class="kh-btn"><span class="material-icons-outlined" aria-hidden="true">bookmark_border</span></span> <span class="kh-ui">Add to Watchlist</span> in the bottom row of buttons.</li>
+									<li><strong>On a title's page:</strong> click the same button next to <span class="kh-ui">Trailer</span>.</li>
+									<li>It also appears on the big banners at the top of the Home screen.</li>
+								</ul>
+								<p>When something is on your list the button turns solid green <span class="kh-btn kh-green"><span class="material-icons" aria-hidden="true">bookmark</span></span>. Click it again to <span class="kh-ui">Remove from Watchlist</span>.</p>
+								<p>You can add movies, shows, single seasons or episodes, collections and playlists.</p>
+								<div class="kh-note"><span class="material-icons" aria-hidden="true">auto_awesome</span><span>Things <strong>remove themselves</strong> once watched: a movie or episode when you finish it, a season or show when you've watched all of it.</span></div>
+								<p>Open the list from <span class="kh-ui">Watchlist</span> in the top bar or side menu. See <a href="#/help?topic=watchlist-page" data-goto="watchlist-page">The Watchlist page</a>.</p>
+							</div>
+						</details>
+
+						<details class="kh-topic" id="topic-watchlist-page" data-keywords="watchlist page series progress movie history statistics stats export import playlist sync">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">insights</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">The Watchlist page</span>
+									<span class="kh-topic-summary">Your list, show progress, movie history and viewing stats</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<p>The <span class="kh-ui">Watchlist</span> page has four tabs:</p>
+								<table class="kh-table">
+									<tbody>
+										<tr><td><span class="kh-ui">Watchlist</span></td><td>Everything you've saved, grouped by type. <span class="kh-btn"><span class="material-icons" aria-hidden="true">view_module</span></span> switches between posters and a list.</td></tr>
+										<tr><td><span class="kh-ui">Series Progress</span></td><td>Every show you've started, with how far through you are and how many episodes are left. <span class="kh-ui">+ View Unwatched Episodes</span> lists what you've missed.</td></tr>
+										<tr><td><span class="kh-ui">Movie History</span></td><td>Every movie you've watched, newest first. Search and sort it.</td></tr>
+										<tr><td><span class="kh-ui">Statistics</span></td><td>Hours watched, your top shows, and charts of when you watch.</td></tr>
+									</tbody>
+								</table>
+								<h3>Backing up or sharing your list</h3>
+								<p><span class="kh-btn"><span class="material-icons" aria-hidden="true">import_export</span></span> <span class="kh-ui">Import/Export Watchlist</span> can:</p>
+								<ul>
+									<li><span class="kh-ui">Export</span> your list to a file or the clipboard.</li>
+									<li><span class="kh-ui">Import</span> a list from a file.</li>
+									<li><span class="kh-ui">Playlist Sync</span>: turn your watchlist into a playlist, so you can play through it.</li>
+								</ul>
+								<div class="kh-warn"><span class="material-icons" aria-hidden="true">warning</span><span><span class="kh-ui">+ Mark All As Watched</span> on Series Progress marks every episode of that show as watched. It asks first, but there's no undo.</span></div>
+							</div>
+						</details>
+
+
+						<details class="kh-topic" id="topic-continue-watching" data-keywords="continue watching next up resume remove clear progress hide">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">history</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Clearing Continue Watching</span>
+									<span class="kh-topic-summary">Get rid of something you started but won't finish</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<p>Hover over a part-watched poster and click <span class="kh-btn"><span class="material-icons" aria-hidden="true">close</span></span> <span class="kh-ui">Remove from Continue Watching</span> in its top corner. It works on any part-watched poster, not just in the Continue Watching row.</p>
+								<div class="kh-warn"><span class="material-icons" aria-hidden="true">warning</span><span>This forgets where you stopped, and there's no undo. Next time it starts from the beginning.</span></div>
+							</div>
+						</details>
+
+						<details class="kh-topic" id="topic-playlists" data-keywords="playlist playlists queue sort resume play from beginning add to playlist">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">playlist_play</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Playlists</span>
+									<span class="kh-topic-summary">Make a list to play in order, and pick up where you left off</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<p>Add anything to a playlist from its <span class="kh-btn"><span class="material-icons" aria-hidden="true">more_vert</span></span> menu › <span class="kh-ui">Add to playlist</span>.</p>
+								<h3>On a playlist's page</h3>
+								<ul>
+									<li>Clicking an item opens its page; it doesn't start playing. Use the <span class="kh-btn"><span class="material-icons" aria-hidden="true">play_arrow</span></span> on a row to play from there onwards.</li>
+									<li>The main button says <span class="kh-ui">Resume</span> once you've started, and carries on from the first thing you haven't watched. <span class="kh-btn"><span class="material-icons" aria-hidden="true">replay</span></span> <span class="kh-ui">Play from Beginning</span> starts over.</li>
+									<li><span class="kh-btn"><span class="material-icons" aria-hidden="true">sort</span></span> <span class="kh-ui">Sort Playlist</span> reorders it, e.g. by release date. Play follows that order. The sort is remembered by this browser.</li>
+								</ul>
+							</div>
+						</details>
+
+						<details class="kh-topic" id="topic-pin" data-keywords="pin home screen pinned row shortcut push pin unpin">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">push_pin</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Pinning to the Home screen</span>
+									<span class="kh-topic-summary">Put any title, collection or library on your Home screen</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<ol>
+									<li>Open the <span class="kh-btn"><span class="material-icons" aria-hidden="true">more_vert</span></span> menu on a poster (or right-click it) and choose <span class="kh-btn"><span class="material-icons" aria-hidden="true">push_pin</span></span> <span class="kh-ui">Pin to Home Screen</span>.</li>
+									<li>Pick a list to add it to. <span class="kh-ui">Pinned</span> is the default, or choose <span class="kh-ui">New...</span> to start another row. Then press <span class="kh-ui">Pin</span>.</li>
+								</ol>
+								<p>For a collection, library, show, genre, actor and so on, you can instead choose <span class="kh-ui">Pin Items from …</span>. That gives you a whole Home row of what's inside it, e.g. a row of every movie in a collection.</p>
+								<p>To unpin, hover over the pinned poster and click <span class="kh-btn"><span class="material-icons" aria-hidden="true">push_pin</span></span> <span class="kh-ui">Unpin from Home Screen</span>; the arrows beside it move it left or right. A message offers <span class="kh-ui">Undo</span> if you change your mind.</p>
+							</div>
+						</details>
+					</div>
+				</section>
+
+				<!-- ======================================================= -->
+				<section class="kh-category" id="cat-home" data-icon="home">
+					<h2><span class="material-icons" aria-hidden="true">home</span>The Home screen</h2>
+					<div class="kh-topics">
+						<details class="kh-topic" id="topic-home-sections" data-keywords="home screen rows sections reorder hide move configure card style grid row layout restore defaults">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">dashboard_customize</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Rearranging the Home screen</span>
+									<span class="kh-topic-summary">Hide, move and restyle the rows on your Home screen</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<p>Your Home screen is yours: changes here don't affect anyone else, and they follow your account to other devices.</p>
+								<h3>From the row itself</h3>
+								<p>Hover over a row's title and three buttons fade in (on a phone, tap <span class="kh-btn"><span class="material-icons" aria-hidden="true">more_vert</span></span> instead):</p>
+								<table class="kh-table">
+									<tbody>
+										<tr><td><span class="kh-btn"><span class="material-icons" aria-hidden="true">refresh</span></span></td><td><span class="kh-ui">Refresh</span>: load fresh items.</td></tr>
+										<tr><td><span class="kh-btn"><span class="material-icons" aria-hidden="true">grid_view</span></span></td><td><span class="kh-ui">Grid layout</span> / <span class="kh-ui">Row layout</span>: show everything at once instead of scrolling.</td></tr>
+										<tr><td><span class="kh-btn"><span class="material-icons" aria-hidden="true">settings</span></span></td><td><span class="kh-ui">Configure</span>: move the row up or down (hold the arrow to send it to the top or bottom), hide it, or change how its posters look.</td></tr>
+									</tbody>
+								</table>
+								<p>When you hide a row, a message offers <span class="kh-ui">Undo</span>.</p>
+								<h3>All rows at once</h3>
+								<p><span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Home</span> › <span class="kh-ui">Home Sections Order</span></span> lists every row. Drag or use the arrows to reorder, and use the switches to turn rows on and off. Hidden rows can be brought back here.</p>
+								<p><span class="kh-ui">Restore Defaults</span> puts everything back the way it started.</p>
+							</div>
+						</details>
+
+						<details class="kh-topic" id="topic-discovery" data-keywords="discovery recommendations because you watched genre studio seasonal halloween christmas infinite scroll">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">auto_awesome</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Recommendation and seasonal rows</span>
+									<span class="kh-topic-summary">The rows that keep appearing as you scroll down</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<p>Keep scrolling down the Home screen and more rows load by themselves, picked for you:</p>
+								<ul>
+									<li><em>Because you watched …</em>, <em>Because you finished …</em>, <em>Because you liked …</em></li>
+									<li><em>Because … is on your Watchlist</em></li>
+									<li>Genre, studio and collection rows, such as <em>Top Rated Comedy Movies</em> or <em>Shows from MAPPA</em></li>
+								</ul>
+								<p>They change each visit. Use a row's <span class="kh-btn"><span class="material-icons" aria-hidden="true">refresh</span></span> to shuffle it.</p>
+								<h3>Seasonal rows</h3>
+								<p>Around holidays, extra rows appear by themselves: Halloween in October, Thanksgiving in late November, Christmas in December.</p>
+							</div>
+						</details>
+
+						<details class="kh-topic" id="topic-media-bar" data-keywords="banner slideshow media bar top carousel spotlight new">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">view_carousel</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">The banners</span>
+									<span class="kh-topic-summary">The slideshow at the top and the big spotlight rows</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<h3>The slideshow at the top</h3>
+								<p>It shows new anime and anime movies from the last week that you haven't watched yet, and changes every 10 seconds.</p>
+								<ul>
+									<li><span class="kh-ui">Play</span> starts it; the other buttons open its page, heart it, or add it to your <a href="#/help?topic=watchlist" data-goto="watchlist">Watchlist</a>.</li>
+									<li>Use the arrows (or swipe on a phone) to move between slides, and <span class="kh-btn"><span class="material-icons" aria-hidden="true">pause</span></span> to stop it moving. With a keyboard: <kbd>←</kbd> <kbd>→</kbd> and <kbd>Space</kbd>.</li>
+								</ul>
+								<p>If you've watched everything new, the slideshow may have very little in it.</p>
+								<h3>Spotlight rows</h3>
+								<p>Some Home rows show one big title at a time instead of posters. Each has <span class="kh-btn"><span class="material-icons" aria-hidden="true">play_arrow</span></span> Play, a Watchlist button, and <span class="kh-btn"><span class="material-icons" aria-hidden="true">info</span></span> to open its page. It pauses while your mouse is over it.</p>
+							</div>
+						</details>
+					</div>
+				</section>
+
+				<!-- ======================================================= -->
+				<section class="kh-category" id="cat-finding" data-icon="travel_explore">
+					<h2><span class="material-icons" aria-hidden="true">travel_explore</span>Finding and requesting</h2>
+					<div class="kh-topics">
+
+						<details class="kh-topic" id="topic-requests" data-keywords="request seerr jellyseerr new movie show add download missing season report issue problem search discover">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">add_circle</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Requesting something new</span>
+									<span class="kh-topic-summary">Ask for a movie or show that isn't here, and track your requests</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<h3>Making a request</h3>
+								<ol>
+									<li>Search for it as usual. Below the results from the server, a <span class="kh-ui">Discover on Seerr</span> row shows matching titles that <em>aren't</em> here yet. You can also browse the <span class="kh-ui">Seerr</span> tab in the top bar.</li>
+									<li>Press <span class="kh-ui">Request</span>. For a show, pick which seasons you want.</li>
+									<li>Once it's downloaded, it appears on the server by itself.</li>
+								</ol>
+								<p>Other places you can request from:</p>
+								<ul>
+									<li><span class="kh-ui">Request More</span> next to a show's Seasons, when there are seasons the server doesn't have.</li>
+									<li>The <span class="kh-ui">Recommended</span> row on a title's page, which suggests things not on the server yet.</li>
+									<li>A collection's page, which lists the movies in that series that are missing.</li>
+								</ul>
+								<div class="kh-note"><span class="material-icons" aria-hidden="true">info</span><span>There may be a limit on how many requests you can make; your remaining requests are shown next to the button.</span></div>
+								<h3>Tracking your requests</h3>
+								<p>The <span class="kh-ui">Requests</span> tab in the top bar shows:</p>
+								<table class="kh-table">
+									<tbody>
+										<tr><td><span class="kh-ui">Downloads</span></td><td>What's downloading now, with a progress bar.</td></tr>
+										<tr><td><span class="kh-ui">Requests</span></td><td>Your requests and their status, from <em>Pending Approval</em> to <em>Available</em>. Available ones get a <span class="kh-btn"><span class="material-icons" aria-hidden="true">play_arrow</span></span> button.</td></tr>
+										<tr><td><span class="kh-ui">Issues</span></td><td>Problems you've reported.</td></tr>
+										<tr><td><span class="kh-ui">History</span></td><td>What's been added recently.</td></tr>
+									</tbody>
+								</table>
+								<h3>Reporting a problem</h3>
+								<p>If something's wrong with a title (bad video, missing audio, wrong subtitles), use the <span class="kh-ui">Report issue</span> button on its page. Choose the kind of problem, and the season and episode if it's a show.</p>
+								<span class="kh-from">From Jellyfin Enhanced and Seerr</span>
+							</div>
+						</details>
+
+						<details class="kh-topic" id="topic-calendar" data-keywords="calendar upcoming releases schedule new episodes airing when">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">calendar_month</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Calendar</span>
+									<span class="kh-topic-summary">See when new episodes and movies are due</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<p>The <span class="kh-ui">Calendar</span> tab in the top bar shows upcoming episodes and movie releases.</p>
+								<ul>
+									<li>Switch between <span class="kh-ui">Day</span>, <span class="kh-ui">Week</span>, <span class="kh-ui">Month</span> and <span class="kh-ui">Agenda</span> (a simple list). Your choice is remembered.</li>
+									<li>Click the coloured chips to filter, e.g. only <span class="kh-ui">Anime</span> or only <span class="kh-ui">Episode</span>.</li>
+									<li>Click an entry that's already on the server to open it.</li>
+								</ul>
+								<div class="kh-note"><span class="material-icons" aria-hidden="true">info</span><span>In the calendar, <span class="kh-ui">Watchlist</span> means your <strong>Favorites</strong> (hearted shows), not the Watchlist from the top bar.</span></div>
+							</div>
+						</details>
+
+						<details class="kh-topic" id="topic-random" data-keywords="random dice surprise pick something shuffle">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">casino</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Can't decide? The Random button</span>
+									<span class="kh-topic-summary">Open a random movie or show</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<p>Click <span class="kh-btn"><span class="material-icons" aria-hidden="true">casino</span></span> in the top bar (or press <kbd>R</kbd>) to open the page of a random movie or show. It doesn't start playing, so click again if it's not for you.</p>
+								<p>To pick only unwatched things, or only movies or only shows, press <kbd>?</kbd> and look under <span class="kh-ui">Random Button Settings</span>.</p>
+							</div>
+						</details>
+
+					</div>
+				</section>
+
+				<!-- ======================================================= -->
+				<section class="kh-category" id="cat-extras" data-icon="sports_esports">
+					<h2><span class="material-icons" aria-hidden="true">sports_esports</span>Extras</h2>
+					<div class="kh-topics">
+						<details class="kh-topic" id="topic-games" data-keywords="games quiz movie lut 3x3 guess play fun">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">sports_esports</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">Games</span>
+									<span class="kh-topic-summary">Guess-the-movie games made from the library</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<p>Open <span class="kh-btn"><span class="material-icons" aria-hidden="true">sports_esports</span></span> <span class="kh-ui">Games</span> in the side menu.</p>
+								<ul>
+									<li><strong>Movie LUT Game</strong>: guess the movie from a strip of colours taken from its frames.</li>
+									<li><strong>3x3 Game</strong>: nine movie backdrops; name as many as you can in 60 seconds. You get 3 re-rolls.</li>
+								</ul>
+							</div>
+						</details>
+						<details class="kh-topic" id="topic-enhanced-panel" data-keywords="jellyfin enhanced panel settings tune subtitle style auto pause picture in picture long press 2x speed watch progress file size audio language tags quality">
+							<summary>
+								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">tune</span></span>
+								<span class="kh-topic-head">
+									<span class="kh-topic-title">The Jellyfin Enhanced panel</span>
+									<span class="kh-topic-summary">Extra settings: subtitle styles, auto-pause, poster labels and more</span>
+								</span>
+								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
+							</summary>
+							<div class="kh-topic-body">
+								<p>Press <kbd>?</kbd>, or choose <span class="kh-ui">Jellyfin Enhanced</span> from your profile menu. Settings save to your account.</p>
+								<table class="kh-table">
+									<tbody>
+										<tr><td><span class="kh-ui">Playback Settings</span></td><td>Pause when you switch to another browser tab and carry on when you come back, or pop out into picture-in-picture instead. <span class="kh-ui">Long Press for 2x Speed</span>: hold down on the video to play at double speed, handy on phones.</td></tr>
+										<tr><td><span class="kh-ui">Auto-Skip Settings</span></td><td>Skip intros and endings automatically. See also <a href="#/help?topic=skip" data-goto="skip">Skipping intros</a>.</td></tr>
+										<tr><td><span class="kh-ui">Subtitle Settings</span></td><td>Ready-made subtitle styles (Netflix Style, Cinema Yellow and others), sizes and fonts. Like Jellyfin's own settings, these don't change subtitles that bring their own styling.</td></tr>
+										<tr><td><span class="kh-ui">UI Settings</span></td><td>Show watch progress, file size and audio languages on a title's page, and labels like 4K or HDR on posters. Click the progress label on a page to switch between percent, time watched and time left.</td></tr>
+										<tr><td><span class="kh-ui">Spoiler Guard</span></td><td>What stays visible on protected shows. See <a href="#/help?topic=spoiler-guard" data-goto="spoiler-guard">Spoiler Guard</a>.</td></tr>
+									</tbody>
+								</table>
+								<p>The panel has a search box, and closes itself after a few seconds if you leave it alone.</p>
+								<span class="kh-from">From Jellyfin Enhanced</span>
+							</div>
+						</details>
+					</div>
+				</section>
+
+				<p class="kh-empty">No help topics match that search. Try a shorter word.</p>
+			</main>
+			</div>
+
+			<div class="kh-variant" data-variant="gallery" hidden></div>
+
+			<script>
+				(function () {
+					var script = document.currentScript;
+					var root = (script && script.closest && script.closest('.kefin-help')) || document.querySelector('.kefin-help');
+					if (!root || root.getAttribute('data-kh-ready') === 'true') return;
+					root.setAttribute('data-kh-ready', 'true');
+
+					function el(tag, cls, html) {
+						var e = document.createElement(tag);
+						if (cls) e.className = cls;
+						if (html != null) e.innerHTML = html;
+						return e;
+					}
+					function icon(name) {
+						return '<span class="material-icons" aria-hidden="true">' + name + '</span>';
+					}
+					function esc(s) {
+						return String(s).replace(/[&<>"]/g, function (c) {
+							return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+						});
+					}
+					function btn(cls, html, label) {
+						var b = el('button', cls, html);
+						b.type = 'button';
+						if (label) b.setAttribute('aria-label', label);
+						return b;
+					}
+					function store(key, value) {
+						try {
+							if (value === undefined) return localStorage.getItem(key);
+							localStorage.setItem(key, value);
+						} catch (e) { /* private window or blocked storage */ }
+						return null;
+					}
+					function hue(node, h) {
+						node.classList.add('kv-hue');
+						node.style.setProperty('--hue', h);
+						return node;
+					}
+					function each(rootEl, sel, fn) {
+						Array.prototype.forEach.call(rootEl.querySelectorAll(sel), fn);
+					}
+
+					// ---------------------------------------------------------------
+					// Content model. Every layout reads the topics from the Classic
+					// markup, so the words live in one place.
+					// ---------------------------------------------------------------
+					var classic = root.querySelector('.kh-variant[data-variant="classic"]');
+					var HUES = { 'getting-around': 205, watching: 350, shows: 268, lists: 145, home: 185, finding: 38, extras: 320 };
+					var cats = [], topics = [], byId = {};
+					each(classic, '.kh-category', function (sec) {
+						var cid = sec.id.replace(/^cat-/, '');
+						var cat = { id: cid, title: sec.querySelector('h2').textContent.trim(), icon: sec.getAttribute('data-icon') || 'help', hue: HUES[cid] || 200, topics: [] };
+						each(sec, 'details.kh-topic', function (d) {
+							var t = {
+								id: d.id.replace(/^topic-/, ''),
+								el: d,
+								cat: cat,
+								title: d.querySelector('.kh-topic-title').textContent.trim(),
+								summary: d.querySelector('.kh-topic-summary').textContent.trim(),
+								icon: d.querySelector('.kh-topic-icon .material-icons').textContent.trim(),
+								keywords: d.getAttribute('data-keywords') || '',
+								body: d.querySelector('.kh-topic-body')
+							};
+							cat.topics.push(t);
+							topics.push(t);
+							byId[t.id] = t;
+						});
+						cats.push(cat);
+					});
+					function bodyOf(t) {
+						var b = t.body.cloneNode(true);
+						b.classList.add('kv-body');
+						return b;
+					}
+
+					var FEATURED = ['spoiler-guard', 'alternate-order', 'requests', 'watchlist', 'theme-media', 'pause-screen'];
+
+					// Questions as people would ask them, so a search for "music" finds the theme topic.
+					var QUESTIONS = [
+						['How do I stop spoilers for a show I\'m watching?', 'spoiler-guard'],
+						['Why is there no Skip button for the recap?', 'skip'],
+						['How do I ask for a show that isn\'t here?', 'requests'],
+						['Can I move the talk-show specials to the end of the season?', 'alternate-order'],
+						['How do I save something to watch later?', 'watchlist'],
+						['How do I turn the theme music down?', 'theme-media'],
+						['Who voices this character?', 'characters'],
+						['Can I hide a row on my Home screen?', 'home-sections'],
+						['How do I put a collection on my Home screen?', 'pin'],
+						['When is the next episode coming out?', 'calendar'],
+						['How do I clear something from Continue Watching?', 'continue-watching'],
+						['What does the TV button in the player do?', 'crt']
+					];
+					topics.forEach(function (t) {
+						var qs = QUESTIONS.filter(function (q) { return q[1] === t.id; }).map(function (q) { return q[0]; }).join(' ');
+						t.hayTitle = t.title.toLowerCase();
+						t.hayMeta = (t.summary + ' ' + t.keywords + ' ' + qs).toLowerCase();
+						t.hay = (t.title + ' ' + t.hayMeta + ' ' + t.body.textContent).toLowerCase().replace(/\s+/g, ' ');
+					});
+					// Every word must match; title hits rank above summary/keyword hits, above body hits.
+					function search(q) {
+						var words = q.toLowerCase().trim().split(/\s+/).filter(Boolean);
+						if (!words.length) return topics.slice();
+						return topics.map(function (t) {
+							if (!words.every(function (w) { return t.hay.indexOf(w) !== -1; })) return null;
+							var score = 0;
+							words.forEach(function (w) {
+								score += t.hayTitle.indexOf(w) !== -1 ? 4 : t.hayMeta.indexOf(w) !== -1 ? 2 : 1;
+							});
+							return { t: t, s: score };
+						}).filter(Boolean).sort(function (a, b) { return b.s - a.s; }).map(function (r) { return r.t; });
+					}
+
+					// ---------------------------------------------------------------
+					// Previews: a small working model of each feature.
+					//
+					// Each has html and init(node, live). In the grid a preview is a
+					// picture: it is inert (no clicks, no focus) and init only draws
+					// its starting state. Inside an open topic it is live: the buttons
+					// work, and init may start timers or listen for keys, returning a
+					// function that stops them when the topic closes.
+					// ---------------------------------------------------------------
+					var PREVIEWS = {};
+					function P(id, def) { PREVIEWS[id] = def; }
+					function pb(name, cls, label) {
+						return '<button type="button" class="pv-btn' + (cls ? ' ' + cls : '') + '" aria-label="' + esc(label || name) + '" title="' + esc(label || name) + '">' + icon(name) + '</button>';
+					}
+					function pill(text, cls) {
+						return '<button type="button" class="pv-pill' + (cls ? ' ' + cls : '') + '">' + text + '</button>';
+					}
+					function thumb(h, cls) {
+						return '<div class="pv-thumb' + (cls ? ' ' + cls : '') + '" style="--h:' + h + '"></div>';
+					}
+					function poster(h) {
+						return '<span class="pv-poster" style="--h:' + h + '"></span>';
+					}
+					function toast(node, html) {
+						var t = node.querySelector('.pv-toast');
+						if (!t) {
+							t = el('div', 'pv-toast');
+							node.appendChild(t);
+						}
+						t.innerHTML = html;
+						t.classList.add('pv-show');
+						clearTimeout(t._hide);
+						t._hide = setTimeout(function () { t.classList.remove('pv-show'); }, 2200);
+					}
+					function on(node, sel, fn) {
+						each(node, sel, function (b) { b.addEventListener('click', function (e) { fn(b, e); }); });
+					}
+					function setIcon(b, name) {
+						b.querySelector('.material-icons').textContent = name;
+					}
+					function clock(minutesAhead) {
+						try {
+							return new Date(Date.now() + minutesAhead * 60000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+						} catch (e) {
+							return '10:42 PM';
+						}
+					}
+
+					// ----- Featured -----
+					P('spoiler-guard', {
+						head: 'Watch without spoilers',
+						html: '<div class="pv-col">' +
+							'<div class="pv-row pv-eps">' +
+							[['11', 'S1 E11', 'Departure', 20], ['12', 'S1 E12', 'Next Stop', 110], ['21', 'S2 E1', 'The Reveal', 200]].map(function (e) {
+								return '<div class="pv-ep" data-ep="' + e[0] + '" data-name="' + e[2] + '" data-code="' + e[1] + '">' + thumb(e[3]) +
+									pb('check', 'pv-mini pv-watch', 'Mark played') + '<div class="pv-cap pv-ep-title"></div><div class="pv-cap pv-ep-desc"></div></div>';
+							}).join('') + '</div>' +
+							'<div class="pv-row pv-center">' + pb('favorite_border', '', 'Favorite') + pb('blur_on', 'pv-guard pv-hot', 'Spoiler Guard') + pb('more_horiz', '', 'More') +
+							'<span class="pv-label pv-guard-label"></span></div></div>',
+						init: function (n) {
+							var guard = true, watched = { '11': true };
+							var order = ['11', '12', '21'];
+							function render() {
+								var next = order.filter(function (k) { return !watched[k]; })[0];
+								each(n, '.pv-ep', function (ep) {
+									var k = ep.getAttribute('data-ep'), hidden = guard && !watched[k];
+									var sameSeason = k.charAt(0) === (next || '').charAt(0);
+									ep.querySelector('.pv-thumb').classList.toggle('pv-blur', hidden);
+									ep.classList.toggle('pv-played', !!watched[k]);
+									// Advanced mode: the next episode and the rest of its season keep their titles.
+									var code = ep.getAttribute('data-code');
+									ep.querySelector('.pv-ep-title').textContent = hidden && !sameSeason
+										? 'Season ' + code.charAt(1) + ', Episode ' + code.split('E')[1]
+										: code + ' · ' + ep.getAttribute('data-name');
+									ep.querySelector('.pv-ep-desc').textContent = hidden ? 'Spoiler Guard activated' : 'What happens in it…';
+								});
+								var g = n.querySelector('.pv-guard');
+								g.classList.toggle('pv-on', guard);
+								setIcon(g, guard ? 'blur_on' : 'blur_off');
+								n.querySelector('.pv-guard-label').textContent = 'Spoiler Guard: ' + (guard ? 'On' : 'Off');
+							}
+							on(n, '.pv-guard', function () { guard = !guard; render(); });
+							on(n, '.pv-watch', function (b) {
+								var k = b.closest('.pv-ep').getAttribute('data-ep');
+								watched[k] = !watched[k];
+								render();
+							});
+							render();
+						}
+					});
+
+					P('alternate-order', {
+						head: 'Bonus episodes, out of the way',
+						html: '<div class="pv-col"><div class="pv-chips pv-ao"></div>' +
+							'<div class="pv-row pv-center">' + pb('favorite_border', '', 'Favorite') + pb('low_priority', 'pv-ao-btn pv-hot', 'Alternate Order') + '<span class="pv-label"></span></div></div>',
+						init: function (n) {
+							var modes = ['Off', 'Reorder', 'Hidden'], m = 1;
+							var aired = ['Ep 10', 'Bonus', 'Ep 11', 'Bonus', 'Ep 12'];
+							function render() {
+								var story = aired.filter(function (x) { return x !== 'Bonus'; });
+								var list = m === 0 ? aired : m === 1 ? story.concat(['Bonus', 'Bonus']) : story;
+								n.querySelector('.pv-ao').innerHTML = list.map(function (x) {
+									return '<span class="pv-epchip' + (x === 'Bonus' ? ' pv-bonus' : '') + '">' + x + '</span>';
+								}).join('') + (m === 2 ? '<span class="pv-epchip pv-gone">2 bonus hidden</span>' : '');
+								var b = n.querySelector('.pv-ao-btn');
+								b.classList.toggle('pv-on', m !== 0);
+								setIcon(b, m === 2 ? 'visibility_off' : 'low_priority');
+								n.querySelector('.pv-label').textContent = 'Alternate Order: ' + modes[m];
+							}
+							on(n, '.pv-ao-btn', function () { m = (m + 1) % 3; render(); });
+							render();
+						}
+					});
+
+					P('requests', {
+						head: 'Can\'t find it? Ask for it',
+						html: '<div class="pv-col pv-w">' +
+							'<div class="pv-search">' + icon('search') + '<span>something new</span></div>' +
+							'<div class="pv-cap pv-left">Discover on Seerr</div>' +
+							'<div class="pv-result">' + poster(280) + '<div class="pv-grow"><b>A show that isn\'t here</b><div class="pv-cap">TV series</div></div>' + pill('Request', 'pv-req pv-hot') + '</div>' +
+							'<div class="pv-result">' + poster(30) + '<div class="pv-grow"><b>A movie you asked for</b><div class="pv-cap">Movie</div></div><span class="pv-pill pv-ok">Available</span></div></div>',
+						init: function (n) {
+							var state = 0;
+							on(n, '.pv-req', function (b) {
+								if (state === 0) {
+									state = 1;
+									b.textContent = 'Requested';
+									b.classList.add('pv-wait');
+									setTimeout(function () {
+										b.textContent = 'Pending Approval';
+										toast(n, 'It appears on the server once it\'s downloaded');
+									}, 900);
+								} else {
+									state = 0;
+									b.textContent = 'Request';
+									b.classList.remove('pv-wait');
+								}
+							});
+						}
+					});
+
+					P('watchlist', {
+						head: 'Save it for later',
+						html: '<div class="pv-col"><div class="pv-row">' + [200, 330, 40].map(function (h, i) {
+							return '<div class="pv-pcard" data-i="' + i + '">' + poster(h) + '<div class="pv-ov">' +
+								pb('bookmark_border', 'pv-wl' + (i === 1 ? ' pv-hot' : ''), 'Add to Watchlist') + pb('check', 'pv-pl', 'Mark played') + '</div></div>';
+						}).join('') + '</div><div class="pv-label pv-count"></div></div>',
+						init: function (n) {
+							var wl = { 0: true }, played = {};
+							function render() {
+								each(n, '.pv-pcard', function (c) {
+									var i = c.getAttribute('data-i'), w = n.querySelector('.pv-pcard[data-i="' + i + '"] .pv-wl');
+									w.classList.toggle('pv-green', !!wl[i]);
+									setIcon(w, wl[i] ? 'bookmark' : 'bookmark_border');
+									w.title = wl[i] ? 'Remove from Watchlist' : 'Add to Watchlist';
+									w.hidden = !!played[i];
+									c.querySelector('.pv-pl').classList.toggle('pv-green', !!played[i]);
+								});
+								n.querySelector('.pv-count').textContent = 'On your Watchlist: ' + Object.keys(wl).filter(function (k) { return wl[k]; }).length;
+							}
+							on(n, '.pv-wl', function (b) { var i = b.closest('.pv-pcard').getAttribute('data-i'); wl[i] = !wl[i]; render(); });
+							on(n, '.pv-pl', function (b) {
+								var i = b.closest('.pv-pcard').getAttribute('data-i');
+								played[i] = !played[i];
+								if (played[i] && wl[i]) {
+									wl[i] = false;
+									toast(n, 'Watched, so it left your Watchlist');
+								}
+								render();
+							});
+							render();
+						}
+					});
+
+					P('theme-media', {
+						head: 'Turn the theme music down',
+						html: '<div class="pv-theme"><div class="pv-theme-top">' + pb('volume_up', 'pv-mute pv-hot', 'Mute theme') +
+							'<input type="range" class="pv-vol" min="0" max="100" value="60" aria-label="Theme volume" />' + pb('fullscreen', 'pv-fs', 'Fullscreen theme') + '</div>' +
+							'<div class="pv-theme-body"><div class="pv-eq"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="pv-cap pv-theme-cap">Theme song playing</div></div></div>',
+						init: function (n) {
+							var muted = false, vol = 60;
+							var box = n.querySelector('.pv-theme');
+							function render() {
+								var silent = muted || vol === 0;
+								box.classList.toggle('pv-silent', silent);
+								box.style.setProperty('--vol', silent ? 0.08 : vol / 100);
+								setIcon(n.querySelector('.pv-mute'), silent ? 'volume_off' : 'volume_up');
+								n.querySelector('.pv-theme-cap').textContent = silent ? 'Muted' : 'Theme song playing · volume ' + vol + '%';
+							}
+							on(n, '.pv-mute', function () { muted = !muted; render(); });
+							n.querySelector('.pv-vol').addEventListener('input', function (e) { vol = +e.target.value; muted = false; render(); });
+							on(n, '.pv-fs', function (b) {
+								var full = box.classList.toggle('pv-full');
+								setIcon(b, full ? 'fullscreen_exit' : 'fullscreen');
+							});
+							render();
+						}
+					});
+
+					P('pause-screen', {
+						head: 'Paused? Here\'s where you are',
+						html: '<div class="pv-player">' + '<div class="pv-frame" style="--h:215"></div>' +
+							'<div class="pv-ps"><b>Episode title</b><small>A short description of the episode, with its year, rating and running time.</small>' +
+							'<div class="pv-bar" style="--p:37%"><i></i></div><div class="pv-meta"><span>37% watched</span><span class="pv-ends"></span></div></div>' +
+							'<div class="pv-ctl">' + pb('pause', 'pv-pp pv-hot', 'Pause') + '<div class="pv-bar" style="--p:37%"><i></i></div><span class="pv-cap pv-hint"></span></div></div>',
+						init: function (n, live) {
+							var ps = n.querySelector('.pv-ps'), pp = n.querySelector('.pv-pp'), hint = n.querySelector('.pv-hint');
+							n.querySelector('.pv-ends').textContent = 'Ends at ' + clock(26);
+							if (!live) {
+								ps.classList.add('pv-show');
+								setIcon(pp, 'play_arrow');
+								return;
+							}
+							var timer = null, left = 0;
+							function resume() {
+								clearInterval(timer);
+								timer = null;
+								ps.classList.remove('pv-show');
+								setIcon(pp, 'pause');
+								hint.textContent = '';
+							}
+							function pause() {
+								setIcon(pp, 'play_arrow');
+								left = 3;
+								hint.textContent = 'Paused…';
+								timer = setInterval(function () {
+									left--;
+									if (left <= 0) {
+										clearInterval(timer);
+										timer = null;
+										hint.textContent = '';
+										ps.classList.add('pv-show');
+									}
+								}, 1000);
+							}
+							pp.addEventListener('click', function () {
+								if (timer || ps.classList.contains('pv-show')) resume();
+								else pause();
+							});
+							ps.addEventListener('click', resume);
+							hint.textContent = 'Press pause';
+							return function () { clearInterval(timer); };
+						}
+					});
+
+					// ----- Getting around -----
+					P('navigation', {
+						html: '<div class="pv-col pv-w">' +
+							'<div class="pv-topbar"><span class="pv-logo"></span>' +
+							'<button type="button" class="pv-tab pv-libs pv-hot">Libraries ▾</button><span class="pv-tab">Favorites</span><span class="pv-tab pv-tab-on">Watchlist</span><span class="pv-tab">Requests</span>' +
+							'<span class="pv-grow"></span>' + icon('casino') + icon('palette') + '</div>' +
+							'<div class="pv-menu pv-libmenu" hidden><div>Anime</div><div>Anime Movies</div><div>Movies</div><div>Shows</div></div>' +
+							'<div class="pv-crumbs">Shows › Show name › <button type="button" class="pv-crumb">Season 1 ▾</button></div>' +
+							'<div class="pv-menu pv-seasons" hidden><button type="button">Season 1</button><button type="button">Season 2</button><button type="button">Specials</button></div></div>',
+						init: function (n) {
+							on(n, '.pv-libs', function () { var m = n.querySelector('.pv-libmenu'); m.hidden = !m.hidden; });
+							on(n, '.pv-crumb', function () { var m = n.querySelector('.pv-seasons'); m.hidden = !m.hidden; });
+							on(n, '.pv-seasons button', function (b) {
+								n.querySelector('.pv-crumb').textContent = b.textContent + ' ▾';
+								n.querySelector('.pv-seasons').hidden = true;
+							});
+						}
+					});
+
+					var SCHEMES = [['Default', '#9db8ff'], ['Warm White', '#f1e4cc'], ['Soft Blue', '#7fb2ff'], ['Teal', '#3cc8b4'], ['Rose', '#f27fa5'], ['Jellyfin Purple', '#aa5cc3']];
+					P('appearance', {
+						html: '<div class="pv-col pv-w"><div class="pv-mock"><div class="pv-mock-bar"><span class="pv-logo"></span><span class="pv-grow"></span><span class="pv-acc">' + icon('palette') + '</span></div>' +
+							'<div class="pv-row">' + poster(210) + poster(20) + poster(140) + '<div class="pv-mock-side"><b>Title</b><span class="pv-mock-btn">Play</span></div></div></div>' +
+							'<div class="pv-row pv-swatches">' + SCHEMES.map(function (s, i) {
+								return '<button type="button" class="pv-swatch' + (i === 4 ? ' pv-hot' : '') + '" style="--sw:' + s[1] + '" aria-label="' + s[0] + '" title="' + s[0] + '"></button>';
+							}).join('') + '</div><div class="pv-label"></div></div>',
+						init: function (n) {
+							function pick(i) {
+								n.querySelector('.pv-mock').style.setProperty('--acc', SCHEMES[i][1]);
+								each(n, '.pv-swatch', function (s, j) { s.classList.toggle('pv-sel', j === i); });
+								n.querySelector('.pv-label').textContent = 'Abyss · ' + SCHEMES[i][0];
+							}
+							each(n, '.pv-swatch', function (s, i) { s.addEventListener('click', function () { pick(i); }); });
+							pick(0);
+						}
+					});
+
+					// ----- Watching -----
+					P('skip', {
+						html: '<div class="pv-col pv-w"><div class="pv-player"><div class="pv-frame" style="--h:330"></div><span class="pv-tag">Opening</span>' +
+							'<button type="button" class="pv-pill pv-skip pv-hot">Skip Intro</button>' +
+							'<div class="pv-ctl"><div class="pv-bar" style="--p:9%"><i></i><b class="pv-seg"></b></div></div></div></div>',
+						init: function (n, live) {
+							var reset = null;
+							on(n, '.pv-skip', function (b) {
+								n.querySelector('.pv-ctl .pv-bar').style.setProperty('--p', '22%');
+								n.querySelector('.pv-tag').textContent = 'Episode';
+								b.hidden = true;
+								if (live) {
+									reset = setTimeout(function () {
+										n.querySelector('.pv-ctl .pv-bar').style.setProperty('--p', '9%');
+										n.querySelector('.pv-tag').textContent = 'Opening';
+										b.hidden = false;
+									}, 2600);
+								}
+							});
+							return function () { clearTimeout(reset); };
+						}
+					});
+
+					var CRT_MODES = [['off', 'tv_off'], ['super', 'tv'], ['kurozumi', 'live_tv']];
+					P('crt', {
+						html: '<div class="pv-player pv-crt"><div class="pv-frame pv-scene" style="--h:28"><span class="pv-sun"></span><span class="pv-hills"></span></div><div class="pv-scan"></div>' +
+							'<div class="pv-ctl"><span class="pv-cap pv-crt-label"></span><span class="pv-grow"></span>' + pb('tv_off', 'pv-crtbtn pv-hot', 'CRT') + pb('settings', '', 'Settings') + '</div></div>',
+						init: function (n, live) {
+							var m = live ? 0 : 1;
+							var box = n.querySelector('.pv-crt');
+							function render() {
+								box.setAttribute('data-crt', CRT_MODES[m][0]);
+								var b = n.querySelector('.pv-crtbtn');
+								setIcon(b, CRT_MODES[m][1]);
+								b.classList.toggle('pv-on', m !== 0);
+								n.querySelector('.pv-crt-label').textContent = 'CRT: ' + CRT_MODES[m][0];
+							}
+							on(n, '.pv-crtbtn', function () { m = (m + 1) % 3; render(); });
+							render();
+						}
+					});
+
+					P('shortcuts', {
+						html: '<div class="pv-col pv-w"><div class="pv-keys">' +
+							[['O', 'Skip intro'], ['-', 'Slower'], ['+', 'Faster'], ['3', 'Jump to 30%'], ['7', 'Jump to 70%'], ['Z', 'Go back'], ['C', 'Subtitles'], ['V', 'Audio']].map(function (k) {
+								return '<button type="button" class="pv-key" data-k="' + k[0] + '"><kbd>' + k[0] + '</kbd><span>' + k[1] + '</span></button>';
+							}).join('') + '</div><div class="pv-status"></div><div class="pv-cap pv-what">Click a key, or press it on your keyboard</div></div>',
+						init: function (n, live) {
+							var s = { speed: 1, pos: 30, last: null, sub: 0, aud: 0 };
+							var SUBS = ['English', 'Signs only', 'Off'], AUDIO = ['Japanese', 'English'], LEN = 1440, SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+							function t(x) { var m = Math.floor(x / 60), sec = Math.floor(x % 60); return m + ':' + (sec < 10 ? '0' : '') + sec; }
+							function render() {
+								n.querySelector('.pv-status').textContent = t(s.pos) + ' / ' + t(LEN) + '  ·  ' + s.speed + '×  ·  Subs: ' + SUBS[s.sub] + '  ·  Audio: ' + AUDIO[s.aud];
+							}
+							function press(k) {
+								var what;
+								if (k === 'O') { if (s.pos < 90) { s.last = s.pos; s.pos = 90; what = 'Skipped the intro'; } else what = 'No intro playing right now'; }
+								else if (k === '+' || k === '=' || k === '-') {
+									var i = SPEEDS.indexOf(s.speed) + (k === '-' ? -1 : 1);
+									s.speed = SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, i))];
+									what = 'Speed ' + s.speed + '×';
+								}
+								else if (/^[0-9]$/.test(k)) { s.last = s.pos; s.pos = LEN * k / 10; what = 'Jumped to ' + k + '0%'; }
+								else if (k === 'Z') { if (s.last != null) { var p = s.pos; s.pos = s.last; s.last = p; what = 'Back to where you were'; } else what = 'Nothing to go back to yet'; }
+								else if (k === 'C') { s.sub = (s.sub + 1) % SUBS.length; what = 'Subtitles: ' + SUBS[s.sub]; }
+								else if (k === 'V') { s.aud = (s.aud + 1) % AUDIO.length; what = 'Audio: ' + AUDIO[s.aud]; }
+								else return false;
+								n.querySelector('.pv-what').textContent = what;
+								var cap = n.querySelector('.pv-key[data-k="' + (k === '=' ? '+' : k) + '"]');
+								if (cap) {
+									cap.classList.remove('pv-pressed');
+									void cap.offsetWidth;
+									cap.classList.add('pv-pressed');
+								}
+								render();
+								return true;
+							}
+							on(n, '.pv-key', function (b) { press(b.getAttribute('data-k')); });
+							render();
+							if (!live) return;
+							function onKey(e) {
+								if (e.ctrlKey || e.metaKey || e.altKey) return;
+								if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '')) return;
+								press(e.key.length === 1 ? e.key.toUpperCase() : e.key);
+							}
+							document.addEventListener('keydown', onKey);
+							return function () { document.removeEventListener('keydown', onKey); };
+						}
+					});
+
+					// ----- Shows and anime -----
+					P('series-page', {
+						html: '<div class="pv-col pv-w"><div class="pv-rowhead"><b>Episodes</b>' + pill('Season 1 ▾', 'pv-small pv-ghost pv-season pv-hot') +
+							'<span class="pv-grow"></span>' + pb('grid_view', 'pv-grid', 'Grid layout') + '</div><div class="pv-strip"></div></div>',
+						init: function (n) {
+							var season = 1, seasons = { 1: { eps: 6, played: 3 }, 2: { eps: 4, played: 0 } };
+							function render() {
+								var s = seasons[season], next = season === 1 ? 4 : 0;
+								n.querySelector('.pv-season').textContent = 'Season ' + season + ' ▾';
+								var html = '';
+								for (var i = 1; i <= s.eps; i++) {
+									html += '<div class="pv-ep' + (i <= s.played ? ' pv-played' : '') + '">' + thumb(season * 90 + i * 25) +
+										(i === next ? '<span class="pv-badge">Next Up</span>' : '') + '<div class="pv-cap">' + i + '. Episode ' + i + '</div></div>';
+								}
+								n.querySelector('.pv-strip').innerHTML = html;
+							}
+							on(n, '.pv-season', function () { season = season === 1 ? 2 : 1; render(); });
+							on(n, '.pv-grid', function (b) {
+								var g = n.querySelector('.pv-strip').classList.toggle('pv-wrap');
+								b.classList.toggle('pv-on', g);
+							});
+							render();
+						}
+					});
+
+					P('specials', {
+						html: '<div class="pv-col pv-w"><div class="pv-row pv-center pv-copies">' +
+							'<div class="pv-copy"><div class="pv-cap">Movies</div><div class="pv-pcard">' + poster(195) + '<div class="pv-ov">' + pb('check', 'pv-pl pv-hot', 'Mark played') + '</div></div></div>' +
+							'<span class="pv-link">' + icon('sync_alt') + '</span>' +
+							'<div class="pv-copy"><div class="pv-cap">Show › Specials</div><div class="pv-pcard">' + poster(195) + '<div class="pv-ov">' + pb('check', 'pv-pl', 'Mark played') + '</div></div></div></div>' +
+							'<div class="pv-chips"><span class="pv-epchip">Ep 11</span><span class="pv-epchip">Ep 12</span><span class="pv-epchip pv-bonus">The Movie</span></div>' +
+							'<div class="pv-cap">Placed after the finale, where it belongs</div></div>',
+						init: function (n) {
+							var played = false;
+							on(n, '.pv-pl', function () {
+								played = !played;
+								each(n, '.pv-pl', function (b) { b.classList.toggle('pv-green', played); });
+								toast(n, played ? 'Marked watched in both places' : 'Unwatched in both places');
+							});
+						}
+					});
+
+					P('characters', {
+						html: '<div class="pv-col pv-w"><div class="pv-row pv-cast">' +
+							'<button type="button" class="pv-person pv-char pv-hot"><i style="--h:340"></i><b class="pv-cname">Yūsha</b><span>Character</span></button>' +
+							'<div class="pv-person"><i class="pv-actor"></i><b>Voice actor</b><span class="pv-as">as Yūsha</span></div>' +
+							'<div class="pv-person"><i class="pv-split"><em style="--h:30" data-n="Rival"></em><em style="--h:180" data-n="Narrator"></em></i><b>Rival / Narrator</b><span>2 characters</span></div>' +
+							'<div class="pv-person"><i class="pv-actor"></i><b>Another actor</b><span>as Rival / Narrator</span></div></div>' +
+							'<div class="pv-charpage" hidden><button type="button" class="pv-pill pv-small pv-ghost pv-back">‹ Back</button><b class="pv-cname">Yūsha</b>' +
+							'<div class="pv-cap">Voiced by: Voice actor · Appears in: 3 titles · AniList, AniDB, MyAnimeList</div></div>' +
+							'<span class="pv-cap pv-hovername">Point at a split picture to see who\'s who</span></div>',
+						init: function (n) {
+							on(n, '.pv-char', function () { n.querySelector('.pv-charpage').hidden = false; n.querySelector('.pv-cast').hidden = true; });
+							on(n, '.pv-back', function () { n.querySelector('.pv-charpage').hidden = true; n.querySelector('.pv-cast').hidden = false; });
+							each(n, '.pv-split em', function (e) {
+								e.addEventListener('pointerenter', function () { n.querySelector('.pv-hovername').textContent = e.getAttribute('data-n'); });
+							});
+						}
+					});
+
+					// ----- Your lists -----
+					P('watchlist-page', {
+						html: '<div class="pv-col pv-w"><div class="pv-tabs">' + ['Watchlist', 'Series Progress', 'Movie History', 'Statistics'].map(function (x, i) {
+							return '<button type="button" class="pv-tabbtn' + (i === 1 ? ' pv-hot' : '') + '" data-i="' + i + '">' + x + '</button>';
+						}).join('') + '</div><div class="pv-tabbody"></div></div>',
+						init: function (n) {
+							var bodies = [
+								'<div class="pv-row">' + poster(10) + poster(90) + poster(170) + poster(250) + '</div><div class="pv-cap">2 Shows · 2 Movies</div>',
+								[['A long show', 67], ['A short show', 100]].map(function (s) {
+									return '<div class="pv-prog"><b>' + s[0] + '</b>' + (s[1] === 100 ? ' <span class="pv-ok-badge">✓ Complete</span>' : '') +
+										'<div class="pv-segbar">' + Array.apply(null, Array(12)).map(function (_, i) { return '<i' + (i < 12 * s[1] / 100 ? ' class="pv-w-on"' : '') + '></i>'; }).join('') + '</div>' +
+										'<div class="pv-cap">Watched ' + Math.round(12 * s[1] / 100) + ' of 12 episodes</div></div>';
+								}).join(''),
+								[['A recent movie', 'Last night'], ['An older favourite', 'Last week'], ['A classic', 'In August']].map(function (m, i) {
+									return '<div class="pv-hist">' + poster(i * 70 + 20) + '<div><b>' + m[0] + '</b><div class="pv-cap">' + m[1] + '</div></div></div>';
+								}).join(''),
+								'<div class="pv-stats"><div><b>212</b><span>Hours</span></div><div><b>48</b><span>Movies</span></div><div><b>31</b><span>Series</span></div></div>' +
+								'<div class="pv-chart">' + [30, 55, 40, 80, 65, 95, 50].map(function (h) { return '<i style="height:' + h + '%"></i>'; }).join('') + '</div>'
+							];
+							function show(i) {
+								each(n, '.pv-tabbtn', function (b, j) { b.classList.toggle('pv-tab-on', i === j); });
+								n.querySelector('.pv-tabbody').innerHTML = bodies[i];
+							}
+							on(n, '.pv-tabbtn', function (b) { show(+b.getAttribute('data-i')); });
+							show(1);
+						}
+					});
+
+					P('continue-watching', {
+						html: '<div class="pv-col pv-w"><div class="pv-row pv-cw">' +
+							[[35, 40, true], [160, 75, true], [260, 0, false]].map(function (c, i) {
+								return '<div class="pv-cwcard" data-i="' + i + '">' + thumb(c[0]) + (c[2] ? pb('close', 'pv-mini pv-x' + (i === 0 ? ' pv-hot' : ''), 'Remove from Continue Watching') : '') +
+									(c[1] ? '<div class="pv-bar" style="--p:' + c[1] + '%"><i></i></div>' : '<div class="pv-cap">Next up</div>') + '</div>';
+							}).join('') + '</div>' + pill('Put them back', 'pv-small pv-ghost pv-reset') + '</div>',
+						init: function (n) {
+							var reset = n.querySelector('.pv-reset');
+							reset.hidden = true;
+							on(n, '.pv-x', function (b) {
+								b.closest('.pv-cwcard').classList.add('pv-gone');
+								toast(n, 'Removed. It will start from the beginning next time');
+								reset.hidden = false;
+							});
+							reset.addEventListener('click', function () {
+								each(n, '.pv-cwcard', function (c) { c.classList.remove('pv-gone'); });
+								reset.hidden = true;
+							});
+						}
+					});
+
+					P('playlists', {
+						html: '<div class="pv-col pv-w"><div class="pv-row pv-full">' + pill(icon('play_arrow') + 'Resume', 'pv-main') + pb('replay', 'pv-restart', 'Play from Beginning') +
+							'<span class="pv-grow"></span>' + pill('Sort: Default', 'pv-ghost pv-small pv-sort pv-hot') + '</div><div class="pv-list"></div></div>',
+						init: function (n) {
+							var items = [
+								{ n: 'Part 1', y: 2001, a: 3, p: true }, { n: 'Part 2', y: 2004, a: 1, p: true },
+								{ n: 'Part 3', y: 2003, a: 4 }, { n: 'Part 4', y: 2009, a: 2 }
+							];
+							var sorts = [['Default', null], ['Release Date', 'y'], ['Date Added', 'a']], si = 0;
+							function render() {
+								var list = items.slice();
+								if (sorts[si][1]) list.sort(function (a, b) { return a[sorts[si][1]] - b[sorts[si][1]]; });
+								var next = list.filter(function (x) { return !x.p; })[0];
+								n.querySelector('.pv-sort').textContent = 'Sort: ' + sorts[si][0];
+								n.querySelector('.pv-list').innerHTML = list.map(function (x) {
+									return '<div class="pv-li' + (x === next ? ' pv-next' : '') + '">' + pb('play_arrow', 'pv-mini pv-rowplay', 'Play from here') +
+										'<b>' + x.n + '</b><span class="pv-cap">' + x.y + '</span><span class="pv-grow"></span>' +
+										(x.p ? '<span class="pv-tick">' + icon('check') + '</span>' : x === next ? '<span class="pv-cap">Up next</span>' : '') + '</div>';
+								}).join('');
+								on(n, '.pv-rowplay', function (b) { toast(n, 'Playing from ' + b.parentNode.querySelector('b').textContent + ' onwards'); });
+							}
+							on(n, '.pv-sort', function () { si = (si + 1) % sorts.length; render(); });
+							on(n, '.pv-main', function () { toast(n, 'Carrying on from the first one you haven\'t watched'); });
+							on(n, '.pv-restart', function () { toast(n, 'Starting again from the top'); });
+							render();
+						}
+					});
+
+					P('pin', {
+						html: '<div class="pv-row pv-pinwrap"><div class="pv-pcard pv-pinsrc">' + poster(150) + '<div class="pv-ov pv-ov-top">' + pb('more_vert', 'pv-more pv-hot', 'More') + '</div>' +
+							'<div class="pv-menu pv-pinmenu" hidden><button type="button">' + icon('playlist_add') + 'Add to playlist</button>' +
+							'<button type="button" class="pv-dopin">' + icon('push_pin') + 'Pin to Home Screen</button><button type="button">' + icon('info') + 'Media Info</button></div></div>' +
+							'<div class="pv-home"><div class="pv-cap">Your Home screen</div><div class="pv-homerow"><b>Continue Watching</b><div class="pv-row">' + thumb(40) + thumb(200) + '</div></div>' +
+							'<div class="pv-homerow pv-pinned" hidden><b>Pinned</b><div class="pv-row"><div class="pv-pcard">' + poster(150) + '<div class="pv-ov">' + pb('push_pin', 'pv-unpin pv-on', 'Unpin from Home Screen') + '</div></div></div></div></div></div>',
+						init: function (n) {
+							var menu = n.querySelector('.pv-pinmenu');
+							on(n, '.pv-more', function () { menu.hidden = !menu.hidden; });
+							on(n, '.pv-dopin', function () { menu.hidden = true; n.querySelector('.pv-pinned').hidden = false; toast(n, 'Pinned to Pinned'); });
+							on(n, '.pv-unpin', function () { n.querySelector('.pv-pinned').hidden = true; toast(n, 'Unpinned'); });
+							on(n, '.pv-menu button:not(.pv-dopin)', function () { menu.hidden = true; });
+						}
+					});
+
+					// ----- Home screen -----
+					P('home-sections', {
+						html: '<div class="pv-col pv-w pv-homeedit">' + [['Recently Added', 0], ['Halloween Movies', 1]].map(function (r) {
+							return '<div class="pv-hrow" data-r="' + r[1] + '"><div class="pv-rowhead"><b>' + r[0] + '</b><span class="pv-grow"></span>' +
+								pb('refresh', 'pv-mini pv-ref', 'Refresh') + pb('grid_view', 'pv-mini pv-g', 'Grid layout') + pb('settings', 'pv-mini pv-cfg' + (r[1] === 0 ? ' pv-hot' : ''), 'Configure') + '</div>' +
+								'<div class="pv-pop" hidden>' + pb('arrow_upward', 'pv-mini pv-up', 'Move up') + pb('arrow_downward', 'pv-mini pv-dn', 'Move down') + pb('visibility_off', 'pv-mini pv-hide', 'Hide section') + '</div>' +
+								'<div class="pv-strip pv-small">' + [0, 1, 2, 3, 4, 5].map(function (i) { return thumb(r[1] * 140 + i * 30); }).join('') + '</div></div>';
+						}).join('') + '<div class="pv-undo" hidden><span></span>' + pill('Undo', 'pv-small pv-ghost pv-undobtn') + '</div></div>',
+						init: function (n) {
+							var hiddenRow = null;
+							on(n, '.pv-cfg', function (b) { var p = b.closest('.pv-hrow').querySelector('.pv-pop'); p.hidden = !p.hidden; });
+							on(n, '.pv-g', function (b) { b.classList.toggle('pv-on', b.closest('.pv-hrow').querySelector('.pv-strip').classList.toggle('pv-wrap')); });
+							on(n, '.pv-ref', function (b) {
+								each(b.closest('.pv-hrow'), '.pv-thumb', function (t) { t.style.setProperty('--h', Math.floor(Math.random() * 360)); });
+							});
+							on(n, '.pv-up', function (b) { var r = b.closest('.pv-hrow'), prev = r.previousElementSibling; if (prev && prev.classList.contains('pv-hrow')) r.parentNode.insertBefore(r, prev); });
+							on(n, '.pv-dn', function (b) { var r = b.closest('.pv-hrow'), next = r.nextElementSibling; if (next && next.classList.contains('pv-hrow')) r.parentNode.insertBefore(next, r); });
+							on(n, '.pv-hide', function (b) {
+								hiddenRow = b.closest('.pv-hrow');
+								hiddenRow.hidden = true;
+								var u = n.querySelector('.pv-undo');
+								u.querySelector('span').textContent = 'Hidden: ' + hiddenRow.querySelector('b').textContent;
+								u.hidden = false;
+							});
+							on(n, '.pv-undobtn', function () { if (hiddenRow) hiddenRow.hidden = false; n.querySelector('.pv-undo').hidden = true; });
+						}
+					});
+
+					var BECAUSE = ['Because you watched A Long Show', 'Because you finished A Short Show', 'Top Rated Comedy Movies', 'Because A Movie is on your Watchlist', 'Shows from A Studio'];
+					P('discovery', {
+						html: '<div class="pv-col pv-w"><div class="pv-rowhead"><b class="pv-because"></b><span class="pv-grow"></span>' + pb('refresh', 'pv-mini pv-ref pv-hot', 'Refresh') + '</div>' +
+							'<div class="pv-strip pv-posters"></div><div class="pv-cap">More rows load as you scroll down</div></div>',
+						init: function (n) {
+							var i = 0;
+							function render() {
+								n.querySelector('.pv-because').textContent = BECAUSE[i];
+								var h = i * 70;
+								n.querySelector('.pv-posters').innerHTML = [0, 1, 2, 3, 4, 5].map(function (k) { return poster(h + k * 23); }).join('');
+							}
+							on(n, '.pv-ref', function () { i = (i + 1) % BECAUSE.length; render(); });
+							render();
+						}
+					});
+
+					P('media-bar', {
+						html: '<div class="pv-mbar"><div class="pv-slide"></div><div class="pv-mbar-ui"><b class="pv-mtitle"></b><div class="pv-cap pv-mmeta"></div>' +
+							'<div class="pv-row">' + pill(icon('play_arrow') + 'Play') + pb('info', 'pv-mini', 'Details') + pb('favorite_border', 'pv-mini pv-heart', 'Favorite') + pb('bookmark_border', 'pv-mini pv-bm', 'Add to Watchlist') + '</div></div>' +
+							'<div class="pv-mnav">' + pb('chevron_left', 'pv-mini pv-prev', 'Previous') + '<span class="pv-dots"></span>' + pb('chevron_right', 'pv-mini pv-next', 'Next') + pb('pause', 'pv-mini pv-mpause pv-hot', 'Pause') + '</div></div>',
+						init: function (n, live) {
+							var slides = [['New this week', 250, 'Anime · 12 episodes'], ['Just added', 20, 'Anime Movie · 2h 4m'], ['New episode out', 160, 'Anime · Season 2']];
+							var i = 0, timer = null, paused = false, fav = {}, bm = {};
+							n.querySelector('.pv-dots').innerHTML = slides.map(function () { return '<i></i>'; }).join('');
+							function render() {
+								var s = slides[i];
+								n.querySelector('.pv-slide').style.setProperty('--h', s[1]);
+								n.querySelector('.pv-mtitle').textContent = s[0];
+								n.querySelector('.pv-mmeta').textContent = s[2];
+								each(n, '.pv-dots i', function (d, j) { d.classList.toggle('pv-dot-on', j === i); });
+								var h = n.querySelector('.pv-heart'), b = n.querySelector('.pv-bm');
+								setIcon(h, fav[i] ? 'favorite' : 'favorite_border');
+								h.classList.toggle('pv-red', !!fav[i]);
+								setIcon(b, bm[i] ? 'bookmark' : 'bookmark_border');
+								b.classList.toggle('pv-green', !!bm[i]);
+							}
+							function go(d) { i = (i + d + slides.length) % slides.length; render(); }
+							function start() { if (live && !paused) { clearInterval(timer); timer = setInterval(function () { go(1); }, 3500); } }
+							on(n, '.pv-prev', function () { go(-1); start(); });
+							on(n, '.pv-next', function () { go(1); start(); });
+							on(n, '.pv-mpause', function (b) {
+								paused = !paused;
+								setIcon(b, paused ? 'play_arrow' : 'pause');
+								if (paused) clearInterval(timer); else start();
+							});
+							on(n, '.pv-heart', function () { fav[i] = !fav[i]; render(); });
+							on(n, '.pv-bm', function () { bm[i] = !bm[i]; render(); });
+							render();
+							start();
+							return function () { clearInterval(timer); };
+						}
+					});
+
+					// ----- Finding and requesting -----
+					var CAL = [
+						{ d: 0, t: 'A weekly anime', k: 'anime', at: '5pm' }, { d: 1, t: 'A drama', k: 'episode', at: '9pm' },
+						{ d: 3, t: 'A new movie', k: 'digital', at: '' }, { d: 3, t: 'Another anime', k: 'anime', at: '4:30pm' },
+						{ d: 5, t: 'A comedy', k: 'episode', at: '8pm' }
+					];
+					var CAL_KINDS = [['anime', 'Anime'], ['episode', 'Episode'], ['digital', 'Digital Release']];
+					P('calendar', {
+						html: '<div class="pv-col pv-w"><div class="pv-row pv-full"><div class="pv-segctl">' + ['Week', 'Month', 'Agenda'].map(function (v, i) {
+							return '<button type="button" data-v="' + i + '"' + (i === 0 ? ' class="pv-hot"' : '') + '>' + v + '</button>';
+						}).join('') + '</div><span class="pv-grow"></span></div>' +
+							'<div class="pv-row pv-legend">' + CAL_KINDS.map(function (k) { return '<button type="button" class="pv-lg pv-k-' + k[0] + ' pv-lg-on" data-k="' + k[0] + '">' + k[1] + '</button>'; }).join('') + '</div>' +
+							'<div class="pv-cal"></div></div>',
+						init: function (n) {
+							var view = 0, onKinds = { anime: true, episode: true, digital: true };
+							var DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+							function items(d) { return CAL.filter(function (c) { return onKinds[c.k] && (d == null || c.d === d); }); }
+							function chip(c) { return '<span class="pv-ev pv-k-' + c.k + '">' + c.t + (c.at ? ' · ' + c.at : '') + '</span>'; }
+							function render() {
+								each(n, '.pv-segctl button', function (b, j) { b.classList.toggle('pv-seg-on', j === view); });
+								var html;
+								if (view === 0) {
+									html = '<div class="pv-week">' + DAYS.map(function (d, i) { return '<div><b>' + d + '</b>' + items(i).map(chip).join('') + '</div>'; }).join('') + '</div>';
+								} else if (view === 1) {
+									html = '<div class="pv-month">' + Array.apply(null, Array(28)).map(function (_, i) {
+										var dots = items(i % 7).filter(function () { return i >= 7 && i < 14; });
+										return '<div>' + (i + 1) + '<span>' + dots.map(function (c) { return '<i class="pv-k-' + c.k + '"></i>'; }).join('') + '</span></div>';
+									}).join('') + '</div>';
+								} else {
+									html = '<div class="pv-agenda">' + items(null).map(function (c) { return '<div><b>' + DAYS[c.d] + '</b>' + chip(c) + '</div>'; }).join('') + '</div>';
+								}
+								n.querySelector('.pv-cal').innerHTML = html;
+							}
+							on(n, '.pv-segctl button', function (b) { view = +b.getAttribute('data-v'); render(); });
+							on(n, '.pv-lg', function (b) { var k = b.getAttribute('data-k'); onKinds[k] = !onKinds[k]; b.classList.toggle('pv-lg-on', onKinds[k]); render(); });
+							render();
+						}
+					});
+
+					var RANDOM_POOL = [['A space western', 200, true], ['A cooking anime', 30, false], ['A heist movie', 0, false], ['A slice-of-life show', 120, true],
+						['A monster movie', 90, false], ['A mystery series', 260, false], ['A sports anime', 160, true], ['A romance movie', 330, false]];
+					P('random', {
+						html: '<div class="pv-col"><div class="pv-row pv-center">' + pb('casino', 'pv-dice pv-hot', 'Random') + '</div>' +
+							'<div class="pv-rand"></div></div>',
+						init: function (n) {
+							var last = -1;
+							function show(i) {
+								var r = RANDOM_POOL[i];
+								n.querySelector('.pv-rand').innerHTML = poster(r[1]) + '<div><b>' + r[0] + '</b><div class="pv-cap">' + (r[2] ? 'Watched' : 'Not watched yet') + '</div></div>';
+							}
+							on(n, '.pv-dice', function (b) {
+								var pool = RANDOM_POOL.map(function (_, i) { return i; }).filter(function (i) { return i !== last; });
+								last = pool[Math.floor(Math.random() * pool.length)];
+								b.classList.remove('pv-roll');
+								void b.offsetWidth;
+								b.classList.add('pv-roll');
+								show(last);
+							});
+							show(5);
+						}
+					});
+
+					// ----- Extras -----
+					var LUTS = [
+						['A desert movie', [32, 28, 36, 24, 30, 40, 20, 34]],
+						['An ocean movie', [200, 190, 210, 185, 220, 195, 205, 180]],
+						['A neon city movie', [300, 320, 280, 190, 310, 330, 290, 200]]
+					];
+					P('games', {
+						html: '<div class="pv-col pv-w"><div class="pv-cap">Movie LUT Game: which movie are these colours from?</div><div class="pv-lut"></div>' +
+							'<div class="pv-row pv-center pv-opts">' + LUTS.map(function (l, i) {
+								return '<button type="button" class="pv-pill pv-small pv-ghost pv-opt' + (i === 1 ? ' pv-hot' : '') + '" data-i="' + i + '">' + l[0] + '</button>';
+							}).join('') + '</div>' +
+							'<div class="pv-label pv-result"></div></div>',
+						init: function (n, live) {
+							var answer = 0, timer = null;
+							function round() {
+								answer = Math.floor(Math.random() * LUTS.length);
+								if (!live) answer = 1;
+								var hs = LUTS[answer][1];
+								var stripes = '';
+								for (var i = 0; i < 24; i++) {
+									var h = hs[i % hs.length] + (i * 7) % 15;
+									stripes += '<i style="background:hsl(' + h + ' ' + (45 + (i * 13) % 35) + '% ' + (25 + (i * 17) % 45) + '%)"></i>';
+								}
+								n.querySelector('.pv-lut').innerHTML = stripes;
+								n.querySelector('.pv-result').textContent = '';
+							}
+							on(n, '.pv-opt', function (b) {
+								var right = +b.getAttribute('data-i') === answer;
+								n.querySelector('.pv-result').textContent = right ? 'Correct!' : 'Not quite: it was ' + LUTS[answer][0].toLowerCase();
+								clearTimeout(timer);
+								timer = setTimeout(round, 1800);
+							});
+							round();
+							return function () { clearTimeout(timer); };
+						}
+					});
+
+
+					// A preview node. Live ones work; the rest are pictures nobody can click or focus.
+					function previewEl(id, live) {
+						var def = PREVIEWS[id];
+						if (!def) return null;
+						var node = el('div', 'pv ' + (live ? 'pv-live' : 'pv-card'), def.html);
+						var stop = null;
+						if (!live) {
+							node.setAttribute('inert', '');
+							node.setAttribute('aria-hidden', 'true');
+						}
+						try {
+							stop = def.init(node, !!live) || null;
+						} catch (e) {
+							console.warn('[KefinTweaks Help] preview failed:', id, e);
+						}
+						if (live) {
+							node.addEventListener('click', function (e) {
+								var h = e.target.closest && e.target.closest('.pv-hot');
+								if (h && node.contains(h)) h.classList.remove('pv-hot');
+							});
+						}
+						node._stop = stop;
+						return node;
+					}
+
+					// Large featured card: a preview, then the headline. Used by Gallery and Classic.
+					function featureCard(id) {
+						var t = byId[id], def = PREVIEWS[id];
+						var a = hue(el('a', 'kv-feat'), t.cat.hue);
+						a.href = '#/help?topic=' + id;
+						a.setAttribute('data-goto', id);
+						var p = previewEl(id, false);
+						if (p) a.appendChild(p);
+						a.appendChild(el('span', 'kv-feat-text', '<span class="kv-feat-eyebrow">' + icon(t.icon) + esc(t.title) +
+							'</span><span class="kv-feat-head">' + esc(def && def.head ? def.head : t.title) + '</span><span class="kv-feat-sum">' + esc(t.summary) + '</span>'));
+						return a;
+					}
+					function featureGrid() {
+						var g = el('div', 'kv-featgrid');
+						FEATURED.forEach(function (id) { if (byId[id]) g.appendChild(featureCard(id)); });
+						return g;
+					}
+
+					// ---------------------------------------------------------------
+					// Classic: featured cards and expanding topics
+					// ---------------------------------------------------------------
+					function buildClassic() {
+						var oldGrid = classic.querySelector('.kh-featured-grid');
+						if (oldGrid) oldGrid.parentNode.replaceChild(featureGrid(), oldGrid);
+						var categoriesEl = Array.prototype.slice.call(classic.querySelectorAll('.kh-category'));
+						var input = classic.querySelector('.kh-search input');
+						var clearBtn = classic.querySelector('.kh-search-clear');
+						var openBefore = null;
+
+						function apply() {
+							var q = input.value.trim();
+							if (!q) {
+								classic.classList.remove('kh-searching', 'kh-no-results');
+								topics.forEach(function (t, i) {
+									t.el.hidden = false;
+									if (openBefore) t.el.open = openBefore[i];
+								});
+								categoriesEl.forEach(function (c) { c.hidden = false; });
+								openBefore = null;
+								return;
+							}
+							if (!openBefore) openBefore = topics.map(function (t) { return t.el.open; });
+							classic.classList.add('kh-searching');
+							var hits = search(q);
+							topics.forEach(function (t) { t.el.hidden = hits.indexOf(t) === -1; });
+							// Open the matches when there are only a few; a long list stays scannable.
+							hits.forEach(function (t) { t.el.open = hits.length <= 3; });
+							categoriesEl.forEach(function (c) {
+								c.hidden = !c.querySelector('details.kh-topic:not([hidden])');
+							});
+							classic.classList.toggle('kh-no-results', !hits.length);
+						}
+						input.addEventListener('input', apply);
+						clearBtn.addEventListener('click', function () {
+							input.value = '';
+							apply();
+							input.focus();
+						});
+
+						function open(id, smooth) {
+							var t = byId[id];
+							if (!t) return;
+							if (input.value) {
+								input.value = '';
+								apply();
+							}
+							t.el.open = true;
+							t.el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
+							t.el.classList.add('kh-flash');
+							setTimeout(function () { t.el.classList.remove('kh-flash'); }, 1600);
+						}
+						return { open: open };
+					}
+
+					// ---------------------------------------------------------------
+					// Gallery: featured previews, tiles by category, topics open in a sheet
+					// ---------------------------------------------------------------
+					function buildGallery(host) {
+						var head = el('div', 'kv-gal-head',
+							'<div><h1 class="kv-h1">Help &amp; Tips</h1><p class="kv-lead" style="margin:0">Everything this server adds to Jellyfin. Open any card to try it out.</p></div>');
+						var sw = el('div', 'kv-inputwrap', icon('search') +
+							'<input class="kv-input" type="search" placeholder="Search help" aria-label="Search help" autocomplete="off" />');
+						head.appendChild(sw);
+						host.appendChild(head);
+						var featured = featureGrid();
+						host.appendChild(featured);
+
+						var tiles = {};
+						var catEls = cats.map(function (c) {
+							var sec = el('section', 'kv-gal-cat');
+							sec.appendChild(el('h2', null, esc(c.title)));
+							var grid = el('div', 'kv-gal-grid');
+							c.topics.forEach(function (t) {
+								// A div, not a button: the preview inside holds buttons of its own.
+								var tile = hue(el('div', 'kv-tile'), c.hue);
+								tile.setAttribute('role', 'button');
+								tile.tabIndex = 0;
+								tile.setAttribute('aria-label', t.title);
+								// Featured topics already have a large preview above, so their tile stays plain.
+								var p = FEATURED.indexOf(t.id) === -1 ? previewEl(t.id, false) : null;
+								if (p) {
+									tile.classList.add('kv-tile-pv');
+									tile.appendChild(p);
+								}
+								tile.appendChild(el('div', 'kv-tile-text', '<span class="kv-tile-icon">' + icon(t.icon) + '</span><span><span class="kv-tile-title">' +
+									esc(t.title) + '</span><span class="kv-tile-sum">' + esc(t.summary) + '</span></span>'));
+								tile.addEventListener('click', function () { openSheet(t.id, tile); });
+								tile.addEventListener('keydown', function (e) {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										openSheet(t.id, tile);
+									}
+								});
+								tiles[t.id] = tile;
+								grid.appendChild(tile);
+							});
+							sec.appendChild(grid);
+							host.appendChild(sec);
+							return sec;
+						});
+						var empty = el('p', 'kv-empty', 'Nothing matches that. Try a shorter word.');
+						empty.hidden = true;
+						host.appendChild(empty);
+
+						var si = sw.querySelector('input');
+						si.addEventListener('input', function () {
+							var hits = si.value.trim() ? search(si.value) : null;
+							topics.forEach(function (t) { tiles[t.id].hidden = hits ? hits.indexOf(t) === -1 : false; });
+							catEls.forEach(function (s) { s.hidden = !s.querySelector('.kv-tile:not([hidden])'); });
+							featured.hidden = !!hits;
+							empty.hidden = !hits || hits.length > 0;
+						});
+
+						var backdrop = null, current = null, returnFocus = null, livePreview = null;
+						function stopLive() {
+							if (livePreview && livePreview._stop) {
+								try { livePreview._stop(); } catch (e) { /* ignore */ }
+							}
+							livePreview = null;
+						}
+						function openSheet(id, from) {
+							var t = byId[id];
+							if (!t) return;
+							if (from) returnFocus = from;
+							if (!backdrop) {
+								backdrop = el('div', 'kv-sheet-backdrop');
+								backdrop.addEventListener('click', function (e) { if (e.target === backdrop) closeSheet(); });
+								host.appendChild(backdrop);
+								document.addEventListener('keydown', onKey, true);
+							}
+							stopLive();
+							current = id;
+							var i = topics.indexOf(t);
+							backdrop.innerHTML = '';
+							var sheet = hue(el('div', 'kv-sheet'), t.cat.hue);
+							sheet.setAttribute('role', 'dialog');
+							sheet.setAttribute('aria-modal', 'true');
+							sheet.setAttribute('aria-label', t.title);
+							var hd = el('div', 'kv-sheet-head', '<span class="kv-tile-icon">' + icon(t.icon) + '</span><div><h2>' + esc(t.title) + '</h2><p>' + esc(t.summary) + '</p></div>');
+							var x = btn('kv-iconbtn', icon('close'), 'Close');
+							x.addEventListener('click', closeSheet);
+							hd.appendChild(x);
+							var bd = el('div', 'kv-sheet-body');
+							livePreview = previewEl(t.id, true);
+							if (livePreview) {
+								var stage = el('div', 'kv-sheet-stage');
+								stage.appendChild(livePreview);
+								stage.appendChild(el('p', 'kv-try', icon('touch_app') + 'Try it: this is a working model.'));
+								bd.appendChild(stage);
+							}
+							bd.appendChild(bodyOf(t));
+							var ft = el('div', 'kv-sheet-foot');
+							var prev = btn('kv-iconbtn', icon('chevron_left'), 'Previous topic');
+							prev.disabled = i === 0;
+							prev.addEventListener('click', function () { openSheet(topics[i - 1].id); });
+							var next = btn('kv-iconbtn', icon('chevron_right'), 'Next topic');
+							next.disabled = i === topics.length - 1;
+							next.addEventListener('click', function () { openSheet(topics[i + 1].id); });
+							ft.appendChild(prev);
+							ft.appendChild(el('span', null, (i + 1) + ' of ' + topics.length + ' &middot; ' + esc(t.cat.title)));
+							ft.appendChild(next);
+							sheet.appendChild(hd);
+							sheet.appendChild(bd);
+							sheet.appendChild(ft);
+							backdrop.appendChild(sheet);
+							x.focus({ preventScroll: true });
+						}
+						function closeSheet() {
+							if (!backdrop) return;
+							stopLive();
+							backdrop.remove();
+							backdrop = null;
+							current = null;
+							document.removeEventListener('keydown', onKey, true);
+							if (returnFocus && document.body.contains(returnFocus)) returnFocus.focus({ preventScroll: true });
+						}
+						function onKey(e) {
+							if (!current) return;
+							if (e.key === 'Escape') {
+								e.preventDefault();
+								e.stopPropagation();
+								closeSheet();
+							} else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) {
+								var i = topics.indexOf(byId[current]) + (e.key === 'ArrowRight' ? 1 : -1);
+								if (topics[i]) {
+									e.preventDefault();
+									e.stopPropagation();
+									openSheet(topics[i].id);
+								}
+							}
+						}
+						return {
+							open: function (id) { openSheet(id, tiles[id]); },
+							leave: closeSheet
+						};
+					}
+
+					// ---------------------------------------------------------------
+					// Layout switcher
+					// ---------------------------------------------------------------
+					var VARIANTS = [
+						{ id: 'gallery', label: 'Gallery', icon: 'apps', build: buildGallery,
+							desc: 'Six large featured previews, then tiles by category, most with a small preview of the feature. Open a card to try a working version; ← → page through topics, Esc closes.' },
+						{ id: 'classic', label: 'Classic', icon: 'view_agenda', build: buildClassic,
+							desc: 'For comparison: the featured previews, then every topic as an expanding row, with search.' }
+					];
+					var hosts = {};
+					each(root, '.kh-variant', function (h) { hosts[h.getAttribute('data-variant')] = h; });
+					var tabsEl = root.querySelector('.kh-variant-tabs');
+					var descEl = root.querySelector('.kh-variant-desc');
+					var apis = {}, tabs = {}, activeName = null;
+
+					VARIANTS.forEach(function (v) {
+						var t = btn('kh-variant-tab', icon(v.icon) + esc(v.label));
+						t.setAttribute('role', 'tab');
+						t.addEventListener('click', function () { activate(v.id); });
+						tabs[v.id] = t;
+						tabsEl.appendChild(t);
+					});
+					function activate(id) {
+						var v = VARIANTS.filter(function (x) { return x.id === id; })[0] || VARIANTS[0];
+						if (activeName && apis[activeName] && apis[activeName].leave) apis[activeName].leave();
+						Object.keys(hosts).forEach(function (k) { hosts[k].hidden = k !== v.id; });
+						if (!apis[v.id]) apis[v.id] = v.build(hosts[v.id]);
+						activeName = v.id;
+						Object.keys(tabs).forEach(function (k) { tabs[k].setAttribute('aria-selected', k === v.id ? 'true' : 'false'); });
+						descEl.textContent = v.desc;
+						store('kefinHelpLayout', v.id);
+					}
+
+					// ---------------------------------------------------------------
+					// Skin. The CSS takes Jellyfin's values, or the active skin's. Under
+					// Jellyfin's own skin the text on the accent is its contrastText; a
+					// skin's accent can be any colour (Abyss's default is near-white, its
+					// schemes are not), so there this measures it: dark text on a light
+					// accent, white otherwise.
+					// ---------------------------------------------------------------
+					var onAccentTimer = null;
+					function syncOnAccent() {
+						clearTimeout(onAccentTimer);
+						onAccentTimer = setTimeout(function () {
+							var skin = document.documentElement.getAttribute('data-kefin-skin');
+							if (!skin || skin === 'Default') {
+								root.style.removeProperty('--kh-on-accent');
+								return;
+							}
+							try {
+								var probe = el('span');
+								probe.style.color = getComputedStyle(root).getPropertyValue('--kh-accent').trim() || '#00a4dc';
+								root.appendChild(probe);
+								var rgb = (getComputedStyle(probe).color.match(/[\d.]+/g) || []).map(Number);
+								probe.remove();
+								if (rgb.length < 3) return;
+								var lum = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
+								root.style.setProperty('--kh-on-accent', lum > 0.62 ? '#111318' : '#fff');
+							} catch (e) { /* keep white */ }
+						}, 60);
+					}
+					syncOnAccent();
+					// A skin or colour-scheme change marks <html> and loads a stylesheet.
+					new MutationObserver(syncOnAccent).observe(document.documentElement, { attributes: true, attributeFilter: ['data-kefin-skin'] });
+					document.addEventListener('load', function (e) {
+						if (e.target && e.target.tagName === 'LINK') syncOnAccent();
+					}, true);
+
+					// Links between topics. Inside Jellyfin the hash is the router, so these
+					// never navigate; the layout on show opens the topic its own way.
+					root.addEventListener('click', function (e) {
+						var a = e.target.closest && e.target.closest('a[data-goto]');
+						if (!a || !root.contains(a)) return;
+						e.preventDefault();
+						apis[activeName].open(a.getAttribute('data-goto'), true);
+					});
+
+					// Deep links: #/help?topic=watchlist&layout=classic inside Jellyfin, or
+					// help.html?topic=watchlist / help.html#watchlist when previewing the file.
+					function param(name) {
+						var re = new RegExp('[?&]' + name + '=([\\w-]+)');
+						var m = (window.location.hash || '').match(re) || window.location.search.match(re);
+						return m ? m[1] : null;
+					}
+					// For the page host: open a topic when #/help?topic=... is shown again.
+					root.khOpenTopic = function (id) {
+						if (byId[id] && apis[activeName]) apis[activeName].open(id, true);
+					};
+					var initialTopic = param('topic');
+					if (!initialTopic && /^#[\w-]+$/.test(window.location.hash || '')) initialTopic = window.location.hash.slice(1).replace(/^topic-/, '');
+					activate(param('layout') || store('kefinHelpLayout') || 'gallery');
+					if (initialTopic && byId[initialTopic]) {
+						setTimeout(function () { apis[activeName].open(initialTopic, false); }, 50);
+					}
+				})();
+			</script>
+		</div>
+	</body>
+</html>
