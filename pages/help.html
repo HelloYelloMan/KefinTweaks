@@ -1050,9 +1050,9 @@
 			.kefin-help .pv-hot::after {
 				content: "";
 				position: absolute;
-				inset: -0.3em;
+				inset: 0;
 				border-radius: inherit;
-				border: 0.14em solid var(--kh-accent);
+				box-shadow: 0 0 0 0.14em var(--kh-accent);
 				opacity: 0;
 				pointer-events: none;
 			}
@@ -1071,9 +1071,12 @@
 				.kefin-help .kv-tile:focus-visible .pv-hot::after {
 					animation: kv-pulse 1.8s ease-out infinite;
 				}
+				/* A glow that spreads and fades. Not a scaled border: scaling a thin
+				   rounded border at these small, fractional sizes left seams through
+				   its middle in some browsers. */
 				@keyframes kv-pulse {
-					from { transform: scale(0.9); opacity: 0.9; }
-					to { transform: scale(1.35); opacity: 0; }
+					from { box-shadow: 0 0 0 0 var(--kh-accent); }
+					to { box-shadow: 0 0 0 0.65em transparent; }
 				}
 			}
 			.kefin-help .pv-toast {
@@ -1374,13 +1377,6 @@
 				transform: scale(1.05);
 			}
 
-			/* Keyboard */
-			.kefin-help .pv-keys {
-				display: grid;
-				grid-template-columns: repeat(4, 1fr);
-				gap: 0.45em;
-				width: 100%;
-			}
 			.kefin-help .pv-key {
 				position: relative;
 				display: flex;
@@ -1406,23 +1402,6 @@
 			.kefin-help .pv-key span {
 				font-size: 0.66em;
 				color: rgba(255, 255, 255, 0.65);
-			}
-			.kefin-help .pv-key.pv-pressed {
-				animation: pv-press 0.4s ease-out;
-			}
-			@keyframes pv-press {
-				from { background: var(--kh-accent); }
-				to { background: #1a1c22; }
-			}
-			.kefin-help .pv-status {
-				width: 100%;
-				padding: 0.5em 0.8em;
-				border-radius: 0.6em;
-				background: #000;
-				font: 0.78em ui-monospace, Menlo, Consolas, monospace;
-				text-align: center;
-				color: #cde;
-				white-space: pre;
 			}
 
 			/* Top bar and menus */
@@ -1943,6 +1922,65 @@
 			}
 
 			/* ---------- Previews: tu ---------- */
+			/* Recommendations: a mini Home screen */
+			.kefin-help .pv-tu-home {
+				gap: 0.55em;
+			}
+			.kefin-help .pv-tu-hbar {
+				display: flex;
+				align-items: center;
+				gap: 0.5em;
+				width: 100%;
+				padding: 0.35em 0.6em;
+				border-radius: 0.5em;
+				background: #181a20;
+				font-size: 0.8em;
+			}
+			.kefin-help .pv-tu-hbar > .material-icons {
+				font-size: 1.2em;
+				color: rgba(255, 255, 255, 0.7);
+			}
+			.kefin-help .pv-tu-htab {
+				padding: 0.2em 0.55em;
+				border-radius: 999px;
+				color: rgba(255, 255, 255, 0.7);
+			}
+			.kefin-help .pv-tu-htab.pv-tu-hon {
+				background: rgba(255, 255, 255, 0.14);
+				color: #fff;
+			}
+			.kefin-help .pv-tu-hrow {
+				display: flex;
+				flex-direction: column;
+				gap: 0.3em;
+				width: 100%;
+			}
+			.kefin-help .pv-tu-hrow > b,
+			.kefin-help .pv-tu-hrow .pv-rowhead b {
+				font-size: 0.8em;
+			}
+			.kefin-help .pv-tu-more {
+				display: flex;
+				align-items: center;
+				gap: 0.45em;
+				font-size: 0.68em;
+				color: rgba(255, 255, 255, 0.6);
+			}
+			.kefin-help .pv-tu-spin {
+				width: 0.9em;
+				height: 0.9em;
+				border: 0.15em solid rgba(255, 255, 255, 0.2);
+				border-top-color: var(--kh-accent);
+				border-radius: 50%;
+			}
+			@media (prefers-reduced-motion: no-preference) {
+				.kefin-help .pv-live .pv-tu-spin {
+					animation: pv-tu-spin 0.9s linear infinite;
+				}
+				@keyframes pv-tu-spin {
+					to { transform: rotate(360deg); }
+				}
+			}
 			/* Show page: Jellyfin's Next Up badge is black with a faint white edge */
 			.kefin-help .pv-tu-nextup {
 				position: absolute;
@@ -2076,6 +2114,7 @@
 			.kefin-help .pv-tu-lg.pv-tu-lg-off {
 				opacity: 0.4;
 			}
+			/* Classes built as 'pv-tu-k-' + kind in the calendar preview. */
 			.kefin-help .pv .pv-tu-k-episode {
 				--k: #4caf50;
 			}
@@ -2085,6 +2124,7 @@
 			.kefin-help .pv .pv-tu-k-cinema {
 				--k: #2196f3;
 			}
+
 			.kefin-help .pv-tu-cal {
 				width: 100%;
 				min-height: 7.2em;
@@ -2161,28 +2201,6 @@
 			}
 			.kefin-help .pv-tu-agenda .pv-tu-ev {
 				font-size: 0.75em;
-			}
-
-			/* Shortcuts: the plugin's on-screen message */
-			.kefin-help .pv-tu-osd {
-				display: flex;
-				justify-content: center;
-				min-height: 1.9em;
-			}
-			.kefin-help .pv-tu-osdtext {
-				padding: 0.35em 0.9em;
-				border: 1px solid var(--kh-accent);
-				border-radius: 0.5em;
-				background: rgba(20, 20, 20, 0.9);
-				font-size: 0.78em;
-				font-weight: 500;
-			}
-			.kefin-help .pv-tu-osd.pv-tu-flash .pv-tu-osdtext {
-				animation: pv-tu-osd 0.35s ease-out;
-			}
-			@keyframes pv-tu-osd {
-				from { transform: translateY(0.4em); opacity: 0.2; }
-				to { transform: none; opacity: 1; }
 			}
 
 			/* Appearance: palette button and its popover */
@@ -2366,11 +2384,22 @@
 					to { background-position: 100% 70%; }
 				}
 			}
-			.kefin-help .pv-tu-eq {
+			.kefin-help .pv-tu-playing {
 				position: absolute;
 				right: 0.7em;
 				bottom: 0.9em;
 				z-index: 1;
+				display: flex;
+				align-items: flex-end;
+				gap: 0.45em;
+			}
+			.kefin-help .pv-tu-tcap {
+				font-size: 0.6em;
+				line-height: 1.2;
+				color: rgba(255, 255, 255, 0.75);
+				white-space: nowrap;
+			}
+			.kefin-help .pv-tu-eq {
 				display: flex;
 				align-items: flex-end;
 				gap: 0.18em;
@@ -2455,12 +2484,6 @@
 			}
 			.kefin-help .pv-tu-dlines i:last-child {
 				width: 70%;
-			}
-			.kefin-help .pv-tu-tcap {
-				position: absolute;
-				top: 3.8em;
-				right: 0.7em;
-				z-index: 4;
 			}
 			.kefin-help .pv-tu-full .pv-tu-backdrop {
 				height: 100%;
@@ -2912,43 +2935,6 @@
 							</div>
 						</details>
 
-						<details class="kh-topic" id="topic-shortcuts" data-keywords="keyboard shortcuts keys hotkeys">
-							<summary>
-								<span class="kh-topic-icon"><span class="material-icons" aria-hidden="true">keyboard</span></span>
-								<span class="kh-topic-head">
-									<span class="kh-topic-title">Keyboard shortcuts</span>
-									<span class="kh-topic-summary">Extra keys for skipping, speed, subtitles and more</span>
-								</span>
-								<span class="material-icons kh-chevron" aria-hidden="true">expand_more</span>
-							</summary>
-							<div class="kh-topic-body">
-								<h3>In the player</h3>
-								<table class="kh-table">
-									<tbody>
-										<tr><td><kbd>O</kbd></td><td>Skip the intro or ending that's playing</td></tr>
-										<tr><td><kbd>S</kbd></td><td>Open the subtitle menu</td></tr>
-										<tr><td><kbd>C</kbd> / <kbd>V</kbd></td><td>Next subtitle track / next audio track</td></tr>
-										<tr><td><kbd>+</kbd> <kbd>-</kbd></td><td>Faster / slower (0.25× to 2×); <kbd>R</kbd> resets to normal speed</td></tr>
-										<tr><td><kbd>0</kbd>–<kbd>9</kbd></td><td>Jump to 0%–90% of the way through</td></tr>
-										<tr><td><kbd>Z</kbd></td><td>Go back to where you were before your last jump</td></tr>
-										<tr><td><kbd>,</kbd> <kbd>.</kbd></td><td>Step one frame back / forward</td></tr>
-										<tr><td><kbd>A</kbd></td><td>Change how the picture fills the screen</td></tr>
-										<tr><td><kbd>I</kbd></td><td>Show playback info</td></tr>
-									</tbody>
-								</table>
-								<h3>Anywhere</h3>
-								<table class="kh-table">
-									<tbody>
-										<tr><td><kbd>?</kbd></td><td>Open the Jellyfin Enhanced panel, which lists every shortcut</td></tr>
-										<tr><td><kbd>/</kbd></td><td>Search</td></tr>
-										<tr><td><kbd>Shift</kbd>+<kbd>H</kbd></td><td>Home</td></tr>
-										<tr><td><kbd>R</kbd></td><td>Open a random movie or show</td></tr>
-										<tr><td><kbd>Q</kbd></td><td>Quick Connect</td></tr>
-									</tbody>
-								</table>
-								<p>Shortcuts don't work while you're typing in a box. To change a key, open the panel with <kbd>?</kbd>, go to Shortcuts, click a key and press the new one.</p>
-							</div>
-						</details>
 					</div>
 				</section>
 
@@ -3740,12 +3726,12 @@
 							'<div class="pv-tu-tctl">' + pb('volume_up', 'pv-mini pv-tu-mute pv-hot', 'Mute theme') +
 							'<input type="range" class="pv-tu-vol" min="0" max="100" value="60" aria-label="Theme volume" title="Theme volume" />' +
 							pb('fullscreen', 'pv-mini pv-tu-fs', 'Fullscreen theme') + '</div>' +
-							'<div class="pv-tu-backdrop"><div class="pv-tu-eq"><i></i><i></i><i></i><i></i><i></i></div></div>' +
+							'<div class="pv-tu-backdrop"><div class="pv-tu-playing"><span class="pv-tu-tcap">Theme song playing</span><div class="pv-tu-eq"><i></i><i></i><i></i><i></i><i></i></div></div></div>' +
 							'<div class="pv-tu-detail">' + poster(25) + '<div class="pv-tu-dinfo"><div class="pv-tu-dtitle">A show</div>' +
 							'<div class="pv-cap">2019 · TV-14 · 3 Seasons</div><div class="pv-row pv-tu-dbtns">' +
 							'<span class="pv-tu-dplay">' + icon('play_arrow') + 'Play</span>' + icon('shuffle') + icon('check') + icon('favorite_border') + icon('more_horiz') + '</div>' +
 							'<div class="pv-tu-dlines"><i></i><i></i></div></div></div>' +
-							'<div class="pv-cap pv-tu-tcap">Theme song playing</div></div>',
+							'</div>',
 						init: function (n) {
 							var muted = false, vol = 60, page = n.querySelector('.pv-tu-page');
 							function render() {
@@ -3923,62 +3909,6 @@
 						}
 					});
 
-					P('shortcuts', {
-						html: '<div class="pv-col pv-w"><div class="pv-keys">' +
-							[['O', 'Skip intro'], ['-', 'Slower'], ['+', 'Faster'], ['3', 'Jump to 30%'], ['7', 'Jump to 70%'], ['Z', 'Go back'], ['C', 'Subtitles'], ['V', 'Audio']].map(function (k) {
-								return '<button type="button" class="pv-key" data-k="' + k[0] + '"><kbd>' + k[0] + '</kbd><span>' + k[1] + '</span></button>';
-							}).join('') + '</div><div class="pv-status"></div><div class="pv-tu-osd"><span class="pv-tu-osdtext">Click a key, or press it on your keyboard</span></div></div>',
-						init: function (n, live) {
-							var s = { speed: 1, pos: 30, last: null, sub: 0, aud: 0 };
-							var SUBS = ['English', 'Signs & Songs', 'Off'], AUDIO = ['Japanese', 'English'], LEN = 1440, SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-							function t(x) { var m = Math.floor(x / 60), sec = Math.floor(x % 60); return m + ':' + (sec < 10 ? '0' : '') + sec; }
-							function render() {
-								n.querySelector('.pv-status').textContent = t(s.pos) + ' / ' + t(LEN) + '  ·  ' + s.speed + '×  ·  Subtitle: ' + SUBS[s.sub] + '  ·  Audio: ' + AUDIO[s.aud];
-							}
-							// The messages are the plugin's own (Jellyfin Enhanced, en.json).
-							function press(k) {
-								var what;
-								if (k === 'O') {
-									if (s.pos < 90) { s.last = s.pos; s.pos = 90; what = 'Skipped Intro'; } else what = 'No skip button available';
-								} else if (k === '+' || k === '=' || k === '-') {
-									var i = SPEEDS.indexOf(s.speed) + (k === '-' ? -1 : 1);
-									s.speed = SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, i))];
-									what = s.speed === 1 ? 'Speed: Normal' : 'Speed: ' + s.speed + 'x';
-								} else if (/^[0-9]$/.test(k)) {
-									s.last = s.pos; s.pos = LEN * k / 10; what = 'Jumped to ' + k + '0%';
-								} else if (k === 'Z') {
-									if (s.last != null) { s.pos = s.last; s.last = null; what = 'Jumped back to ' + t(s.pos); } else what = 'No previous position saved';
-								} else if (k === 'C') {
-									s.sub = (s.sub + 1) % SUBS.length; what = 'Subtitle: ' + SUBS[s.sub];
-								} else if (k === 'V') {
-									s.aud = (s.aud + 1) % AUDIO.length; what = 'Audio: ' + AUDIO[s.aud];
-								} else return false;
-								var osd = n.querySelector('.pv-tu-osd');
-								osd.querySelector('.pv-tu-osdtext').textContent = what;
-								osd.classList.remove('pv-tu-flash');
-								void osd.offsetWidth;
-								osd.classList.add('pv-tu-flash');
-								var cap = n.querySelector('.pv-key[data-k="' + (k === '=' ? '+' : k) + '"]');
-								if (cap) {
-									cap.classList.remove('pv-pressed');
-									void cap.offsetWidth;
-									cap.classList.add('pv-pressed');
-								}
-								render();
-								return true;
-							}
-							on(n, '.pv-key', function (b) { press(b.getAttribute('data-k')); });
-							render();
-							if (!live) return;
-							function onKey(e) {
-								if (e.ctrlKey || e.metaKey || e.altKey) return;
-								if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '')) return;
-								press(e.key.length === 1 ? e.key.toUpperCase() : e.key);
-							}
-							document.addEventListener('keydown', onKey);
-							return function () { document.removeEventListener('keydown', onKey); };
-						}
-					});
 
 					// ----- Shows and anime -----
 					P('series-page', {
@@ -4026,17 +3956,20 @@
 						html: '<div class="pv-col pv-w"><div class="pv-row pv-cast">' +
 							'<button type="button" class="pv-person pv-char pv-hot"><i style="--h:340"></i><b class="pv-cname">Yūsha</b><span>Character</span></button>' +
 							'<div class="pv-person"><i class="pv-actor"></i><b>Voice actor</b><span class="pv-as">as Yūsha</span></div>' +
-							'<div class="pv-person"><i class="pv-split"><em style="--h:30" data-n="Rival"></em><em style="--h:180" data-n="Narrator"></em></i><b>Rival / Narrator</b><span>2 characters</span></div>' +
+							'<div class="pv-person"><i class="pv-split"><em style="--h:30" data-n="Rival"></em><em style="--h:180" data-n="Narrator"></em></i><b class="pv-splitname">Rival / Narrator</b><span>2 characters</span></div>' +
 							'<div class="pv-person"><i class="pv-actor"></i><b>Another actor</b><span>as Rival / Narrator</span></div></div>' +
 							'<div class="pv-charpage" hidden><button type="button" class="pv-pill pv-small pv-ghost pv-back">‹ Back</button><b class="pv-cname">Yūsha</b>' +
-							'<div class="pv-cap">Voiced by: Voice actor · Appears in: 3 titles · AniList, AniDB, MyAnimeList</div></div>' +
-							'<span class="pv-cap pv-hovername">Point at a split picture to see who\'s who</span></div>',
+							'<div class="pv-cap">Voiced by: Voice actor · Appears in: 3 titles · AniList, AniDB, MyAnimeList</div></div></div>',
 						init: function (n) {
 							on(n, '.pv-char', function () { n.querySelector('.pv-charpage').hidden = false; n.querySelector('.pv-cast').hidden = true; });
 							on(n, '.pv-back', function () { n.querySelector('.pv-charpage').hidden = true; n.querySelector('.pv-cast').hidden = false; });
+							// As on the real cast row: pointing at one character of a shared card
+							// puts that character's name on the card in place of "A / B".
+							var splitName = n.querySelector('.pv-splitname'), full = splitName.textContent;
 							each(n, '.pv-split em', function (e) {
-								e.addEventListener('pointerenter', function () { n.querySelector('.pv-hovername').textContent = e.getAttribute('data-n'); });
+								e.addEventListener('pointerenter', function () { splitName.textContent = e.getAttribute('data-n'); });
 							});
+							n.querySelector('.pv-split').addEventListener('pointerleave', function () { splitName.textContent = full; });
 						}
 					});
 
@@ -4163,8 +4096,12 @@
 					});
 
 					P('discovery', {
-						html: '<div class="pv-col pv-w"><div class="pv-rowhead"><b class="pv-because"></b><span class="pv-grow"></span>' + pb('refresh', 'pv-mini pv-ref pv-hot', 'Refresh') + '</div>' +
-							'<div class="pv-strip pv-posters"></div><div class="pv-cap">More rows load as you scroll down</div></div>',
+						html: '<div class="pv-col pv-w pv-tu-home">' +
+							'<div class="pv-tu-hbar"><span class="pv-logo"></span><span class="pv-tu-htab pv-tu-hon">Home</span><span class="pv-tu-htab">Favorites</span><span class="pv-grow"></span>' + icon('search') + '</div>' +
+							'<div class="pv-tu-hrow"><b>Continue Watching</b><div class="pv-strip pv-small">' + thumb(40) + thumb(200) + thumb(120) + thumb(300) + '</div></div>' +
+							'<div class="pv-tu-hrow"><div class="pv-rowhead"><b class="pv-because"></b><span class="pv-grow"></span>' + pb('refresh', 'pv-mini pv-ref pv-hot', 'Refresh') + '</div>' +
+							'<div class="pv-strip pv-posters"></div></div>' +
+							'<div class="pv-tu-more"><span class="pv-tu-spin"></span>More rows load as you scroll down</div></div>',
 						init: function (n) {
 							var seed = 0;
 							n.querySelector('.pv-because').textContent = 'Because you finished A Short Show';
