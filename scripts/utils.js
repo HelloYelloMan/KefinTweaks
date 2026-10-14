@@ -1890,7 +1890,6 @@
 	position: relative;
 	box-sizing: border-box;
 	outline: 0;
-	margin: 0;
 	cursor: pointer;
 	user-select: none;
 	vertical-align: middle;
