@@ -2281,13 +2281,12 @@ div[data-tab="watchlist"] .loading-message {
    looks at its following siblings in a two- or three-button container, so neither
    inserting a card nor anything inside one causes an ancestor walk.
 
-   The .mainDetailButtons rules below keep :has(): that subject is a single element
-   per page, so its invalidation cost is negligible. Upstream 1271143 tightened that
-   first one to require .playstatebutton-played as well as [data-played]; that fix is
-   kept, only the card-level selectors are ours. */
-.mainDetailButtons:has(button[data-played].playstatebutton-played) .watchlist-icon,
-.mainDetailButtons:not(:has(button[data-played])) .watchlist-icon,
-.mainDetailButtons:not(:has(button[data-played])) .btnRecommend {
+   The .mainDetailButtons rule below keeps :has(): that subject is a single element
+   per page, so its invalidation cost is negligible. It is upstream 1271143's, which
+   also dropped the two rules hiding the icon and Recommend on a page with no played
+   button; a merge had brought those back, and they were removed again 2026-10-15
+   (they matched nothing: the only such page, a person's, has neither button). */
+.mainDetailButtons:has(button[data-played].playstatebutton-played) .watchlist-icon {
     display: none;
 }
 
