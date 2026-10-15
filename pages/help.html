@@ -2647,18 +2647,71 @@
 							<div class="kh-topic-body">
 								<p>Cast rows pair each actor with the character they play. When an actor has several roles, the characters share one card; point at a part of it to see that character&#39;s name.</p>
 								<p>Clicking a character opens their page: who voices them, what they appear in, and links to AniList, AniDB and MyAnimeList. Spoilers in descriptions stay blacked out until clicked. Actor pages get a <span class="kh-ui">Characters</span> row of everyone they&#39;ve played.</p>
-								<h3>Settings</h3>
-								<p>Under <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Display</span> › <span class="kh-ui">Characters</span></span>. They save as soon as they&#39;re changed, and <span class="kh-ui">Default</span> follows the server&#39;s choice.<br>Anime and western shows are set separately.</p>
-								<ul>
-									<li><strong>Series cast</strong>: which seasons a show&#39;s own page takes its cast from. <em>First</em> is season 1&#39;s, <em>Current</em> the season you&#39;re on, <em>All</em> every season&#39;s. <em>Progressive</em> is every season up to the one you&#39;re on, so later cast members don&#39;t give anything away.</li>
-									<li><strong>Cast display</strong>: <em>Characters and cast</em> pairs each actor with their characters. <em>Characters only</em> gives each character a card of its own, with the actor&#39;s name under it. <em>Cast only</em> leaves just the actors.</li>
-									<li><strong>Western character source</strong>: <em>Character versions</em> shows a character as this title has them. <em>No alternate versions</em> shows them as the first title the same actor played them in.</li>
-									<li><strong>Anime character source</strong>: <em>AniList</em> shows each character as one entry everywhere; its <em>TheTVDB pictures</em> option uses TheTVDB&#39;s art where there is some. <em>AniDB</em> shows each title&#39;s own version of a character, such as how they look in a later season.</li>
-									<li><strong>Anime versions shown</strong>: the version this title names, every version up to the season you&#39;re on, or all of them, each as a card of its own beside the actor.</li>
-									<li><strong>Anime spoiler versions</strong>: a version that gives something away appears once you&#39;ve watched far enough to have seen it, or never.</li>
-									<li><strong>Anime character names</strong>: Japanese (Ushikai Musume), English (Cow Girl), or English (Weebified), which keeps names fans use as they are, like Sensei.</li>
-								</ul>
-								<div class="kh-note"><span class="material-icons" aria-hidden="true">info</span><span>The two versions settings only apply with the AniDB source, and are greyed out otherwise.</span></div>
+								<h3>Choosing how characters show</h3>
+								<p>The settings are under <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Display</span> › <span class="kh-ui">Characters</span></span>, and each one saves as soon as you change it.<br><span class="kh-ui">Default</span> follows the server&#39;s choice, so you only need to change what you&#39;d like to be different.</p>
+								<p>Anime and western shows are set separately, because their character information comes from different places. Series cast applies to both.</p>
+								<h3>Series cast</h3>
+								<p>Whose cast a show&#39;s main page lists. Season and episode pages always show their own.</p>
+								<table class="kh-table">
+									<tbody>
+										<tr><td><span class="kh-ui">First seasons cast</span></td><td>Season 1&#39;s cast. The original line-up, and nothing past it.</td></tr>
+										<tr><td><span class="kh-ui">Current seasons cast</span></td><td>The cast of the season you&#39;re up to, going by what you&#39;ve watched.</td></tr>
+										<tr><td><span class="kh-ui">All seasons cast</span></td><td>Everyone from every season. The fullest list, but it can show characters you haven&#39;t met yet.</td></tr>
+										<tr><td><span class="kh-ui">Progressive seasons cast</span></td><td>Everyone from season 1 up to the season you&#39;re on. It grows as you watch, and never gives away who turns up later.</td></tr>
+									</tbody>
+								</table>
+								<h3>Cast display</h3>
+								<p>How each actor and their characters are drawn in a Cast &amp; Crew row. There&#39;s one for anime and one for western shows.</p>
+								<table class="kh-table">
+									<tbody>
+										<tr><td><span class="kh-ui">Characters and cast</span></td><td>The actor&#39;s card with their characters beside it: who plays them, and what they look like.</td></tr>
+										<tr><td><span class="kh-ui">Characters only</span></td><td>Just the characters, each with the actor&#39;s name underneath. Someone with two roles gets two cards.</td></tr>
+										<tr><td><span class="kh-ui">Cast only</span></td><td>Just the actors, the way Jellyfin normally shows them. Where an actor has no photo, their character&#39;s picture stands in.</td></tr>
+									</tbody>
+								</table>
+								<h3>Anime character source</h3>
+								<p>Where anime characters come from, which decides whether a character can look different from one show or season to the next.</p>
+								<table class="kh-table">
+									<tbody>
+										<tr><td><span class="kh-ui">AniList</span></td><td>One entry per character, the same everywhere they appear. The simplest choice if you don&#39;t want to think about versions.</td></tr>
+										<tr><td><span class="kh-ui">AniList, TheTVDB pictures</span></td><td>The same, using TheTVDB&#39;s art for a character where it has some.</td></tr>
+										<tr><td><span class="kh-ui">AniDB</span></td><td>Each title can have its own version of a character, such as an older self in a sequel or a new look in a spin-off. This is what the next two settings are for.</td></tr>
+									</tbody>
+								</table>
+								<h3>Anime versions shown</h3>
+								<p>With AniDB, how many of a character&#39;s versions a cast row shows. Each one is a card of its own beside the actor.</p>
+								<table class="kh-table">
+									<tbody>
+										<tr><td><span class="kh-ui">Single versions at a time</span></td><td>Only the version that title uses.</td></tr>
+										<tr><td><span class="kh-ui">Versions up to current season</span></td><td>Every version from the seasons you&#39;ve reached.</td></tr>
+										<tr><td><span class="kh-ui">All versions</span></td><td>Every version the show has.</td></tr>
+									</tbody>
+								</table>
+								<h3>Anime spoiler versions</h3>
+								<p>Some versions would give a twist away, like a disguise dropped or a later form. This decides when those appear.</p>
+								<table class="kh-table">
+									<tbody>
+										<tr><td><span class="kh-ui">Shown once watched</span></td><td>They appear once you&#39;ve watched far enough to have seen them.</td></tr>
+										<tr><td><span class="kh-ui">Always hidden</span></td><td>They never appear.</td></tr>
+									</tbody>
+								</table>
+								<div class="kh-note"><span class="material-icons" aria-hidden="true">info</span><span>Both versions settings only apply with the AniDB source, and are greyed out otherwise.</span></div>
+								<h3>Western character source</h3>
+								<table class="kh-table">
+									<tbody>
+										<tr><td><span class="kh-ui">Character versions</span></td><td>Each title shows its own version of a character.</td></tr>
+										<tr><td><span class="kh-ui">No alternate versions</span></td><td>A character always appears as they did in the earliest title the same actor played them in.</td></tr>
+									</tbody>
+								</table>
+								<h3>Anime character names</h3>
+								<p>Which name a character goes by on cards, and in the &ldquo;as&rdquo; line under an actor.</p>
+								<table class="kh-table">
+									<tbody>
+										<tr><td><span class="kh-ui">Japanese names</span></td><td>As in the original: Ushikai Musume.</td></tr>
+										<tr><td><span class="kh-ui">English names</span></td><td>As in English releases: Cow Girl.</td></tr>
+										<tr><td><span class="kh-ui">English (Weebified) names</span></td><td>English, except for names fans usually leave as they are: Sensei rather than Teacher.</td></tr>
+									</tbody>
+								</table>
 								<span class="kh-from">From Vault Tweaks</span>
 							</div>
 						</details>
