@@ -1215,9 +1215,6 @@
 				background: transparent;
 				text-align: center;
 			}
-			.kefin-help button.pv-person {
-				cursor: pointer;
-			}
 			.kefin-help .pv-person i {
 				display: block;
 				width: 100%;
@@ -1254,17 +1251,6 @@
 				overflow: hidden;
 				text-overflow: ellipsis;
 				white-space: nowrap;
-			}
-			.kefin-help .pv-charpage {
-				display: flex;
-				flex-direction: column;
-				align-items: center;
-				gap: 0.5em;
-				width: 100%;
-				padding: 0.9em;
-				border-radius: 0.7em;
-				background: #1a1c22;
-				text-align: center;
 			}
 
 			/* Watchlist page */
@@ -2660,9 +2646,19 @@
 							</summary>
 							<div class="kh-topic-body">
 								<p>Cast rows pair each actor with the character they play. When an actor has several roles, the characters share one card; point at a part of it to see that character&#39;s name.</p>
-								<p>On a show&#39;s page, the cast only covers seasons up to the one you&#39;re on, so later cast members don&#39;t give anything away.</p>
 								<p>Clicking a character opens their page: who voices them, what they appear in, and links to AniList, AniDB and MyAnimeList. Spoilers in descriptions stay blacked out until clicked. Actor pages get a <span class="kh-ui">Characters</span> row of everyone they&#39;ve played.</p>
-								<p>Name language, which seasons&#39; cast to show, and where character data comes from are under <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Display</span> › <span class="kh-ui">Characters</span></span>.</p>
+								<h3>Settings</h3>
+								<p>Under <span class="kh-path"><span class="kh-ui">Settings</span> › <span class="kh-ui">Display</span> › <span class="kh-ui">Characters</span></span>. They save as soon as they&#39;re changed, and <span class="kh-ui">Default</span> follows the server&#39;s choice.<br>Anime and western shows are set separately.</p>
+								<ul>
+									<li><strong>Series cast</strong>: which seasons a show&#39;s own page takes its cast from. <em>First</em> is season 1&#39;s, <em>Current</em> the season you&#39;re on, <em>All</em> every season&#39;s. <em>Progressive</em> is every season up to the one you&#39;re on, so later cast members don&#39;t give anything away.</li>
+									<li><strong>Cast display</strong>: <em>Characters and cast</em> pairs each actor with their characters. <em>Characters only</em> gives each character a card of its own, with the actor&#39;s name under it. <em>Cast only</em> leaves just the actors.</li>
+									<li><strong>Western character source</strong>: <em>Character versions</em> shows a character as this title has them. <em>No alternate versions</em> shows them as the first title the same actor played them in.</li>
+									<li><strong>Anime character source</strong>: <em>AniList</em> shows each character as one entry everywhere; its <em>TheTVDB pictures</em> option uses TheTVDB&#39;s art where there is some. <em>AniDB</em> shows each title&#39;s own version of a character, such as how they look in a later season.</li>
+									<li><strong>Anime versions shown</strong>: the version this title names, every version up to the season you&#39;re on, or all of them, each as a card of its own beside the actor.</li>
+									<li><strong>Anime spoiler versions</strong>: a version that gives something away appears once you&#39;ve watched far enough to have seen it, or never.</li>
+									<li><strong>Anime character names</strong>: Japanese (Ushikai Musume), English (Cow Girl), or English (Weebified), which keeps names fans use as they are, like Sensei.</li>
+								</ul>
+								<div class="kh-note"><span class="material-icons" aria-hidden="true">info</span><span>The two versions settings only apply with the AniDB source, and are greyed out otherwise.</span></div>
 								<span class="kh-from">From Vault Tweaks</span>
 							</div>
 						</details>
@@ -3459,20 +3455,20 @@
 
 					P('characters', {
 						html: '<div class="pv-col pv-w"><div class="pv-row pv-cast">' +
-							'<button type="button" class="pv-person pv-char pv-hot"><i style="--h:340"></i><b class="pv-cname">Yūsha</b><span>Character</span></button>' +
+							'<div class="pv-person"><i style="--h:340"></i><b>Yūsha</b><span>Character</span></div>' +
 							'<div class="pv-person"><i class="pv-actor"></i><b>Voice actor</b><span class="pv-as">as Yūsha</span></div>' +
-							'<div class="pv-person"><i class="pv-split"><em style="--h:30" data-n="Rival"></em><em style="--h:180" data-n="Narrator"></em></i><b class="pv-splitname">Rival / Narrator</b><span>2 characters</span></div>' +
-							'<div class="pv-person"><i class="pv-actor"></i><b>Another actor</b><span>as Rival / Narrator</span></div></div>' +
-							'<div class="pv-charpage" hidden><button type="button" class="pv-pill pv-small pv-ghost pv-back">‹ Back</button><b class="pv-cname">Yūsha</b>' +
-							'<div class="pv-cap">Voiced by: Voice actor · Appears in: 3 titles · AniList, AniDB, MyAnimeList</div></div></div>',
-						init: function (n) {
-							on(n, '.pv-char', function () { n.querySelector('.pv-charpage').hidden = false; n.querySelector('.pv-cast').hidden = true; });
-							on(n, '.pv-back', function () { n.querySelector('.pv-charpage').hidden = true; n.querySelector('.pv-cast').hidden = false; });
+							'<div class="pv-person pv-hot"><i class="pv-split"><em style="--h:30" data-n="Rival"></em><em style="--h:180" data-n="Narrator"></em></i><b class="pv-splitname">Rival / Narrator</b><span>2 characters</span></div>' +
+							'<div class="pv-person"><i class="pv-actor"></i><b>Another actor</b><span>as Rival / Narrator</span></div></div></div>',
+						init: function (n, live) {
 							// As on the real cast row: pointing at one character of a shared card
-							// puts that character's name on the card in place of "A / B".
+							// puts that character's name on the card in place of "A / B". Pointing
+							// is the interaction here, so it is what clears the hint ring.
 							var splitName = n.querySelector('.pv-splitname'), full = splitName.textContent;
 							each(n, '.pv-split em', function (e) {
-								e.addEventListener('pointerenter', function () { splitName.textContent = e.getAttribute('data-n'); });
+								e.addEventListener('pointerenter', function () {
+									splitName.textContent = e.getAttribute('data-n');
+									if (live) e.closest('.pv-person').classList.remove('pv-hot');
+								});
 							});
 							n.querySelector('.pv-split').addEventListener('pointerleave', function () { splitName.textContent = full; });
 						}
