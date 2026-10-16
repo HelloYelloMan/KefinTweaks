@@ -18,6 +18,17 @@
             transparent 90%
         );
 
+    /* ElegantFin's mobile layout draws the header from this one instead
+       (:root.layout-mobile { --headerColorGradient: var(--headerColorGradientAlt) },
+       which outranks :root above), so it stayed ElegantFin's slate blue there. */
+    --headerColorGradientAlt:
+        linear-gradient(
+            180deg,
+            hsl(0, 0%, 7%),
+            70%,
+            transparent
+        );
+
     /* Borders */
     --borderColor: hsla(0, 0%, 32%, 1);
     --darkerBorderColor: hsla(0, 0%, 22%, 1);
