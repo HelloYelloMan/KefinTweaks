@@ -43,9 +43,19 @@
         return slot.promise;
     }
 
+    // Vault Tweaks' Item Page Tweaks ask for the same collections and
+    // children on the same pages and share their answers as
+    // window.VaultTweaksSeriesSpecialsData. When it is loaded its answers are
+    // used, so a page makes each request once; without it this asks itself.
+    function vaultTweaksData() {
+        return window.VaultTweaksSeriesSpecialsData || null;
+    }
+
     const lastChildren = {};
 
     function fetchChildren(collectionId) {
+        const shared = vaultTweaksData();
+        if (shared && typeof shared.childrenOf === 'function') return shared.childrenOf(collectionId);
         return sharedFetch(lastChildren, collectionId, () =>
             ApiClient.getItems(ApiClient.getCurrentUserId(), { ParentId: collectionId })
                 .then(r => r.Items || [])
@@ -72,6 +82,8 @@
     const lastCollections = {};
 
     function collectionsOf(itemId) {
+        const shared = vaultTweaksData();
+        if (shared && typeof shared.collectionsOf === 'function') return shared.collectionsOf(itemId);
         return sharedFetch(lastCollections, itemId, () =>
             ApiClient.getJSON(ApiClient.getUrl(`Items/${itemId}/Collections`, {
                 userId: ApiClient.getCurrentUserId(),

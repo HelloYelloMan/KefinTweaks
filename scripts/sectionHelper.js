@@ -768,12 +768,40 @@
         return [];
     }
 
+    /* A virtual special is a BoxSet the anime pipeline keeps per work in a
+     * Specials folder, holding only season-0 episodes; it marks each one with
+     * the AnimePipelineSeries provider id. A {Collection} row asks for the
+     * collection's movies and series, so one of these always comes back empty
+     * -- and on vault they are 325 of 335 BoxSets, so a random pick nearly
+     * always landed on one. */
+    function isVirtualSpecial(item) {
+        return !!(item?.ProviderIds && item.ProviderIds.AnimePipelineSeries);
+    }
+
+    /* The Collection pool must carry ProviderIds to tell those apart. Added
+     * here rather than in the template so a section saved before it gets it
+     * too. */
+    function withProviderIdsField(sourceQuery) {
+        const options = sourceQuery.queryOptions || {};
+        const fields = Array.isArray(options.Fields)
+            ? options.Fields
+            : String(options.Fields || '').split(',').filter(Boolean);
+        if (fields.includes('ProviderIds')) return sourceQuery;
+        return {
+            ...sourceQuery,
+            queryOptions: { ...options, Fields: [...fields, 'ProviderIds'].join(',') }
+        };
+    }
+
     async function fetchDiscoveryPool(sectionConfig) {
         const config = normalizeDiscoveryConfig(sectionConfig);
-        const sourceQuery = config.discoverySourceQuery;
+        let sourceQuery = config.discoverySourceQuery;
         if (!sourceQuery) {
             WARN(`Discovery section ${config.id}: missing discoverySourceQuery`);
             return [];
+        }
+        if (config.discoveryType === 'Collection' && sourceQuery.path) {
+            sourceQuery = withProviderIdsField(sourceQuery);
         }
 
         if ((await window.LibraryCache?.sectionDependsOnIncompleteCache?.({
@@ -986,6 +1014,7 @@
             const minimumItems = config.minimumItems || 3;
             const eligible = pool.filter((c) => {
                 if (!c?.Id || discoveryState.renderedDiscoveryIds.collections.has(c.Id)) return false;
+                if (isVirtualSpecial(c)) return false;
                 const count = (c.TotalRecordCount ?? c.RecursiveItemCount ?? c.ChildCount ?? 0);
                 return count >= minimumItems;
             });

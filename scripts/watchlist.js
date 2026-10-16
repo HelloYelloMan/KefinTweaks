@@ -4975,8 +4975,8 @@ In the Custom Tabs plugin, add a new tab with the following HTML content:
 			// Get the item data to check current played status
 			const item = await getWatchedItem(itemId);
 
-			// Only handle movies, series, seasons, and episodes
-			if (item.Type !== 'Movie' && item.Type !== 'Series' && item.Type !== 'Season' && item.Type !== 'Episode') {
+			// Only handle movies, series, seasons, episodes, and virtual specials
+			if (item.Type !== 'Movie' && item.Type !== 'Series' && item.Type !== 'Season' && item.Type !== 'Episode' && !isVirtualSpecial(item)) {
 				return;
 			}
 			
@@ -5317,7 +5317,37 @@ In the Custom Tabs plugin, add a new tab with the following HTML content:
 		await updateWatchlistButtonOnDetailPage();
 	}
 
-	// Check and remove parent Season/Series if they're played
+	// A virtual special is a BoxSet the anime pipeline keeps per work, holding
+	// that work's season-0 episodes; it marks each with the AnimePipelineSeries
+	// provider id. It is played once all its episodes are, so it leaves the
+	// watchlist the way a Season or Series does.
+	function isVirtualSpecial(item) {
+		return !!item && item.Type === 'BoxSet'
+			&& !!(item.ProviderIds && item.ProviderIds.AnimePipelineSeries);
+	}
+
+	// The virtual specials a special episode is in. Vault Tweaks reads the same
+	// list on the episode's page and shares it, so its answer is used when it is
+	// loaded. Only season-0 episodes are asked about: no other episode is in one.
+	async function virtualSpecialsOf(episode) {
+		if (episode.ParentIndexNumber !== 0) {
+			return [];
+		}
+		const shared = window.VaultTweaksSeriesSpecialsData;
+		let collections;
+		if (shared && typeof shared.collectionsOf === 'function') {
+			collections = await shared.collectionsOf(episode.Id);
+		} else {
+			const result = await ApiClient.getJSON(ApiClient.getUrl(`Items/${episode.Id}/Collections`, {
+				userId: ApiClient.getCurrentUserId(),
+				fields: 'ProviderIds'
+			}));
+			collections = (result && result.Items) || [];
+		}
+		return (collections || []).filter(isVirtualSpecial);
+	}
+
+	// Check and remove parent Season/Series/virtual specials if they're played
 	async function checkAndRemoveParentItems(episode) {
 		try {
 			// Check Season
@@ -5340,6 +5370,18 @@ In the Custom Tabs plugin, add a new tab with the following HTML content:
 					if (seriesItem && seriesItem.UserData && seriesItem.UserData.Played) {
 						LOG('Series is now played, removing from watchlist:', seriesItem.Name);
 						await removeItemFromWatchlist(episode.SeriesId, 'Series');
+					}
+				}
+			}
+
+			// Check virtual specials
+			for (const special of await virtualSpecialsOf(episode)) {
+				const specialInWatchlist = await checkIfItemInWatchlist(special.Id);
+				if (specialInWatchlist) {
+					const specialItem = await ApiClient.getItem(ApiClient.getCurrentUserId(), special.Id);
+					if (specialItem && specialItem.UserData && specialItem.UserData.Played) {
+						LOG('Virtual special is now played, removing from watchlist:', specialItem.Name);
+						await removeItemFromWatchlist(special.Id, 'BoxSet');
 					}
 				}
 			}

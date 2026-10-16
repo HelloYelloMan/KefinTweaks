@@ -2732,14 +2732,23 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
    <body> (Home has tabs, this page does not): the solid dark layer, the sharp
    ::after copy of the backdrop hidden so only the blurred copy shows, and on
    mobile the layer's opacity. Abyss blurs and darkens the backdrop on any
-   library page, and Jellyfin's own theme treats every page alike. */
-html[data-kefin-skin^="ElegantFin"].kefin-custom-page-backdrop .backgroundContainer.withBackdrop {
+   library page, and Jellyfin's own theme treats every page alike.
+   Vault Tweaks' custom pages (the Help & Tips page among them) put
+   .vaultTweaksPageActive on #reactRoot, which holds the backdrop, and nothing
+   on <html>. Its pages sit on Jellyfin's fallback route, whose pageshow clears
+   any backdrop left from the page before, so .withBackdrop there means the
+   page asked for one; telling that from the page's own backdropPage class
+   would need a document-wide :has(). */
+html[data-kefin-skin^="ElegantFin"].kefin-custom-page-backdrop .backgroundContainer.withBackdrop,
+html[data-kefin-skin^="ElegantFin"] #reactRoot.vaultTweaksPageActive .backgroundContainer.withBackdrop {
 	background: var(--darkerGradientPoint);
 }
-html[data-kefin-skin^="ElegantFin"].kefin-custom-page-backdrop .backdropImage::after {
+html[data-kefin-skin^="ElegantFin"].kefin-custom-page-backdrop .backdropImage::after,
+html[data-kefin-skin^="ElegantFin"] #reactRoot.vaultTweaksPageActive .backdropImage::after {
 	opacity: 0;
 }
-html[data-kefin-skin^="ElegantFin"].kefin-custom-page-backdrop.layout-mobile .backgroundContainer.withBackdrop {
+html[data-kefin-skin^="ElegantFin"].kefin-custom-page-backdrop.layout-mobile .backgroundContainer.withBackdrop,
+html[data-kefin-skin^="ElegantFin"].layout-mobile #reactRoot.vaultTweaksPageActive .backgroundContainer.withBackdrop {
 	opacity: 0.9;
 }
 
