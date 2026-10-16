@@ -2047,10 +2047,23 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
              * Shows group reappearing at the bottom of the discovery list after
              * every save, however many times it was "removed". Pruning on load
              * alone can never fix that; the save has to drop it too. */
+            /* The same for a section: the startup sync prunes a saved section that
+             * is no longer a default (pruneOrphanKefinDefaultSections) and saves,
+             * and the merge put the saved copy's section straight back -- so every
+             * admin load pruned it again and left another KefinTweaks-Config-Backup
+             * in JS Injector. The saved copy drops what that prune drops, by the
+             * same test. Not when the defaults are missing: every section would
+             * look orphaned. */
             const defaults = window.KefinHomeConfig2 || {};
-            const savedGroupsFor = (key) => defaults[key]
+            const defaultSectionIds = getAllKefinDefaultSectionIds();
+            const dropOrphanSections = (key, groups) => (KEFIN_DEFAULT_GROUP_KEYS.includes(key) && defaultSectionIds.size)
+                ? groups.map((g) => (Array.isArray(g.sections)
+                    ? { ...g, sections: g.sections.filter((s) => shouldKeepDefaultSurfaceSection(s, defaultSectionIds)) }
+                    : g))
+                : groups;
+            const savedGroupsFor = (key) => dropOrphanSections(key, defaults[key]
                 ? pruneStaleDefaultGroups(defaults[key], savedHomeScreenConfig[key])
-                : (savedHomeScreenConfig[key] || []);
+                : (savedHomeScreenConfig[key] || []));
 
             // Create merged config
             const mergedHomeScreenConfig = {
