@@ -208,25 +208,25 @@ html body #itemDetailPage.kefin-episode-logo.kefin-episode-logo-placed .detailLo
  * tint at .05 on the overlay, a backdrop blur behind its buttons, and a band
  * of light (the overlay's :after) slid across the card by a transform, from
  * wholly off one side to wholly off the other, clipped by the card box --
- * which a blurred card cannot clip, so the band crossed the page.
- * The tint is drawn on the overlay's :before in the card's own blurred,
- * rounded shape (--vt-sg-blur and --vt-sg-round are Vault Tweaks'); a white
- * tint is not a darkening, so it cannot be Vault Tweaks' --vt-sg-dim. The
- * backdrop blur is off. The band's :after stays on the card, in the same
- * blurred shape, and the band slides through it as its background, by the
- * same distance: the overlay is a size container, so 100cqw is the card's
- * width. */
+ * a hard edge on a soft picture.
+ * The tint is drawn on the overlay's :before in the picture's own blurred,
+ * rounded shape: drawn in from the card's edge by twice the blur, as Vault
+ * Tweaks draws the picture, so it fades out inside the card (--vt-sg-blur and
+ * --vt-sg-round are Vault Tweaks'); a white tint is not a darkening, so it
+ * cannot be Vault Tweaks' --vt-sg-dim. The backdrop blur is off. The band's
+ * :after takes the same shape, and the band slides through it as its
+ * background, by the same distance: the overlay is a size container, so
+ * 100cqw is the card's width. */
 .cardScalable.vt-sg-frame > .cardOverlayContainer {
 	background: none;
 	backdrop-filter: none;
-	overflow: visible;
 	container-type: size;
 }
 
 .cardScalable.vt-sg-frame > .cardOverlayContainer::before {
 	content: "";
 	position: absolute;
-	inset: 0;
+	inset: calc(2 * var(--vt-sg-blur));
 	border-radius: var(--vt-sg-round);
 	background: hsla(0, 0%, 100%, .05);
 	filter: blur(var(--vt-sg-blur));
@@ -235,7 +235,7 @@ html body #itemDetailPage.kefin-episode-logo.kefin-episode-logo-placed .detailLo
 
 .cardScalable.vt-sg-frame > .cardOverlayContainer::after {
 	transform: none !important;
-	inset: 0;
+	inset: calc(2 * var(--vt-sg-blur));
 	border-radius: var(--vt-sg-round);
 	filter: blur(var(--vt-sg-blur));
 	background-size: 100% 100%;
