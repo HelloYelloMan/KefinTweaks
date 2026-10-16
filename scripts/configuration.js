@@ -1177,7 +1177,7 @@
     // Build script toggle switches
     function buildScriptToggles(scripts) {
         // Features that have configuration options (not just toggles)
-        const featuresWithConfig = new Set(['homeScreen', 'search', 'flattenSingleSeasonShows', 'skinManager', 'customMenuLinks', 'seriesInfo', 'versionPreferences', 'thumbnailScrubber', 'themeMediaCastFix', 'pauseScreen', 'osdLogo', 'watchTogether', 'watchlist', 'userManager', 'seriesSpecials']);
+        const featuresWithConfig = new Set(['homeScreen', 'search', 'flattenSingleSeasonShows', 'skinManager', 'customMenuLinks', 'seriesInfo', 'versionPreferences', 'thumbnailScrubber', 'watchTogether', 'watchlist', 'userManager', 'seriesSpecials']);
         
         const scriptNames = [
             { key: 'watchlist', label: 'Watchlist', desc: 'Allows your users to add items to their Watchlist. The Watchlist page shows an overview of all items on a user\'s Watchlist, as well as their Series Progress and Movie History. It also includes a Statistics page with an overview of your user watched stats.' },
@@ -1212,14 +1212,7 @@
             // and an upstream merge lands its additions above the line instead
             // of among ours.
             // ================================================================
-            { key: 'osdLogo', label: 'Player Logo', desc: 'Shows the media\'s logo (or ClearArt) on the video player OSD while the playback controls are visible, with optional transparency trimming and OSD drop shadows.' },
-            { key: 'pauseScreen', label: 'Pause Screen', desc: 'Shows a rich overlay with the media\'s logo, plot, details, disc/clear art and playback progress when playback stays paused for a few seconds. Works with the HTML5 web player and external players (mpv-shim etc.).' },
-            { key: 'themeMediaCastFix', label: 'Theme Media', desc: 'Plays theme songs and videos in the web client, including while casting to an mpv-shim or other remote player. Replaces the native Play Theme Music/Videos toggles and adds subtle on-video controls.' },
-            { key: 'seriesSpecials', label: 'Item Page Tweaks', desc: 'Episode, season and collection-page tweaks that work together: the episode heading and header logo naming and opening the season or virtual special, collection pages for virtual specials, collection sections as rows, no "Special - " prefix, and a Tags row. Open its settings to switch each one on or off.' },
-            { key: 'posterAspect', label: 'Poster Aspect Cards', desc: 'Sizes each poster card to its own image rather than cropping everything to one shape. The aspect ratio is written into the card markup as a class by the File Transformation plugin, so CSS sizes every card as the browser parses it - no JavaScript per card and nothing to correct afterwards. The row height is the skin\'s own, measured once per container before its cards exist.' },
-            { key: 'librariesInMore', label: 'Libraries Menu', desc: 'Replaces the top bar\'s library buttons with a Libraries dropdown placed before Favourites, holding every library. Applies to the Jellyfin 12 layout through the File Transformation plugin, from the next page load after saving.' },
-            { key: 'crtShader', label: 'CRT Shader', desc: 'Adds a CRT button to the video player controls that cycles off, super and kurozumi, like ctrl+r in mpv. It runs the video through your mpv retro CRT chain - the same shader files and retro.conf profiles: analog resampling, composite NTSC (super only) and crt-royale - with the interlace fields locked to the display refresh, black bars cropped, and subtitles burned in. Always off when the page loads, and only for the web player. Needs WebGL2 and a capable GPU.' },
-            { key: 'help', label: 'Help & Tips', desc: 'Adds a Help & Tips entry to the user menu, opening a page that explains the features this server adds: what the buttons and settings do, with a working preview of each.' },
+            { key: 'seriesSpecials', label: 'Item Page Tweaks', desc: 'Breadcrumbs for virtual specials: a special\'s trail goes through its virtual special, and a virtual special\'s trail leads back to its series. Open its settings to switch each one on or off.' },
         ];
 
         // Filter before building the Map. A registry entry that is null -- or a hole,
@@ -1245,7 +1238,7 @@
 
         return visibleScripts.map(script => {
             // Match injector defaults: most scripts on unless set false; opt-in scripts require true
-            const defaultDisabled = ['thumbnailScrubber', 'watchTogether', 'userManager', 'updoot', 'posterAspect', 'librariesInMore'].includes(script.key);
+            const defaultDisabled = ['thumbnailScrubber', 'watchTogether', 'userManager', 'updoot'].includes(script.key);
             const isEnabled = defaultDisabled
                 ? scripts[script.key] === true
                 : scripts[script.key] !== false;

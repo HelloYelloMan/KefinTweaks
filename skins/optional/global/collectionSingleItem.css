@@ -3,9 +3,9 @@
  * Keeps a collection's own heading when a logo is showing; the rationale is
  * below. File name and option key are historical: this file used to hide a
  * one-item collection's count and Shuffle button as well, reading a marker set
- * by Virtual Specials. Those rules moved into scripts/virtualSpecials.js
- * (2026-10-05), under the "one-item collections" switch in Item Page Tweaks, so
- * that feature takes one switch instead of two in two places. The name stays
+ * by Virtual Specials. Those rules moved into Virtual Specials (2026-10-05),
+ * now Vault Tweaks', under its "one-item collections" switch, so that feature
+ * takes one switch instead of two in two places. The name stays
  * because the option's saved key is built from it.
  */
 
