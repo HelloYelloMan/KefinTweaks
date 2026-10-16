@@ -49,7 +49,6 @@
         episodeSeasonTitle: true, // Episode Logo: header logo links up (episode -> season -> series)
         mediaTags: true,          // Add a Tags row to the item-details metadata table
         specialEpisodePrefix: true, // Drop the "Special - " prefix from season-zero episode titles
-        posterAspect: false,   // Size poster cards to their own aspect ratio; CSS-sized from a ratio class, height measured before the cards exist
         virtualSpecials: true,    // Collection pages: Studios row, no "Special - " prefix, breadcrumbs
         collectionSectionRows: true, // Collection pages: sections as rows, like the flat season row
     };
@@ -591,13 +590,6 @@
             css: null,
             dependencies: ['utils'],
             description: 'Removes the "Special - " prefix Jellyfin puts on the title of every season-zero episode, everywhere it appears. The prefix is localized, so the wording is learned once from the server rather than assumed.'
-        },
-        {
-            name: 'posterAspect',
-            script: 'posterAspect.js',
-            css: 'posterAspect.css',
-            dependencies: ['utils', 'userHelper'],
-            description: 'Sizes each poster card to its own image instead of cropping everything to one shape. The ratio arrives as a class in the card markup (via the File Transformation plugin) so CSS sizes each card as it is parsed, and the row height is measured once per container BEFORE its cards exist. Cards are correct in the first painted frame, with no correction afterwards.'
         },
         {
             name: 'collectionSectionRows',

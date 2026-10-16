@@ -779,7 +779,7 @@
      * feeding the observer that calls it. */
     /* The last of Jellyfin's own items in the bar, which the divider follows.
      * Normally that is the overflow ("More") button, which UserViewNav renders
-     * after Favourites and the library buttons. The Libraries menu option moves
+     * after Favourites and the library buttons. Vault Tweaks' Libraries Menu moves
      * that button in front of Favourites, so Favourites is last; whichever of
      * the two comes later in the bar wins. */
     function findLastNativeTopNavItem(stack) {
@@ -2417,78 +2417,6 @@ button[data-kefin-custom-menu-more] .MuiSvgIcon-root {
         return response.json();
     }
 
-    /* Libraries menu: the modern top bar shows no library buttons, and every
-     * library is in a "Libraries" dropdown placed before Favourites.
-     *
-     * Two File Transformation rules on jellyfin-web 12.1's UserViewNav (chunk
-     * 78701), sharing one pattern so they run in one pipeline:
-     *
-     *   1. COUNT. UserViewNav picks how many libraries get a button with
-     *      `return v?8:y?5:3` -- 8 from the xl breakpoint, 5 from lg, 3 below --
-     *      and lists the rest in its overflow menu. It counts only libraries,
-     *      while Favourites, our Watchlist and Custom Tabs' home tabs share the
-     *      row, so at 1024-1536px the row outgrew the bar under every skin.
-     *      Zero sends every library to the menu; the menu, its icons and the
-     *      current-library highlight are Jellyfin's own.
-     *   2. ORDER AND LABEL. The component returns [Favourites, library buttons,
-     *      overflow button + menu]. The rule reorders that to [overflow,
-     *      Favourites, library buttons] and labels the button with
-     *      HeaderLibraries ("Libraries") instead of ButtonMore. The SearchText
-     *      is the whole return statement, verbatim; it occurs once and the
-     *      patched chunk parses.
-     *
-     * They live in that plugin's config, so they are set here, where every save
-     * of our config passes (Save, Import, Reset), and switching the setting off
-     * takes them out again. Nothing runs on page load. The pattern names one
-     * chunk -- see posterAspect.js for why a pattern matching every chunk breaks
-     * other plugins. A jellyfin-web upgrade that renumbers the chunk or renames
-     * its minified variables stops the rules matching, and the bar quietly goes
-     * back to Jellyfin's own layout. */
-    const LIBRARIES_MENU_PATTERN = String.raw`78701\.[0-9a-f]+\.chunk\.js`;
-    const LIBRARIES_MENU_RULES = [
-        {
-            Id: '3f9b6c2e-71a4-4d58-b0e3-9c5a2d8f1e47',
-            FilenamePattern: LIBRARIES_MENU_PATTERN,
-            SearchText: 'return v?8:y?5:3',
-            ReplaceText: 'return 0'
-        },
-        {
-            Id: 'a4c7e2d9-3b16-4f85-9e0a-7d2b5c8f1e63',
-            FilenamePattern: LIBRARIES_MENU_PATTERN,
-            SearchText: "return S?null:(0,l.jsxs)(l.Fragment,{children:[(0,l.jsx)(I.A,{variant:\"text\",color:(null==q?void 0:q.Id)===U.Id?\"primary\":\"inherit\",startIcon:(0,l.jsx)(k.A,{}),component:A.N_,to:\"/home?tab=1\",children:O.Ay.translate(U.Name)}),null==N?void 0:N.map((function(e){return\"url\"in e?(0,l.jsx)(I.A,{variant:\"text\",color:\"inherit\",startIcon:(0,l.jsx)(F.A,{children:e.icon||\"link\"}),component:\"a\",href:e.url,target:\"_blank\",rel:\"noopener noreferrer\",children:e.name},e.name):(0,l.jsx)(I.A,{variant:\"text\",color:e.Id===(null==q?void 0:q.Id)?\"primary\":\"inherit\",startIcon:(0,l.jsx)(K,{item:e}),component:A.N_,to:h.appRouter.getRouteUrl(e,{context:e.CollectionType}).substring(1),children:e.Name},e.Id)})),R&&R.length>0&&(0,l.jsxs)(l.Fragment,{children:[(0,l.jsx)(I.A,{variant:\"text\",color:\"inherit\",endIcon:(0,l.jsx)(P.A,{}),\"aria-controls\":se,\"aria-haspopup\":\"true\",onClick:M,children:O.Ay.translate(\"ButtonMore\")}),(0,l.jsx)(ae,{anchorEl:T,id:se,open:E,onMenuClose:z,userViews:R,selectedId:null==q?void 0:q.Id})]})]})}",
-            ReplaceText: "return S?null:(0,l.jsxs)(l.Fragment,{children:[R&&R.length>0&&(0,l.jsxs)(l.Fragment,{children:[(0,l.jsx)(I.A,{variant:\"text\",color:\"inherit\",endIcon:(0,l.jsx)(P.A,{}),\"aria-controls\":se,\"aria-haspopup\":\"true\",onClick:M,children:O.Ay.translate(\"HeaderLibraries\")}),(0,l.jsx)(ae,{anchorEl:T,id:se,open:E,onMenuClose:z,userViews:R,selectedId:null==q?void 0:q.Id})]}),(0,l.jsx)(I.A,{variant:\"text\",color:(null==q?void 0:q.Id)===U.Id?\"primary\":\"inherit\",startIcon:(0,l.jsx)(k.A,{}),component:A.N_,to:\"/home?tab=1\",children:O.Ay.translate(U.Name)}),null==N?void 0:N.map((function(e){return\"url\"in e?(0,l.jsx)(I.A,{variant:\"text\",color:\"inherit\",startIcon:(0,l.jsx)(F.A,{children:e.icon||\"link\"}),component:\"a\",href:e.url,target:\"_blank\",rel:\"noopener noreferrer\",children:e.name},e.name):(0,l.jsx)(I.A,{variant:\"text\",color:e.Id===(null==q?void 0:q.Id)?\"primary\":\"inherit\",startIcon:(0,l.jsx)(K,{item:e}),component:A.N_,to:h.appRouter.getRouteUrl(e,{context:e.CollectionType}).substring(1),children:e.Name},e.Id)}))]})}"
-        }
-    ];
-
-    async function applyLibrariesInMore(on) {
-        try {
-            const id = await resolvePluginId(['File Transformation', '5e87cc92-571a-4d8d-8d98-d2d4147f9f90']);
-            if (!id) {
-                if (on) WARN('File Transformation is not installed, so libraries keep their top bar buttons.');
-                return;
-            }
-            const cfg = await getPluginConfiguration(id);
-            const list = Array.isArray(cfg?.Transformations) ? cfg.Transformations : [];
-            const norm = (x) => String(x || '').replace(/-/g, '').toLowerCase();
-            const isOurs = (t) => t && LIBRARIES_MENU_RULES.some((r) => norm(t.Id) === norm(r.Id));
-            const current = list.filter(isOurs);
-            const inPlace = current.length === LIBRARIES_MENU_RULES.length
-                && LIBRARIES_MENU_RULES.every((r) => current.some((t) => norm(t.Id) === norm(r.Id)
-                    && t.FilenamePattern === r.FilenamePattern
-                    && t.SearchText === r.SearchText
-                    && t.ReplaceText === r.ReplaceText));
-            if (on ? inPlace : current.length === 0) return;
-            const rest = list.filter((t) => !isOurs(t));
-            await ApiClient.updatePluginConfiguration(id, {
-                ...cfg,
-                Transformations: on ? rest.concat(LIBRARIES_MENU_RULES.map((r) => ({ ...r }))) : rest
-            });
-            LOG(on ? 'Libraries menu rules registered.' : 'Libraries menu rules removed.');
-        } catch (err) {
-            ERR('Could not update the Libraries menu rules:', err);
-        }
-    }
-
     /**
      * Saves the current KefinTweaksConfig back to JS Injector plugin
      * @param {Object} config - Optional config object to save. If not provided, uses window.KefinTweaksConfig
@@ -2642,7 +2570,6 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
             }
             
             LOG('Successfully saved config (+ injector preload) to JS Injector plugin');
-            await applyLibrariesInMore(configToSave.scripts?.librariesInMore === true);
             return true;
         } catch (err) {
             ERR('Error saving config to JS Injector:', err);
