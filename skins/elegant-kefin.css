@@ -216,17 +216,24 @@ html body #itemDetailPage.kefin-episode-logo.kefin-episode-logo-placed .detailLo
  * cannot be Vault Tweaks' --vt-sg-dim. The backdrop blur is off. The band's
  * :after takes the same shape, and the band slides through it as its
  * background, by the same distance: the overlay is a size container, so
- * 100cqw is the card's width. */
+ * 100cqw is the card's width. With Vault Tweaks' Outer blur (the vt-sg-outer
+ * class on the root) the picture is the card's full size and its fade runs out
+ * past the card (--vt-sg-inset is 0), so the overlay lets the tint run out
+ * with it. */
 .cardScalable.vt-sg-frame > .cardOverlayContainer {
 	background: none;
 	backdrop-filter: none;
 	container-type: size;
 }
 
+html.vt-sg-outer .cardScalable.vt-sg-frame > .cardOverlayContainer {
+	overflow: visible;
+}
+
 .cardScalable.vt-sg-frame > .cardOverlayContainer::before {
 	content: "";
 	position: absolute;
-	inset: calc(2 * var(--vt-sg-blur));
+	inset: var(--vt-sg-inset, calc(2 * var(--vt-sg-blur)));
 	border-radius: var(--vt-sg-round);
 	background: hsla(0, 0%, 100%, .05);
 	filter: blur(var(--vt-sg-blur));
@@ -235,7 +242,7 @@ html body #itemDetailPage.kefin-episode-logo.kefin-episode-logo-placed .detailLo
 
 .cardScalable.vt-sg-frame > .cardOverlayContainer::after {
 	transform: none !important;
-	inset: calc(2 * var(--vt-sg-blur));
+	inset: var(--vt-sg-inset, calc(2 * var(--vt-sg-blur)));
 	border-radius: var(--vt-sg-round);
 	filter: blur(var(--vt-sg-blur));
 	background-size: 100% 100%;
