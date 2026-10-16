@@ -268,7 +268,20 @@
                         ]
                     }
                 ],
-                colorSchemes: [],
+                // OLED is the first scheme, so the default (getDefaultColorScheme
+                // takes the first); Classic is ElegantFin's own palette, with no
+                // stylesheet of its own -- choosing it removes the scheme's link.
+                // OLED was an optional include until 2026-10-16.
+                colorSchemes: [
+                    {
+                        name: 'OLED',
+                        url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/OLEDTheme.css`
+                    },
+                    {
+                        name: 'Classic',
+                        url: ''
+                    }
+                ],
                 optionalIncludes: [
                     {
                         name: 'Media Bar Support',
@@ -312,11 +325,6 @@
                     {
                         name: 'Solid App Bar',
                         url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/solidAppBar.css`,
-                        enabled: false
-                    },
-                    {
-                        name: 'OLED Dark Theme',
-                        url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/OLEDTheme.css`,
                         enabled: false
                     },
                     {
