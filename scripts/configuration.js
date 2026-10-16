@@ -1215,7 +1215,6 @@
             { key: 'seriesSpecials', label: 'Item Page Tweaks', desc: 'Episode, season and collection-page tweaks that work together: the episode heading and header logo naming and opening the season or virtual special, collection pages for virtual specials, collection sections as rows, no "Special - " prefix, and a Tags row. Open its settings to switch each one on or off.' },
             { key: 'posterAspect', label: 'Poster Aspect Cards', desc: 'Sizes each poster card to its own image rather than cropping everything to one shape. The aspect ratio is written into the card markup as a class by the File Transformation plugin, so CSS sizes every card as the browser parses it - no JavaScript per card and nothing to correct afterwards. The row height is the skin\'s own, measured once per container before its cards exist.' },
             { key: 'librariesInMore', label: 'Libraries Menu', desc: 'Replaces the top bar\'s library buttons with a Libraries dropdown placed before Favourites, holding every library. Applies to the Jellyfin 12 layout through the File Transformation plugin, from the next page load after saving.' },
-            { key: 'help', label: 'Help & Tips', desc: 'Adds a Help & Tips entry to the user menu, opening a page that explains the features this server adds: what the buttons and settings do, with a working preview of each.' },
         ];
 
         // Filter before building the Map. A registry entry that is null -- or a hole,

@@ -47,14 +47,11 @@
         seriesSpecialsData: true, // Item Page Tweaks: shared virtual-special lookup (a dependency, no switch in the window)
         episodeTitle: true,       // Item Page Tweaks: episode heading names/opens the season or virtual special
         episodeSeasonTitle: true, // Episode Logo: header logo links up (episode -> season -> series)
-        jeSidebarMemo: true,      // Memoise Jellyfin Enhanced's getSidebarContainer (forced style flush on every DOM mutation)
-        jeSpoilerGuardScope: true, // Scope Jellyfin Enhanced's Spoiler Guard image refresh to the item that changed
         mediaTags: true,          // Add a Tags row to the item-details metadata table
         specialEpisodePrefix: true, // Drop the "Special - " prefix from season-zero episode titles
         posterAspect: false,   // Size poster cards to their own aspect ratio; CSS-sized from a ratio class, height measured before the cards exist
         virtualSpecials: true,    // Collection pages: Studios row, no "Special - " prefix, breadcrumbs
         collectionSectionRows: true, // Collection pages: sections as rows, like the flat season row
-        help: true,               // Help & Tips page (pages/help.html) at #/help, from a user menu entry
     };
 
     const THIRD_PARTY_SCRIPTS = {
@@ -580,21 +577,6 @@
             description: "Header logo that links up a level: episode to season, season to series. Shown under the thumbnail on ElegantFin episode pages."
         },
         {
-            name: 'jeSidebarMemo',
-            script: 'jeSidebarMemo.js',
-            css: null,
-            dependencies: [],
-            description: "Memoises Jellyfin Enhanced's getSidebarContainer(), which reads offsetParent (a forced full-document style flush) on every body mutation. Measured at 3.2s of style recalc across 104 calls when navigating into a series page. No-ops if Jellyfin Enhanced is absent."
-        },
-        {
-            name: 'jeSpoilerGuardScope',
-            script: 'jeSpoilerGuardScope.js',
-            css: null,
-            dependencies: ['websocketHelper'],
-            priority: true, // Must claim the plugin's watched-refresh hook before its Spoiler Guard boots
-            description: "Scopes Jellyfin Enhanced's Spoiler Guard image refresh to the items whose watched state changed. As shipped it rewrites the URL of every Jellyfin image in the document after any mark-played, which makes all card artwork and the detail-page backdrop reload at once. No-ops if Jellyfin Enhanced or Spoiler Guard is absent."
-        },
-        {
             name: 'mediaTags',
             group: 'seriesSpecials',
             script: 'mediaTags.js',
@@ -616,13 +598,6 @@
             css: 'posterAspect.css',
             dependencies: ['utils', 'userHelper'],
             description: 'Sizes each poster card to its own image instead of cropping everything to one shape. The ratio arrives as a class in the card markup (via the File Transformation plugin) so CSS sizes each card as it is parsed, and the row height is measured once per container BEFORE its cards exist. Cards are correct in the first painted frame, with no correction afterwards.'
-        },
-        {
-            name: 'help',
-            script: 'help.js',
-            css: null,
-            dependencies: ['utils'],
-            description: 'Adds a Help & Tips entry to the user menu, opening a page that explains the features this server adds'
         },
         {
             name: 'collectionSectionRows',
