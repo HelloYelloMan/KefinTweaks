@@ -601,3 +601,25 @@ html:is(.layout-desktop, .layout-tablet, .layout-mobile) :is(#castContent, #gues
 #itemDetailPage .verticalSection.emby-scroller-container {
 	overflow-x: clip;
 }
+
+/* Vault Tweaks' Blur cards (Spoiler Guard Tweaks), on the cards it blurs --
+ * .vt-sg-frame is such a card's box, so with the card blur off this matches
+ * nothing. Abyss draws three hard edges on a card whose edge is soft: a
+ * whitish inset ring on the picture, black at .7 on the hover overlay, and a
+ * whitish 1px border round the overlay on hover. The ring and the border are
+ * off, the overlay draws nothing, and the card itself darkens by as much
+ * instead: black at .7 over it is the card at brightness .3, which Vault
+ * Tweaks applies while the overlay shows. The border is Abyss's !important
+ * rule (and this file's, "card:hover"), hence the longer selector. */
+.cardScalable.vt-sg-frame {
+	--vt-sg-dim: .3;
+}
+
+.cardScalable.vt-sg-frame .cardImageContainer.vt-sg-blur {
+	box-shadow: none;
+}
+
+.card .cardBox .cardScalable.vt-sg-frame > .cardOverlayContainer {
+	background: none;
+	border-color: transparent !important;
+}

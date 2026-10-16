@@ -201,3 +201,56 @@ html body #itemDetailPage.kefin-episode-logo.kefin-episode-logo-placed .detailLo
 .itemsContainer > .card.characterPairStart::before {
 	border-radius: var(--largeRadius, 2.98px);
 }
+
+/* Vault Tweaks' Blur cards (Spoiler Guard Tweaks), on the cards it blurs --
+ * .vt-sg-frame is such a card's box, so with the card blur off this matches
+ * nothing. ElegantFin's hover draws, over a card whose edge is soft, a white
+ * tint at .05 on the overlay, a backdrop blur behind its buttons, and a band
+ * of light (the overlay's :after) slid across the card by a transform, from
+ * wholly off one side to wholly off the other, clipped by the card box --
+ * which a blurred card cannot clip, so the band crossed the page.
+ * The tint is drawn on the overlay's :before in the card's own blurred,
+ * rounded shape (--vt-sg-blur and --vt-sg-round are Vault Tweaks'); a white
+ * tint is not a darkening, so it cannot be Vault Tweaks' --vt-sg-dim. The
+ * backdrop blur is off. The band's :after stays on the card, in the same
+ * blurred shape, and the band slides through it as its background, by the
+ * same distance: the overlay is a size container, so 100cqw is the card's
+ * width. */
+.cardScalable.vt-sg-frame > .cardOverlayContainer {
+	background: none;
+	backdrop-filter: none;
+	overflow: visible;
+	container-type: size;
+}
+
+.cardScalable.vt-sg-frame > .cardOverlayContainer::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: var(--vt-sg-round);
+	background: hsla(0, 0%, 100%, .05);
+	filter: blur(var(--vt-sg-blur));
+	pointer-events: none;
+}
+
+.cardScalable.vt-sg-frame > .cardOverlayContainer::after {
+	transform: none !important;
+	inset: 0;
+	border-radius: var(--vt-sg-round);
+	filter: blur(var(--vt-sg-blur));
+	background-size: 100% 100%;
+	background-repeat: no-repeat;
+	background-position: 0 -100cqh;
+}
+
+.card-hoverable:hover .cardScalable.vt-sg-frame > .cardOverlayContainer::after {
+	background-position: 0 100cqh;
+}
+
+:is(.backdropCard, .overflowBackdropCard) .cardScalable.vt-sg-frame > .cardOverlayContainer::after {
+	background-position: -100cqw 0;
+}
+
+:is(.backdropCard, .overflowBackdropCard).card-hoverable:hover .cardScalable.vt-sg-frame > .cardOverlayContainer::after {
+	background-position: 100cqw 0;
+}

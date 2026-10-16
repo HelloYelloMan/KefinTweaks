@@ -132,3 +132,17 @@
 #itemDetailPage .verticalSection.emby-scroller-container {
 	overflow-x: clip;
 }
+
+/* Vault Tweaks' Blur cards (Spoiler Guard Tweaks), on the cards it blurs --
+ * .vt-sg-frame is such a card's box, so with the card blur off this matches
+ * nothing. jellyfin-web's hover overlay is black at .5 over the card: a
+ * hard-edged box on a card whose edge is soft. The overlay draws nothing, and
+ * the card itself darkens by as much instead: black at .5 over it is the card
+ * at brightness .5, which Vault Tweaks applies while the overlay shows. */
+.cardScalable.vt-sg-frame {
+	--vt-sg-dim: .5;
+}
+
+.cardScalable.vt-sg-frame > .cardOverlayContainer {
+	background: none;
+}
