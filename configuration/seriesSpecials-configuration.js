@@ -3,14 +3,16 @@
 // (Named Series & Specials at first; the key, seriesSpecials, and the file
 // names keep that name so saved settings still match.)
 //
-// Item Page Tweaks is one entry in the feature list standing for many small
-// tweaks to episode, season and collection pages. Each tweak has its own switch
-// here, stored in config.itemPageTweaks.<key>. Several tweaks live in one
-// script, so each script also keeps its own flag, config.scripts.<script>, and
-// this window keeps that in step: a script's flag is on when any of its tweaks
-// is. The loader reads those flags, so a script whose tweaks are all off is not
-// loaded at all; the scripts read the tweak switches themselves (tweakOn).
-// scripts/kefinTweaks-loader.js runs any of them only while the group's own flag
+// Item Page Tweaks is one entry in the feature list. Of its tweaks only the
+// two virtual-special breadcrumbs are KefinTweaks' now; the rest moved to
+// Vault Tweaks on 2026-10-15, and their saved switches in
+// config.itemPageTweaks are left as they are and read by nothing here. Each
+// tweak has its own switch, stored in config.itemPageTweaks.<key>, and its
+// script keeps its own flag, config.scripts.<script>, which this window keeps
+// in step: a script's flag is on when any of its tweaks is. The loader reads
+// those flags, so a script whose tweaks are all off is not loaded at all; the
+// script reads the tweak switches itself (tweakOn).
+// scripts/kefinTweaks-loader.js runs it only while the group's own flag
 // (config.scripts.seriesSpecials) is on.
 //
 // A tweak with no saved switch falls back to its script's flag - what it was
@@ -36,66 +38,17 @@
         {
             title: 'Episode pages',
             tweaks: [
-                { key: 'episodeHeadingToSeason', script: 'episodeTitle',
-                    label: 'Heading names and opens the season',
-                    desc: 'The heading above the episode title shows the season\'s Original Title and opens the season, instead of the series - on every show, single-season ones too. A season with no Original Title keeps the series name but still opens the season.' },
-                { key: 'episodeLogoToSeason', script: 'episodeSeasonTitle',
-                    label: 'Logo opens the season',
-                    desc: 'Clicking the header logo opens the episode\'s season.' },
-                { key: 'specialHeadingToCollection', script: 'episodeTitle',
-                    label: 'Special: heading names and opens its virtual special',
-                    desc: 'On a special that belongs to exactly one virtual special collection, the heading shows that collection\'s name and opens it.' },
-                { key: 'specialLogoFromCollection', script: 'episodeSeasonTitle',
-                    label: 'Special: logo is its virtual special\'s, and opens it',
-                    desc: 'On a special that belongs to exactly one virtual special collection, the header logo is that collection\'s own logo and opens the collection.' },
                 { key: 'specialBreadcrumb', script: 'virtualSpecials',
                     label: 'Special: breadcrumb goes through its virtual special',
-                    desc: 'A special\'s breadcrumb trail goes Shows > series > virtual special > episode, instead of through the Specials season. With several virtual specials, that crumb opens a list of them.' },
-                { key: 'specialCollectionsRowTitle', script: 'virtualSpecials',
-                    label: 'Special: one collection is titled "Collection"',
-                    desc: 'Jellyfin titles the Collections row in the plural however many it holds; with one, it reads "Collection".' },
-                { key: 'elegantfinEpisodeLogo', script: 'episodeSeasonTitle',
-                    label: 'ElegantFin: logo under the thumbnail',
-                    desc: 'ElegantFin hides the logo on episode pages. This shows it under the thumbnail, in place of the series name. Other skins keep their logo where it is either way.' }
-            ]
-        },
-        {
-            title: 'Season pages',
-            tweaks: [
-                { key: 'seasonLogoToSeries', script: 'episodeSeasonTitle',
-                    label: 'Logo opens the series',
-                    desc: 'Clicking the header logo on a season page opens its series.' }
+                    desc: 'A special\'s breadcrumb trail goes Shows > series > virtual special > episode, instead of through the Specials season. With several virtual specials, that crumb opens a list of them.' }
             ]
         },
         {
             title: 'Collection pages',
             tweaks: [
-                { key: 'collectionLogoToSeries', script: 'episodeSeasonTitle',
-                    label: 'Virtual special: logo opens the series',
-                    desc: 'On a virtual special\'s page, clicking the header logo opens the series its episodes come from - when they all come from one.' },
                 { key: 'collectionBreadcrumb', script: 'virtualSpecials',
                     label: 'Virtual special: breadcrumb back to the series',
-                    desc: 'A virtual special\'s page gets the trail Shows > series > collection, which Jellyfin gives a collection none of.' },
-                { key: 'collectionStudios', script: 'virtualSpecials',
-                    label: 'Studios row filled in',
-                    desc: 'Jellyfin builds a collection\'s Studios row but never fills it in. Any collection.' },
-                { key: 'collectionSectionRows', script: 'collectionSectionRows',
-                    label: 'Sections as rows',
-                    desc: 'Each section of a collection page (Episodes, Movies and so on) shows as a horizontal row of cards, like the season row on a series page. Any collection.' },
-                { key: 'singleItemCollection', script: 'virtualSpecials',
-                    label: 'One-item collections: no count or Shuffle',
-                    desc: 'A collection of one hides its "1 items" count and its Shuffle button, which could only shuffle one thing. Play stays. Any collection.' }
-            ]
-        },
-        {
-            title: 'Everywhere',
-            tweaks: [
-                { key: 'noSpecialPrefix', script: 'specialEpisodePrefix',
-                    label: 'No "Special - " prefix',
-                    desc: 'Removes the "Special - " Jellyfin puts before the title of every episode in a Specials season - cards, season pages and episode pages. The wording is localized, so it is learned once from your server rather than assumed.' },
-                { key: 'mediaTags', script: 'mediaTags',
-                    label: 'Tags row',
-                    desc: 'ElegantFin only. Adds a Tags row to the details table on item pages, between Genres and Studios, each tag linking to its items.' }
+                    desc: 'A virtual special\'s page gets the trail Shows > series > collection, which Jellyfin gives a collection none of.' }
             ]
         }
     ];

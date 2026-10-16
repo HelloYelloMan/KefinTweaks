@@ -1212,7 +1212,7 @@
             // and an upstream merge lands its additions above the line instead
             // of among ours.
             // ================================================================
-            { key: 'seriesSpecials', label: 'Item Page Tweaks', desc: 'Episode, season and collection-page tweaks that work together: the episode heading and header logo naming and opening the season or virtual special, collection pages for virtual specials, collection sections as rows, no "Special - " prefix, and a Tags row. Open its settings to switch each one on or off.' },
+            { key: 'seriesSpecials', label: 'Item Page Tweaks', desc: 'Breadcrumbs for virtual specials: a special\'s trail goes through its virtual special, and a virtual special\'s trail leads back to its series. Open its settings to switch each one on or off.' },
         ];
 
         // Filter before building the Map. A registry entry that is null -- or a hole,

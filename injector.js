@@ -245,13 +245,7 @@
         // ================================================================
         elegantfinHaspatch: true, // ElegantFin :has() hotfix marker classes (needs the local ElegantFin build)
         seriesSpecials: true,     // Item Page Tweaks group (see scripts/kefinTweaks-loader.js)
-        seriesSpecialsData: true, // Item Page Tweaks: shared virtual-special lookup (a dependency, no switch in the window)
-        episodeTitle: true,       // Item Page Tweaks: episode heading names/opens the season or virtual special
-        episodeSeasonTitle: true, // Episode Logo: header logo links up (episode -> season -> series)
-        mediaTags: true,          // Add a Tags row to the item-details metadata table
-        specialEpisodePrefix: true, // Drop the "Special - " prefix from season-zero episode titles
-        virtualSpecials: true,    // Collection pages: Studios row, no "Special - " prefix, breadcrumbs
-        collectionSectionRows: true, // Collection pages: sections as rows, like the flat season row
+        virtualSpecials: true,    // Item Page Tweaks: a virtual special's breadcrumbs, and a special's through it
 
         // Note: Core functionality scripts (utils, cardBuilder, localStorageCache, modal) 
         // are automatically enabled when needed by other scripts
@@ -763,36 +757,12 @@
             description: 'Maintains the .ef-* marker classes that replace the Chromium-hot :has() selectors in the local ElegantFin build.'
         },
         {
-            name: 'collectionSectionRows',
-            group: 'seriesSpecials',
-            script: 'collectionSectionRows.js',
-            css: null,
-            dependencies: ['utils', 'cardBuilder', 'seriesSpecialsData'],
-            description: "Collection pages: each section (Episodes, Movies...) as a horizontal row of cards, built the way the flat season row on a series page is. The original grid stays in the page, hidden, so collection sorting still applies."
-        },
-        {
             name: 'virtualSpecials',
             group: 'seriesSpecials',
             script: 'virtualSpecials.js',
             css: null,
-            dependencies: ['utils', 'seriesSpecialsData'],
-            description: "Fixes to the collection (BoxSet) detail page. Fills in the Studios row, which renderStudio refuses to render for a BoxSet. Gives a virtual special breadcrumbs back to its series, and hides a one-item collection's count and Shuffle button. Each is a switch in Item Page Tweaks."
-        },
-        {
-            name: 'seriesSpecialsData',
-            group: 'seriesSpecials',
-            script: 'seriesSpecialsData.js',
-            css: null,
-            dependencies: ['utils'],
-            description: "Shared lookup of a special episode's virtual special collection (stock /Items/{id}/Collections), asked once per page for Episode Title, Episode Logo and Virtual Specials."
-        },
-        {
-            name: 'episodeTitle',
-            group: 'seriesSpecials',
-            script: 'episodeTitle.js',
-            css: null,
-            dependencies: ['utils', 'seriesSpecialsData'],
-            description: "Episode heading names and opens the season (its Original Title), or a special's virtual special collection."
+            dependencies: [],
+            description: "Breadcrumbs for virtual specials, through breadcrumbs.js's override hook: a virtual special's trail back to its series, and a special's trail through its virtual special. Each is a switch in Item Page Tweaks."
         },
         {
             name: 'seriesSpecials',
@@ -807,30 +777,6 @@
             css: null,
             dependencies: ['modal', 'toaster', 'utils'],
             description: 'Settings window for the Item Page Tweaks group'
-        },
-        {
-            name: 'mediaTags',
-            group: 'seriesSpecials',
-            script: 'mediaTags.js',
-            css: null,
-            dependencies: ['utils'],
-            description: 'Adds a Tags row to the item-details metadata table, matching the Genres/Studios rows.'
-        },
-        {
-            name: 'specialEpisodePrefix',
-            group: 'seriesSpecials',
-            script: 'specialEpisodePrefix.js',
-            css: null,
-            dependencies: ['utils'],
-            description: 'Removes the "Special - " prefix Jellyfin puts on the title of every season-zero episode, everywhere it appears. The prefix is localized, so the wording is learned once from the server rather than assumed.'
-        },
-        {
-            name: 'episodeSeasonTitle',
-            group: 'seriesSpecials',
-            script: 'episodeSeasonTitle.js',
-            css: null,
-            dependencies: ['utils', 'seriesSpecialsData'],
-            description: "Header logo that links up a level: episode to season, season to series. Shown under the thumbnail on ElegantFin episode pages."
         }
     ];
 

@@ -269,11 +269,6 @@
                     }
                 ],
                 colorSchemes: [],
-                // ElegantFin hides Jellyfin's own Tags line under the overview
-                // (.itemTags{display:none}), so Media Tags (scripts/mediaTags.js)
-                // adds a Tags row to the details table on this skin and no other.
-                // Default and Abyss show that line, and a row there would repeat it.
-                mediaTagsRow: true,
                 optionalIncludes: [
                     {
                         name: 'Media Bar Support',
@@ -325,9 +320,10 @@
                         enabled: false
                     },
                     {
-                        // Media Tags draws its row only on this skin (mediaTagsRow
-                        // above), so the switch to hide it again lives here, not in
-                        // the global list where it started.
+                        // Vault Tweaks' Media Tags draws its row only where the skin
+                        // hides Jellyfin's own Tags line, as this one does, so the
+                        // switch to hide it again lives here, not in the global list
+                        // where it started.
                         name: 'Hide Media Tags Row',
                         url: `${getKefinTweaksRoot()}skins/optional/ElegantFin/hideMediaTags.css`,
                         enabled: false

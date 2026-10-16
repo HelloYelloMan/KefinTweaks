@@ -1,61 +1,37 @@
-// KefinTweaks Virtual Specials Tweaks
+// KefinTweaks Virtual Special Breadcrumbs
 //
-// Fixes to the collection (BoxSet) detail page, sharing one fetch of the
-// collection's children. Written for the generated per-work specials
-// collections, but each is just as right on a hand-curated collection, and none
-// of them look at where the collection came from. A third, on a special's own
-// episode page, is described in its section.
+// The breadcrumbs of a virtual special and of the specials in one, added to
+// breadcrumbs.js's trails through its override hook
+// (window.KefinTweaksBreadcrumbOverrides). Each is its own switch in Item Page
+// Tweaks (tweakOn below).
 //
-//   1. STUDIOS. jellyfin-web's renderStudio opens with an unconditional early
-//      return for BoxSet and Playlist -- "the list of studios can be massive
-//      for collections of items" -- so the row is built, left empty, and
-//      hidden however few studios the collection has.
-//
-//   2. BREADCRUMBS, on the collection's page and on a special's episode page
-//      (its section says how).
-//
-// It also hides a one-item collection's count and Shuffle button.
-//
-// Every one of these is its own switch in Item Page Tweaks (tweakOn below).
-//
-// The "Special - " prefix used to be stripped here too, on collection pages, by
-// writing back each special's own Name. specialEpisodePrefix.js does it on every
-// page, so with both on this was a second pass over the same cards - and with
-// that switch off it kept the prefix gone on collection pages anyway. Removed
-// 2026-10-05; that switch alone decides now.
-//
-// There used to be an artwork fallback here, borrowing a backdrop and logo from
-// the first child, the matching AniDB series, the Specials season or the series
-// for collections that had neither. The pipeline now symlinks artwork into every
-// virtual special -- 325 of 325 had both on 2026-10-03 -- and the fallback only
-// ever filled a blank, so it could no longer fire and was removed.
+// The rest of what this script did on collection and special-episode pages
+// (the Studios row, the one-item collection marker, the Collections row
+// title) moved to Vault Tweaks with the other Item Page Tweaks on
+// 2026-10-15. These two stay here because they change KefinTweaks' own
+// breadcrumbs.
 
 (function () {
     'use strict';
 
-    const LOG = (...args) => console.log('[KefinTweaks VirtualSpecials]', ...args);
     const WARN = (...args) => console.warn('[KefinTweaks VirtualSpecials]', ...args);
 
-    // Each behaviour here is its own switch in the Item Page Tweaks settings
+    // Each breadcrumb is its own switch in the Item Page Tweaks settings
     // window (config.itemPageTweaks). Unset means on: that is what every
-    // install ran before the switches existed. With all of them off the window
-    // turns this script's own flag off, and the loader does not load it at all.
+    // install ran before the switches existed. With both off the window turns
+    // this script's own flag off, and the loader does not load it at all.
     function tweakOn(key) {
         const tweaks = window.KefinTweaksConfig && window.KefinTweaksConfig.itemPageTweaks;
         return !tweaks || tweaks[key] !== false;
     }
 
-    const POLL_INTERVAL_MS = 150;
-    const POLL_TIMEOUT_MS = 8000;
-    const SETTLE_MS = 220;
-
     // ======================================================================
     // Shared data
     // ======================================================================
 
-    // The page and its breadcrumb ask for the same item within a moment of each
-    // other, so one answer serves both. It is kept for seconds, not for the
-    // session, so a revisit still sees the collection as it is now.
+    // Asks for the same item within a few seconds share one answer. It is
+    // kept for seconds, not for the session, so a revisit still sees the
+    // collection as it is now.
     const SHARED_FETCH_MS = 10000;
 
     function sharedFetch(slot, id, fetch) {
@@ -69,11 +45,7 @@
 
     const lastChildren = {};
 
-    // Shared with Episode Logo through seriesSpecialsData.js; the local fetch is
-    // only a fallback should that script not have run.
     function fetchChildren(collectionId) {
-        const shared = window.KefinTweaksSeriesSpecialsData;
-        if (shared && shared.childrenOf) return shared.childrenOf(collectionId);
         return sharedFetch(lastChildren, collectionId, () =>
             ApiClient.getItems(ApiClient.getCurrentUserId(), { ParentId: collectionId })
                 .then(r => r.Items || [])
@@ -81,180 +53,7 @@
     }
 
     // ======================================================================
-    // The single-item marker
-    // ======================================================================
-
-    // THE SINGLE-ITEM MARKER, and the rules that read it: a collection of one
-    // still shows a "1 items" count and a Shuffle button that can only ever
-    // shuffle one thing, so both are hidden. Switch: singleItemCollection.
-    //
-    // The rules used to live in skins/optional/global/collectionSingleItem.css,
-    // switched separately in the skin settings, so the feature took two switches
-    // in two places and did nothing with either alone. They are injected here
-    // now, with the marker, under the one switch.
-    //
-    // The marker is taken from the child count rather than from `:only-child`
-    // in the DOM, which is authoritative and available before the row renders,
-    // so the row never appears and then vanishes. A page-level :has() could do
-    // it in CSS alone, but that is the selector shape elegantfin-haspatch.js
-    // exists to eliminate (style invalidation on every mutation under it).
-    //
-    // Every rule is scoped to the VISIBLE detail page: Jellyfin keeps the
-    // outgoing view in the DOM during a navigation, and the marker describes
-    // the visible one only. The "1 items" count is :first-child because
-    // mediainfo.js pushes a BoxSet's child count first. The Play button is left
-    // alone: for one item it still means "play this item".
-    const SINGLE_CLASS = 'kefin-collection-single';
-    const SINGLE_STYLE_ID = 'kefin-collection-single-style';
-
-    function setSingleItemMarker(isSingle) {
-        document.body.classList.toggle(SINGLE_CLASS, !!isSingle && tweakOn('singleItemCollection'));
-    }
-
-    function injectSingleItemStyle() {
-        if (!tweakOn('singleItemCollection') || document.getElementById(SINGLE_STYLE_ID)) return;
-        const style = document.createElement('style');
-        style.id = SINGLE_STYLE_ID;
-        style.textContent =
-            'body.' + SINGLE_CLASS + ' .itemDetailPage:not(.hide) .itemMiscInfo-primary > .mediaInfoItem:first-child { display: none; }\n'
-            + 'body.' + SINGLE_CLASS + ' .itemDetailPage:not(.hide) .btnShuffle { display: none; }';
-        (document.head || document.documentElement).appendChild(style);
-    }
-
-    // ======================================================================
-    // 1. Studios row
-    // ======================================================================
-
-    const STUDIOS_ATTR = 'data-kefin-studios';
-
-    function findLinkTemplate(page) {
-        const group = page.querySelector('.itemDetailsGroup');
-        if (!group) return null;
-        const rows = group.querySelectorAll('.detailsGroupItem:not(.studiosGroup)');
-        for (let i = 0; i < rows.length; i++) {
-            const a = rows[i].querySelector('.content a');
-            if (a) return a;
-        }
-        return null;
-    }
-
-    // Cloned, not written out: these anchors are is="emby-linkbutton" custom
-    // built-in elements, and setting that attribute on an anchor created
-    // afterwards does not upgrade it. Only a clone of an already-upgraded
-    // element carries both the behaviour and the skin's `.content > a` styling.
-    function buildStudioLink(template, studio, serverId) {
-        const href = '#/details?id=' + encodeURIComponent(studio.Id)
-            + '&serverId=' + encodeURIComponent(serverId);
-        let link;
-        if (template) {
-            link = template.cloneNode(true);
-        } else {
-            link = document.createElement('a');
-            link.className = 'button-link emby-button';
-            link.setAttribute('style', 'color:inherit;');
-        }
-        link.setAttribute('href', href);
-        link.textContent = studio.Name;
-        return link;
-    }
-
-    // Jellyfin 12 renders the metadata rows with React: .itemDetailsGroup holds
-    // one wrapper div per type, always in the order Author, Creator, Director,
-    // Writer, Studio, Genre, each `.detailsGroupItem > p.label +
-    // .focuscontainer-x > span > a.button-link` or empty when the item has none.
-    // Studios render nothing at all for a BoxSet, so there is no row to fill.
-    // Our row goes in its own wrapper after the Studio slot; the React roots
-    // themselves are left alone.
-    const V12_STUDIO_SLOT = 4;
-
-    function injectStudiosV12(group, item) {
-        group.querySelectorAll(':scope > [' + STUDIOS_ATTR + ']').forEach(el => el.remove());
-
-        const studios = ((item && item.Studios) || []).filter(studio => studio && studio.Id);
-        if (!studios.length) return;
-
-        const serverId = item.ServerId
-            || (window.ApiClient && ApiClient.serverId && ApiClient.serverId());
-        const template = group.querySelector('.detailsGroupItem .focuscontainer-x a');
-        const sampleRow = group.querySelector('.detailsGroupItem');
-
-        let row;
-        let label;
-        let content;
-        if (sampleRow) {
-            // A clone keeps the MUI and skin classes the other rows carry.
-            row = sampleRow.cloneNode(true);
-            label = row.querySelector('.label');
-            content = row.querySelector('.focuscontainer-x');
-        }
-        if (!row || !label || !content) {
-            row = document.createElement('div');
-            row.className = 'detailsGroupItem';
-            label = document.createElement('p');
-            label.className = 'label';
-            content = document.createElement('div');
-            content.className = 'focuscontainer-x';
-            row.append(label, content);
-        }
-
-        content.innerHTML = '';
-        studios.forEach((studio, i) => {
-            const span = document.createElement('span');
-            if (i > 0) span.appendChild(document.createTextNode(', '));
-            span.appendChild(buildStudioLink(template, studio, serverId));
-            content.appendChild(span);
-        });
-        label.textContent = studios.length > 1 ? 'Studios' : 'Studio';
-
-        const wrapper = document.createElement('div');
-        wrapper.setAttribute(STUDIOS_ATTR, '1');
-        wrapper.appendChild(row);
-        const slot = group.children[V12_STUDIO_SLOT];
-        group.insertBefore(wrapper, slot ? slot.nextSibling : null);
-    }
-
-    function injectStudios(page, item) {
-        const groupEl = page.querySelector('.studiosGroup');
-        if (!groupEl) {
-            const group = page.querySelector('.itemDetailsGroup');
-            if (group && !group.querySelector('.content')) injectStudiosV12(group, item);
-            return;
-        }
-
-        const studios = (item && item.Studios) || [];
-        const label = groupEl.querySelector('.studiosLabel');
-        const content = groupEl.querySelector('.studios');
-        if (!content) return;
-
-        if (!studios.length) {
-            // Leave the row as jellyfin-web left it, and undo a previous item's
-            // injection if this page element is being reused.
-            if (groupEl.getAttribute(STUDIOS_ATTR)) {
-                content.innerHTML = '';
-                groupEl.classList.add('hide');
-                groupEl.removeAttribute(STUDIOS_ATTR);
-            }
-            return;
-        }
-
-        const serverId = item.ServerId
-            || (window.ApiClient && ApiClient.serverId && ApiClient.serverId());
-        const template = findLinkTemplate(page);
-
-        content.innerHTML = '';
-        studios.forEach((studio, i) => {
-            if (!studio || !studio.Id) return;
-            if (i > 0) content.appendChild(document.createTextNode(', '));
-            content.appendChild(buildStudioLink(template, studio, serverId));
-        });
-
-        if (label) label.textContent = studios.length > 1 ? 'Studios' : 'Studio';
-        groupEl.classList.remove('hide');
-        groupEl.setAttribute(STUDIOS_ATTR, '1');
-    }
-
-    // ======================================================================
-    // 2. Breadcrumbs, and a special's episode page
+    // Breadcrumbs
     // ======================================================================
     //
     // A virtual special sits between a series and its specials, and the
@@ -269,18 +68,10 @@
     // specials keeps the season's name on its crumb and opens a list of them;
     // a virtual special whose episodes come from several series opens a list
     // of those. With none, the trail is left as breadcrumbs.js built it.
-    //
-    // The episode's collections also size the title of jellyfin-web's
-    // collections row, which is plural however many cards it holds.
 
     const lastCollections = {};
 
-    // The answer is shared with Episode Title and Episode Logo through
-    // seriesSpecialsData.js, a dependency, so the page makes one request for all
-    // three. The local fetch is only a fallback should that script be missing.
     function collectionsOf(itemId) {
-        const shared = window.KefinTweaksSeriesSpecialsData;
-        if (shared) return shared.collectionsOf(itemId);
         return sharedFetch(lastCollections, itemId, () =>
             ApiClient.getJSON(ApiClient.getUrl(`Items/${itemId}/Collections`, {
                 userId: ApiClient.getCurrentUserId(),
@@ -375,214 +166,4 @@
 
     (window.KefinTweaksBreadcrumbOverrides = window.KefinTweaksBreadcrumbOverrides || [])
         .push(virtualSpecialBreadcrumbs, specialsBreadcrumbs);
-
-    const TITLE_ATTR = 'data-kefin-original-title';
-
-    // null puts back what jellyfin-web wrote, for a page element being reused.
-    function setCollectionsTitle(page, text) {
-        const title = page.querySelector('#collectionsCollapsible .sectionTitle');
-        if (!title) return;
-        if (text == null) {
-            if (title.hasAttribute(TITLE_ATTR)) {
-                title.textContent = title.getAttribute(TITLE_ATTR);
-                title.removeAttribute(TITLE_ATTR);
-            }
-            return;
-        }
-        if (!title.hasAttribute(TITLE_ATTR)) title.setAttribute(TITLE_ATTR, title.textContent);
-        title.textContent = text;
-    }
-
-    // ======================================================================
-    // Observers
-    // ======================================================================
-    //
-    // Two, because the two targets settle on different schedules: the metadata
-    // table re-renders in passes and can wipe the studios row, and the items row
-    // re-renders on lazy load and on a sort applied by collections.js. Both are
-    // bounded so nothing observes for the life of the page, and both re-apply
-    // with the observer disconnected so our own writes cannot re-trigger them.
-
-    function makeBoundedObserver(target, apply, lifetimeMs) {
-        let observer = null;
-        let settleTimer = null;
-        let stopTimer = null;
-
-        const stop = () => {
-            if (observer) { observer.disconnect(); observer = null; }
-            if (settleTimer) { clearTimeout(settleTimer); settleTimer = null; }
-            if (stopTimer) { clearTimeout(stopTimer); stopTimer = null; }
-        };
-        const run = () => {
-            if (observer) observer.disconnect();
-            apply();
-            if (observer && target.isConnected) {
-                observer.observe(target, { childList: true, subtree: true });
-            }
-        };
-
-        observer = new MutationObserver(() => {
-            if (settleTimer) clearTimeout(settleTimer);
-            settleTimer = setTimeout(run, SETTLE_MS);
-        });
-        observer.observe(target, { childList: true, subtree: true });
-        run();
-        stopTimer = setTimeout(stop, lifetimeMs);
-        return stop;
-    }
-
-    // Every async continuation below outlives the navigation that started it, and
-    // several of them write to elements shared across views -- .backdropContainer
-    // and .backgroundContainer are body-level, and the waitFor() polls query the
-    // document rather than a page. Navigate from one collection to another
-    // quickly and the first page's fetches land after the second has rendered,
-    // painting it with the wrong show's backdrop. So each view takes a token,
-    // stopAll() invalidates it, and nothing touches the DOM once it is stale.
-    let viewToken = 0;
-
-    let teardown = [];
-    // The page and item the handler last set up, to skip repeat notifications.
-    let applied = { page: null, itemId: null };
-
-    function stopAll() {
-        viewToken++;
-        setSingleItemMarker(false);
-        teardown.forEach(fn => { try { fn(); } catch (e) { /* already stopped */ } });
-        teardown = [];
-    }
-
-    // Scoped to the page: jellyfin-web keeps up to three views cached, and an
-    // older collection page can come first in the document.
-    function waitFor(root, selector, startedAt) {
-        return new Promise(resolve => {
-            const tick = () => {
-                const el = root.querySelector(selector);
-                if (el) { resolve(el); return; }
-                if (Date.now() - startedAt >= POLL_TIMEOUT_MS) { resolve(null); return; }
-                setTimeout(tick, POLL_INTERVAL_MS);
-            };
-            tick();
-        });
-    }
-
-    // ======================================================================
-    // View hook
-    // ======================================================================
-
-    function initializeHook() {
-        if (!window.KefinTweaksUtils || !window.KefinTweaksUtils.onViewPage) {
-            WARN('KefinTweaksUtils.onViewPage not available, retrying in 1 second');
-            setTimeout(initializeHook, 1000);
-            return;
-        }
-
-        window.KefinTweaksUtils.onViewPage(
-            async (view, element, hash, itemPromise, previousHash) => {
-                if (ApiClient._loggedIn === false) return;
-
-                let item;
-                try { item = await itemPromise; } catch (e) { return; }
-                // A slow item fetch can resolve after the next page's handler has
-                // started; stopAll() here would cancel that page's work. Judged by
-                // the URL, which names the item this call is for.
-                if (!item || !item.Id || !window.location.hash.includes(item.Id)) return;
-
-                // The page is looked up only now, not before the await. Going from
-                // one item page to another, this handler is called from the
-                // History API as the URL changes -- before jellyfin-web has
-                // swapped the views -- so the visible page at that moment is the
-                // OUTGOING one, hidden by the time the item arrives. Checking that
-                // page made the handler give up, and the second notification, from
-                // the view show, was suppressed (this used triggerOnSameHash: false)
-                // because the hash had not changed since. Seen in the app opening a
-                // collection from a series page's Collections row: no marker, so
-                // the count and Shuffle of a one-item collection stayed visible.
-                const page = document.querySelector('.itemDetailPage:not(.hide)')
-                    || document.querySelector('.libraryPage:not(.hide)');
-                if (!page) return;
-
-                // Registered with triggerOnSameHash: true, so one navigation can
-                // call this two or three times (History API, then view show). With
-                // false, utils drops every call whose URL equals the last one it
-                // reported - and when this script loads after Jellyfin has already
-                // reported the page, that drops the immediate call on registration
-                // AND the view show, so a refresh sometimes did nothing at all. A
-                // repeat for the same navigation (previousHash === hash) is skipped
-                // once this page is set up for this item: stopAll() would cancel
-                // work already under way and briefly clear the marker and title. A
-                // later return to the same item has a different previousHash and
-                // runs again, as Jellyfin re-renders the page then.
-                if (previousHash === hash && applied.page === page && applied.itemId === item.Id) return;
-                applied = { page, itemId: item.Id };
-
-                stopAll();
-                setCollectionsTitle(page, null);
-
-                if (isSpecialEpisode(item)) {
-                    if (!tweakOn('specialCollectionsRowTitle')) return;
-                    const token = viewToken;
-                    collectionsOf(item.Id).then(collections => {
-                        if (token !== viewToken || page.classList.contains('hide')) return;
-                        if (collections.length === 1) setCollectionsTitle(page, 'Collection');
-                    });
-                    return;
-                }
-
-                if (!item || item.Type !== 'BoxSet' || !item.Id) return;
-
-                // The single-item marker, from the count the item already carries.
-                // It used to wait for the children fetch below, and stopAll() above
-                // clears it on every details view event -- jellyfin-web can fire
-                // more than one for a single navigation -- so the count and the
-                // Shuffle button showed until that request came back, or for good
-                // when a later event cleared it. Set here, in the same task as the
-                // clear, there is no gap. The children fetch still confirms it.
-                if (typeof item.ChildCount === 'number') setSingleItemMarker(item.ChildCount === 1);
-
-                const token = viewToken;
-                // stopAll() only runs when another details page opens, so leaving
-                // for Home or a library must also count.
-                const alive = () => token === viewToken
-                    && page.isConnected && !page.classList.contains('hide');
-
-                // One fetch, two consumers.
-                const children = await fetchChildren(item.Id);
-                if (!alive()) return;
-
-                if (children.length) setSingleItemMarker(children.length === 1);
-
-                // --- studios -------------------------------------------------
-                if (tweakOn('collectionStudios')) waitFor(page, '.itemDetailsGroup', Date.now()).then(group => {
-                    if (!group || !alive()) return;
-                    teardown.push(makeBoundedObserver(
-                        group, () => injectStudios(page, item), POLL_TIMEOUT_MS));
-                });
-
-            },
-            {
-                pages: ['details'],
-                triggerOnSameHash: true
-            }
-        );
-
-        LOG('Virtual specials hook initialized');
-    }
-
-    function initialize(attempt = 0) {
-        if (typeof ApiClient === 'undefined' || !window.KefinTweaksUtils) {
-            if (attempt < 40) { setTimeout(() => initialize(attempt + 1), 250); return; }
-            WARN('Dependencies not available, giving up');
-            return;
-        }
-        injectSingleItemStyle();
-        initializeHook();
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => initialize());
-    } else {
-        initialize();
-    }
-
-    LOG('Script loaded');
 })();

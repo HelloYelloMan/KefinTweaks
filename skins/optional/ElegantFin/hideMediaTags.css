@@ -1,8 +1,8 @@
 /* KefinTweaks — Hide Media Tags Row (ElegantFin add-on)
  *
- * Companion toggle for the mediaTags feature (scripts/mediaTags.js), which injects
- * a "Tags" row into the item-details metadata table with the class .kefin-tags-row.
- * The feature adds that row only on ElegantFin (mediaTagsRow in skinConfig.js),
+ * Companion toggle for Vault Tweaks' Media Tags, which injects a "Tags" row into
+ * the item-details metadata table with the class .kefin-tags-row. It adds that
+ * row only where the skin hides Jellyfin's own Tags line, as ElegantFin does,
  * which is why this include is offered under ElegantFin only.
  * Enabling it hides the injected row again — a pure CSS visibility override, so it
  * fits the skin-option mechanism (which only loads stylesheets) without needing to
