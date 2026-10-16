@@ -243,7 +243,6 @@
         // Grouped at the end so an upstream merge lands their additions above
         // this line and ours below it, rather than interleaved.
         // ================================================================
-        castSessionWatchdog: true, // Re-subscribe the Sessions feed when a stale now playing bar shows a dead cast target
         elegantfinHaspatch: true, // ElegantFin :has() hotfix marker classes (needs the local ElegantFin build)
         seriesSpecials: true,     // Item Page Tweaks group (see scripts/kefinTweaks-loader.js)
         seriesSpecialsData: true, // Item Page Tweaks: shared virtual-special lookup (a dependency, no switch in the window)
@@ -254,12 +253,8 @@
         mediaTags: true,          // Add a Tags row to the item-details metadata table
         specialEpisodePrefix: true, // Drop the "Special - " prefix from season-zero episode titles
         posterAspect: false,   // Size poster cards to their own aspect ratio; CSS-sized from a ratio class, height measured before the cards exist
-        osdLogo: true,            // Media logo/ClearArt on the video OSD
-        pauseScreen: true,        // Rich pause screen overlay (logo, plot, artwork, progress)
-        themeMediaCastFix: true,  // Theme media playback while a remote/cast target is connected
         virtualSpecials: true,    // Collection pages: Studios row, no "Special - " prefix, breadcrumbs
         collectionSectionRows: true, // Collection pages: sections as rows, like the flat season row
-        crtShader: true,          // CRT toggle on the video OSD: the mpv retro chain in WebGL2 (off until clicked)
         help: true,               // Help & Tips page (pages/help.html) at #/help, from a user menu entry
 
         // Note: Core functionality scripts (utils, cardBuilder, localStorageCache, modal) 
@@ -786,13 +781,6 @@
             description: 'Adds a Help & Tips entry to the user menu, opening a page that explains the features this server adds'
         },
         {
-            name: 'crtShader',
-            script: 'crtShader.js',
-            css: null,
-            dependencies: ['utils', 'toaster'],
-            description: "Adds a CRT button to the video OSD. When on, the playing video runs through the mpv retro CRT chain itself (scripts/crt/: retro.conf profiles and the .glsl files, translated to GLSL ES by tools/build-crt-shaders.mjs) in WebGL2, one field per 59.94 Hz locked to the refresh rate. Per browser; web player only."
-        },
-        {
             name: 'collectionSectionRows',
             group: 'seriesSpecials',
             script: 'collectionSectionRows.js',
@@ -876,34 +864,6 @@
             css: null,
             dependencies: ['utils', 'seriesSpecialsData'],
             description: "Header logo that links up a level: episode to season, season to series. Shown under the thumbnail on ElegantFin episode pages."
-        },
-        {
-            name: 'themeMediaCastFix',
-            script: 'themeMediaCastFix.js',
-            css: null,
-            dependencies: [],
-            description: 'Restores theme song/video playback in the web client while a remote/cast player (e.g. mpv-shim) is the selected target.'
-        },
-        {
-            name: 'castSessionWatchdog',
-            script: 'castSessionWatchdog.js',
-            css: null,
-            dependencies: [],
-            description: 'Re-subscribes the Sessions WebSocket feed when it goes silent while the now playing bar is up, so a cast target that stopped playing cannot leave a frozen seek bar on screen.'
-        },
-        {
-            name: 'pauseScreen',
-            script: 'pauseScreen.js',
-            css: null,
-            dependencies: [],
-            description: 'Shows a rich overlay (logo, plot, details, disc/clear art, progress) when playback is paused for a few seconds. Supports the HTML5 player and external players (mpv-shim etc.).'
-        },
-        {
-            name: 'osdLogo',
-            script: 'osdLogo.js',
-            css: null,
-            dependencies: [],
-            description: 'Shows the media\'s logo (or ClearArt) on the video OSD while playback controls are visible, with optional transparency trimming and OSD shadows.'
         }
     ];
 

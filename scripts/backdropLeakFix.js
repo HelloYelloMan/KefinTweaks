@@ -21,7 +21,7 @@
         const pruneObserver = new MutationObserver(() => {
             LOG('Mutation detected, checking children count:', container.children.length);
             // Only count/remove Jellyfin's own backdrop children — never other
-            // scripts' mounts (e.g. themeMediaCastFix's video container).
+            // scripts' mounts (e.g. Vault Tweaks' Theme Media video container).
             const prunable = () => Array.from(container.children)
                 .filter((c) => !c.classList.contains('kefin-theme-video-container'));
             let victims = prunable();
