@@ -2401,7 +2401,14 @@
         const found = new Set();
         itemIdDomVariants(itemId).forEach((variant) => {
             const escapedId = escapeCssIdentForCardSync(variant);
-            document.querySelectorAll(`.card[data-id="${escapedId}"]:not(.skeleton-card)`).forEach((card) => {
+            // FORK: only cards this builder made (data-kefin-card). Upstream took
+            // every card in the document with the id, and rebuilt jellyfin-web's
+            // own cards, React library cards and Vault Tweaks' (its Specials
+            // row) as KefinTweaks cards on each LibraryChanged that named the
+            // item -- which the pipeline's runs send often -- losing what those
+            // carry; jellyfin-web's cards always looked changed to it, their
+            // lazy loader having dropped data-src.
+            document.querySelectorAll(`.card[data-kefin-card][data-id="${escapedId}"]:not(.skeleton-card)`).forEach((card) => {
                 found.add(card);
             });
         });
@@ -4288,6 +4295,9 @@
         // Create the main card container
         const card = document.createElement('div');
         card.className = `card ${cardClass}${mobileLayout ? '' : ' card-hoverable'} card-withuserdata`;
+        // FORK: marks a card as built here, for the in-place refresh
+        // (findVisibleCardsForItemId), which may replace only these.
+        card.setAttribute('data-kefin-card', '');
         card.setAttribute('data-index', '0');
         card.setAttribute('data-isfolder', itemType === 'MusicAlbum' || itemType === 'Artist' || item.IsFolder ? 'true' : 'false');
         card.setAttribute('data-serverid', serverId);
