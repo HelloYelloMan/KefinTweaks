@@ -4,7 +4,7 @@
  * only with Default, from the skin's own urls list in scripts/skinConfig.js.
  * Default used to load no CSS of its own, so Default-only rules went in
  * scripts/defaultSkin.css, which loads for every skin and must scope each rule
- * to html[data-kefin-skin="Default"]. That marker arrives with skinManager,
+ * to html[data-kefin-skin="Jellyfin Default"]. That marker arrives with skinManager,
  * after Poster Aspect may already have measured; a skin sheet is something
  * Poster Aspect waits for (skinReady), so sizing rules belong here.
  */

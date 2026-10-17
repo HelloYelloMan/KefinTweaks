@@ -19,6 +19,15 @@
     const STORAGE_KEY = 'kefinTweaks_selectedSkin';
     const THEME_STORAGE_KEY = 'kefinTweaks_selectedTheme';
     const COLOR_SCHEMES_STORAGE_KEY = 'kefinTweaks_selectedColorScheme';
+
+    // FORK: upstream renamed the 'Default' skin 'Jellyfin Default' (fbdd0aa)
+    // and left saved choices behind: a browser that picked Default kept
+    // 'Default', which no longer names a skin, and fell back to the admin's
+    // default skin. Renamed here before anything reads it.
+    const DEFAULT_SKIN_NAME = 'Jellyfin Default';
+    try {
+        if (localStorage.getItem(STORAGE_KEY) === 'Default') localStorage.setItem(STORAGE_KEY, DEFAULT_SKIN_NAME);
+    } catch (e) { /* storage blocked */ }
     
     // Cached server version for synchronous access — prefer window.KefinTweaks
     let cachedServerVersion = null;
@@ -499,7 +508,7 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
         if (SKINS_CONFIG.length === 0) {
             SKINS_CONFIG = [
                 {
-                    name: 'Default',
+                    name: DEFAULT_SKIN_NAME,
                     url: null
                 }
             ];
@@ -579,7 +588,7 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
     function getSelectedSkinName() {
         let stored = null;
         try { stored = localStorage.getItem(STORAGE_KEY); } catch (e) { /* storage blocked */ }
-        return stored || window.KefinTweaksConfig?.defaultSkin || 'Default';
+        return stored || window.KefinTweaksConfig?.defaultSkin || DEFAULT_SKIN_NAME;
     }
 
     // Expose helper functions globally
@@ -2814,8 +2823,8 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
             return configDefaultSkin;
         }
         
-        // Fall back to 'Default' if no configuration is specified
-        return 'Default';
+        // Fall back to Jellyfin Default if no configuration is specified
+        return DEFAULT_SKIN_NAME;
     }
     
     /**

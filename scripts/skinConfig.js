@@ -239,7 +239,7 @@
         // Each skin should have an author field indicating who created the skin
         skins: [
             {
-                name: 'Default',
+                name: 'Jellyfin Default',
                 author: 'Jellyfin',
                 // Jellyfin's own theme plus our companion sheet, which carries
                 // the rules that must apply before Poster Aspect measures.
