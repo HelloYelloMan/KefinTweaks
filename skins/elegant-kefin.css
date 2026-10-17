@@ -230,6 +230,15 @@ html.vt-sg-outer .cardScalable.vt-sg-frame > .cardOverlayContainer {
 	overflow: visible;
 }
 
+/* ElegantFin's hover zooms the picture inside the card's box (scale 1.025)
+ * and the box clips it there (overflow: hidden !important on every
+ * .cardScalable): on a blurred card that cut the picture's soft edge off
+ * square, wherever the box's edge fell in it. A blurred card's box clips
+ * nothing; the zoom keeps its soft edge whole, a little past the box. */
+.card .cardBox .cardScalable.vt-sg-frame {
+	overflow: visible !important;
+}
+
 .cardScalable.vt-sg-frame > .cardOverlayContainer::before {
 	content: "";
 	position: absolute;
