@@ -6,76 +6,79 @@
 // Gated to dashboard routes: the old version ran a document.body observer on
 // every page for the whole session just to catch the dashboard mounting — and
 // disconnected permanently after the first attach, so a recreated button on a
-// later dashboard visit never got the handler. Now the observer only runs
-// while the hash is a dashboard route, re-arms on every dashboard entry
-// (dashboard subpages are hash changes too, which also covers React
-// recreating the button), and stands down entirely everywhere else.
+// later dashboard visit never got the handler. Upstream's onViewPage arming now
+// does the re-arm on every dashboard entry; the direct-load run below keeps the
+// route check so a MUI button on some other page is never given the redirect.
 
 (function () {
-    let observer = null;
+    'use strict';
 
     function isDashboardRoute() {
-        return (window.location.hash || '').toLowerCase().includes('dashboard');
+        const hash = (window.location.hash || '').toLowerCase();
+        return hash.includes('dashboard') || hash.includes('configurationpage');
     }
 
-    function tryAttach() {
-        const btn = document.querySelector('button.MuiButtonBase-root');
+    function attachHandler(btn) {
+        // No button yet is "not attached": returning true here would tell
+        // armForDashboard there is nothing to wait for.
         if (!btn) return false;
-
         if (btn._backCheckAttached) return true;
         btn._backCheckAttached = true;
 
         btn.addEventListener('click', function (e) {
             if (window.history.state?.idx === 0) {
-                // Stop normal handlers
                 e.stopImmediatePropagation();
                 e.preventDefault();
 
-                console.log("[KefinTweaks DashboardButtonFix]: No history to go back. Redirecting to home page.");
+                console.log('[KefinTweaks DashboardButtonFix]: No history to go back. Redirecting to home page.');
 
-                // Changes this to the page you'd like to return to by default
                 // Jellyfin 12 is '12.x', so the minor part alone no longer tells us.
                 const [majorPart, minorPart] = String(ApiClient.serverVersion()).split('.').map(Number);
                 const homeUrl = majorPart > 10 || minorPart > 10 ? 'home' : 'home.html';
                 Dashboard.navigate(`/${homeUrl}`);
             }
         }, true);
-
         return true;
     }
 
-    function deactivate() {
-        if (observer) {
-            observer.disconnect();
-            observer = null;
-        }
+    function tryAttach() {
+        const btn = document.querySelector('button.MuiButtonBase-root');
+        return attachHandler(btn);
     }
 
-    function activate() {
-        if (!isDashboardRoute()) {
-            deactivate();
-            return;
-        }
+    function armForDashboard() {
+        if (tryAttach()) return;
 
-        if (tryAttach()) {
-            // Button present and handled; no need to keep observing until the
-            // next hash change re-runs activate().
-            deactivate();
-            return;
-        }
-
-        // Dashboard route but the MUI app hasn't mounted the button yet — watch
-        // for it, scoped to this visit only.
-        if (!observer) {
-            observer = new MutationObserver(() => {
-                if (tryAttach()) deactivate();
+        const utils = window.KefinTweaksUtils;
+        if (utils?.waitForElement) {
+            utils.waitForElement('button.MuiButtonBase-root', {
+                timeout: 15000,
+                quiet: true,
+                predicate: (el) => !el._backCheckAttached
+            }).then((btn) => {
+                if (btn) attachHandler(btn);
             });
-            observer.observe(document.body, { childList: true, subtree: true });
+            return;
         }
+        if (utils?.pollUntil) {
+            utils.pollUntil(() => (tryAttach() ? true : null), { intervalMs: 200, timeoutMs: 15000 });
+            return;
+        }
+        setTimeout(armForDashboard, 500);
     }
 
-    window.addEventListener('hashchange', activate);
+    function start() {
+        const utils = window.KefinTweaksUtils;
+        if (!utils?.onViewPage) {
+            setTimeout(start, 500);
+            return;
+        }
+        utils.onViewPage(() => {
+            armForDashboard();
+        }, { pages: ['dashboard', 'configurationpage'] });
+        // Also try immediately (direct load), but only on a dashboard route.
+        if (isDashboardRoute()) armForDashboard();
+    }
 
-    // Initial run
-    activate();
+    start();
 })();

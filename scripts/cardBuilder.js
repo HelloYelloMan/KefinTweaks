@@ -21,6 +21,21 @@
     // Developers can set this to false to disable the behavior.
     const FADE_IN_SECTIONS = true;
 
+    // Detect flex gap after DOM is ready (JMP/Qt often lacks flex gap).
+    // ensureNoFlexGapClass is a function declaration (hoisted in this IIFE).
+    function scheduleFlexGapDetect() {
+        if (!document.body) {
+            document.addEventListener('DOMContentLoaded', () => ensureNoFlexGapClass(), { once: true });
+            return;
+        }
+        ensureNoFlexGapClass();
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => ensureNoFlexGapClass(), { once: true });
+    } else {
+        scheduleFlexGapDetect();
+    }
+
     // Sliding window: render current slide + 4 prev + 4 next (9 total). As user navigates, remove/add slides.
     const SPOTLIGHT_WINDOW_PREV = 4;
     const SPOTLIGHT_WINDOW_NEXT = 4;
@@ -432,7 +447,7 @@
         } else {
             sectionEl.style.removeProperty('--wood-vert-img');
         }
-        const cards = sectionEl.querySelectorAll('.card:not(.card-layout-dummy) .cardScalable');
+        const cards = sectionEl.querySelectorAll('.card .cardScalable');
         cards.forEach((scalable) => {
             let host = scalable.querySelector(':scope > .cardBorder');
             if (!style) {
@@ -476,9 +491,7 @@
     function getCardRadius() {
         if (cachedCardRadius != null) return cachedCardRadius;
 
-        const candidates = document.querySelectorAll(
-            '.card:not(.card-layout-dummy) .cardScalable, .card:not(.card-layout-dummy) .cardContent, .card:not(.card-layout-dummy)',
-        );
+        const candidates = document.querySelectorAll('.card .cardScalable, .card .cardContent, .card');
         let sample = null;
         for (const el of candidates) {
             if (!sectionHasSquareCardBorder(el)) {
@@ -718,6 +731,7 @@
         const maxPosition = getMaxPositionFromPadding(scroller, readScrollerPadding(scroller), readSampleCardPadding(scroller));
         leftButton.disabled = pos <= 20;
         rightButton.disabled = pos >= maxPosition;
+        scrollButtons.classList.toggle('hide', leftButton.disabled && rightButton.disabled);
     }
 
     /**
@@ -780,6 +794,32 @@
         return formats[Math.floor(Math.random() * formats.length)];
     }
 
+    /**
+     * Map section cardFormat / data-card-format to JF grid column shape.
+     * Used for CSS grid column tables (no data-grid-shape attribute).
+     * @param {string|null|undefined} cardFormat
+     * @returns {'portrait'|'square'|'backdrop'|'banner'}
+     */
+    function resolveGridShape(cardFormat) {
+        const f = String(cardFormat || '')
+            .trim()
+            .toLowerCase();
+        if (f === 'banner') return 'banner';
+        if (f === 'square' || f === 'sqaure' || f === 'disc') return 'square';
+        if (
+            f === 'backdrop' ||
+            f === 'thumb' ||
+            f === 'series thumb' ||
+            f === 'logo' ||
+            f === 'clear art' ||
+            f === 'button'
+        ) {
+            return 'backdrop';
+        }
+        // Poster, Series Poster, portrait, Random-resolved concrete formats, default
+        return 'portrait';
+    }
+
     function sectionHasRandomQuerySort(sectionConfig) {
         // Treat as random if any query has an undefined/null/non-existent SortBy without a path
         if (String(sectionConfig?.sortBy || '').toLowerCase() === 'random') {
@@ -795,21 +835,23 @@
     function flattenSeriesEpisodes(items) {
         if (!items || items.length === 0) return items;
 
-        // Keep only the first item in the array for any given series
-        const seriesMap = new Map();
-        items.forEach((item) => {
-            if (item.Type !== 'Episode') {
-                return;
+        const seenSeries = new Set();
+        const result = [];
+
+        for (const item of items) {
+            if (item.Type === 'Episode') {
+                // Only keep the first episode seen for a given SeriesId
+                if (item.SeriesId && !seenSeries.has(item.SeriesId)) {
+                    seenSeries.add(item.SeriesId);
+                    result.push(item);
+                }
+            } else {
+                // Keep non-Episode items as-is, in order
+                result.push(item);
             }
+        }
 
-            if (seriesMap.has(item.SeriesId)) {
-                return;
-            }
-
-            seriesMap.set(item.SeriesId, item);
-        });
-
-        return Array.from(seriesMap.values());
+        return result;
     }
 
     function formatAirDate(premiereDate) {
@@ -1058,13 +1100,13 @@
          * after the finale). IndexNumber restarts at 1 for season 0, so sorting
          * on it collapses that placement: special 1 beside episode 1, and so on.
          *
-         * This was the second copy of that sort. seriesEpisodes.js's own
-         * postProcessEpisodes had it too and was fixed there, but only the first
-         * render goes through that function -- the refresh button and the
-         * generic load paths come through here. So the row looked right on load
-         * and scrambled the moment it was refreshed. Measured on Neon Genesis
-         * Evangelion: the server returns E1-E24, Death, Rebirth, E25, E26, then
-         * the films, because Death and Rebirth are marked airs-before S1E25.
+         * Every render of the row comes through here: first draw, the refresh
+         * button and the season picker alike (seriesEpisodes.js no longer has a
+         * postProcessEpisodes of its own). Upstream still sorts this type here,
+         * so this omission is the only thing keeping the server's placement.
+         * Measured on Neon Genesis Evangelion: the server returns E1-E24, Death,
+         * Rebirth, E25, E26, then the films, because Death and Rebirth are
+         * marked airs-before S1E25.
          */
 
         /*         if (sectionConfig.id === 'popularTVNetworks') {
@@ -1167,9 +1209,7 @@
         // that, and distinct episodes legitimately share provider ids. Neon
         // Genesis Evangelion's specials "Death" and "Rebirth" are separate items
         // (AniDB 4001 and 7178) that IMDb and TVDB both list as the one combined
-        // film -- tt0169880, 357967 -- so this dropped Rebirth every time the row
-        // was refreshed, while the first render (which never comes through here)
-        // showed both.
+        // film -- tt0169880, 357967 -- so this dropped Rebirth from the row.
         if (sectionConfig.type !== 'series-episodes') {
             processed = deduplicateItems(processed);
         }
@@ -1428,15 +1468,40 @@
         const resolveFreshItems = async () => {
             if (results.length > 1) {
                 const merged = ApiHelper.mergeMultiQueryResults(results, sectionConfig);
+                // Kick SWR so _refreshPromise is attached when cache is stale
                 const raw =
                     typeof merged.result?.ensureData === 'function'
                         ? await merged.result.ensureData()
                         : await (merged.result?.dataPromise ?? merged.result?.data);
+
+                const hasRefresh = results.some((r) => r && r._refreshPromise);
+                if (hasRefresh) {
+                    const allData = await Promise.all(
+                        results.map((r) => r._refreshPromise || Promise.resolve(r.data)),
+                    );
+                    const itemsByFreshQuery = [];
+                    allData.forEach((data) => {
+                        if (data?.Items) itemsByFreshQuery.push(data.Items);
+                        else if (Array.isArray(data)) itemsByFreshQuery.push(data);
+                    });
+                    return postProcessItemsByQuery(sectionConfig, itemsByFreshQuery);
+                }
+
                 return extractItemsFromQueryPayload(raw);
             }
             if (results.length === 1) {
                 const qr = results[0];
-                const raw = typeof qr.ensureData === 'function' ? await qr.ensureData() : await (qr.dataPromise ?? qr.data);
+                // Kick SWR so _refreshPromise is attached when cache is stale
+                const raw =
+                    typeof qr.ensureData === 'function'
+                        ? await qr.ensureData()
+                        : await (qr.dataPromise ?? qr.data);
+
+                if (qr._refreshPromise) {
+                    const fresh = await qr._refreshPromise;
+                    return postProcessItems(sectionConfig, extractItemsFromQueryPayload(fresh));
+                }
+
                 return postProcessItems(sectionConfig, extractItemsFromQueryPayload(raw));
             }
             return [];
@@ -1547,6 +1612,36 @@
     }
 
     /**
+     * Toggle data-refreshing (drives refresh-button spin CSS). Manual refresh only —
+     * do not set true during enhance / stale revalidate / multi-query switch.
+     * @param {HTMLElement|null|undefined} el
+     * @param {boolean} refreshing
+     */
+    function setSectionRefreshing(el, refreshing) {
+        if (!el?.dataset) return;
+        el.dataset.refreshing = refreshing ? 'true' : 'false';
+    }
+
+    /**
+     * Paper-icon button with Material Icon on a child span (native Jellyfin pattern).
+     * Keep material-icons off the button — paper-icon-button-light sets font-family: inherit.
+     */
+    function createPaperIconButton({ className = '', icon = '', title = '', ariaLabel = '', showFocus = false } = {}) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `${className} paper-icon-button-light`.trim();
+        if (showFocus) button.classList.add('show-focus');
+        if (title) button.title = title;
+        if (ariaLabel || title) button.setAttribute('aria-label', ariaLabel || title);
+
+        const iconSpan = document.createElement('span');
+        iconSpan.className = `material-icons ${icon}`.trim();
+        iconSpan.setAttribute('aria-hidden', 'true');
+        button.appendChild(iconSpan);
+        return button;
+    }
+
+    /**
      * Show checkmark icon temporarily, then revert to refresh icon
      * @param {HTMLElement} button - The refresh button element
      */
@@ -1555,15 +1650,13 @@
         // This ensures the transition from spinning to checkmark looks natural
         await new Promise((resolve) => requestAnimationFrame(resolve));
 
-        // Fade out current icon
-        /*         button.classList.add('icon-fade-out');
+        const icon = button.querySelector('.material-icons') || button;
 
-        // Wait for fade out to complete
-        await new Promise(resolve => setTimeout(resolve, 200));*/
-
-        // Change to checkmark icon
+        // Change to checkmark icon (state classes on button for CSS; glyph on icon span)
         button.classList.remove('refresh', 'icon-fade-out');
         button.classList.add('check_circle', 'icon-fade-in');
+        icon.classList.remove('refresh', 'icon-fade-out');
+        icon.classList.add('check_circle', 'icon-fade-in');
 
         await new Promise((resolve) => requestAnimationFrame(resolve));
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1571,20 +1664,25 @@
         // Wait for fade in to complete
         await new Promise((resolve) => setTimeout(resolve, 200));
         button.classList.remove('icon-fade-in');
+        icon.classList.remove('icon-fade-in');
 
         // After 1.5 seconds, fade out checkmark and fade in refresh icon
         setTimeout(async () => {
             // Fade out checkmark
             button.classList.add('icon-fade-out');
+            icon.classList.add('icon-fade-out');
             await new Promise((resolve) => setTimeout(resolve, 200));
 
             // Change to refresh icon
             button.classList.remove('check_circle', 'icon-fade-out');
             button.classList.add('refresh', 'icon-fade-in');
+            icon.classList.remove('check_circle', 'icon-fade-out');
+            icon.classList.add('refresh', 'icon-fade-in');
 
             // Wait for fade in to complete
             await new Promise((resolve) => setTimeout(resolve, 200));
             button.classList.remove('icon-fade-in');
+            icon.classList.remove('icon-fade-in');
         }, 1500);
     }
 
@@ -1618,7 +1716,7 @@
             });
             const content = refreshed.content;
             ensureCardBorders(content);
-            content.dataset.refreshing = 'false';
+            setSectionRefreshing(content, false);
             attachSectionControlButtons(sectionConfig, content, freshItems);
             ensureSectionRevealObservation(content);
             return content;
@@ -1653,7 +1751,7 @@
             sectionElement.replaceWith(content);
             ensureCardBorders(content);
             attachSectionControlButtons(sectionConfig, content, freshItems);
-            content.dataset.refreshing = 'false';
+            setSectionRefreshing(content, false);
             registerLazyImagesInSection(content);
             ensureSectionRevealObservation(content);
             return content;
@@ -1664,7 +1762,7 @@
             cardFormat: finalCardFormat,
         });
         unobserveSkeletonShimmer(sectionElement);
-        sectionElement.dataset.refreshing = 'false';
+        setSectionRefreshing(sectionElement, false);
         ensureSectionRevealObservation(sectionElement);
         return sectionElement;
     }
@@ -1712,7 +1810,8 @@
             skeleton.setAttribute('data-card-format', finalCardFormat);
         }
         applySectionPresentationAttrs(skeleton, sectionConfig);
-        skeleton.dataset.refreshing = 'true';
+        // Preserve data-refreshing from the replaced section if already set (manual refresh);
+        // do not force true here — multi-query / enhance must not spin the button.
 
         const oldItemsContainer = sectionElement.querySelector('.itemsContainer');
         const layoutFromDom = oldItemsContainer?.getAttribute('data-layout');
@@ -1745,6 +1844,7 @@
         const selectButton = document.createElement('button');
         selectButton.type = 'button';
         selectButton.className = 'emby-button raised multi-query-picker-button';
+        if (isTvLayout()) selectButton.classList.add('show-focus');
         selectButton.textContent = getMultiQueryPickerButtonLabel(sectionConfig);
         selectButton.style.cssText = 'margin-left: 1em; padding: 0.5em 1em; font-size: 0.9em;';
         selectButton.setAttribute('aria-label', 'Select query');
@@ -1752,8 +1852,9 @@
         const controlsMount = titleContainer.querySelector('.section-controls');
         const titleLink = titleContainer.querySelector('a.sectionTitle-link');
         const sectionTitle = titleContainer.querySelector('.sectionTitle');
-        if (controlsMount) {
-            titleContainer.insertBefore(selectButton, controlsMount);
+        // controls may live under .sectionTitle-wrapper when a caption is present
+        if (controlsMount?.parentNode) {
+            controlsMount.parentNode.insertBefore(selectButton, controlsMount);
         } else if (titleLink?.parentNode) {
             titleLink.parentNode.insertBefore(selectButton, titleLink.nextSibling);
         } else if (sectionTitle?.parentNode) {
@@ -1762,135 +1863,163 @@
             titleContainer.appendChild(selectButton);
         }
 
-        let activePopover = null;
-        const closePopover = () => {
-            if (activePopover) {
-                activePopover.remove();
-                activePopover = null;
-            }
-        };
+        const MULTI_QUERY_MODAL_ID = 'kefin-multi-query-picker';
 
-        if (!document.getElementById('kefinTweaks-multiQueryPopover-style')) {
-            const styleElement = document.createElement('style');
-            styleElement.id = 'kefinTweaks-multiQueryPopover-style';
-            styleElement.textContent = `
-                .multiQueryPopover {
-                    background-color: rgba(0, 0, 0, 0.95);
-                    position: absolute !important;
+        const multiQueryPopoverCss = `
+                .kefin-multi-query-modal {
+                    background-color: rgba(0, 0, 0, 0.95) !important;
                     z-index: 1001;
-                    display: block;
+                    min-width: 12rem;
+                    max-width: min(90vw, 320px);
+                    max-height: min(60vh, 420px);
+                    overflow: hidden;
+                    padding: 0 !important;
+					min-width: initial !important;
                 }
+                .kefin-multi-query-modal [data-name="kefin-modal-content"] {
+                    overflow-y: auto !important;
+                    max-height: min(60vh, 420px);
+                }
+				.kefinTweaks-popover.multiQueryPopover {
+					margin-top: 0 !important;
+					display: grid;
+				}
             `;
-            document.head.appendChild(styleElement);
+        let multiQueryStyleEl = document.getElementById('kefinTweaks-multiQueryPopover-style');
+        if (!multiQueryStyleEl) {
+            multiQueryStyleEl = document.createElement('style');
+            multiQueryStyleEl.id = 'kefinTweaks-multiQueryPopover-style';
+            document.head.appendChild(multiQueryStyleEl);
         }
+        multiQueryStyleEl.textContent = multiQueryPopoverCss;
 
         selectButton.addEventListener('click', (e) => {
             e.stopPropagation();
             e.preventDefault();
 
-            if (activePopover) {
-                closePopover();
+            if (!window.ModalSystem?.create) return;
+            if (window.ModalSystem.isOpen?.(MULTI_QUERY_MODAL_ID)) {
+                window.ModalSystem.close(MULTI_QUERY_MODAL_ID);
                 return;
             }
 
-            const popover = document.createElement('div');
-            popover.className = 'kefinTweaks-popover multiQueryPopover itemDetailsGroup';
+            const list = document.createElement('div');
+            list.className = 'kefinTweaks-popover multiQueryPopover itemDetailsGroup';
             const selectedIndex = resolveActiveQueryIndex(sectionConfig, { initialize: false });
             let selectedItemElement = null;
 
+            const selectQuery = async (index) => {
+                window.ModalSystem.close(MULTI_QUERY_MODAL_ID);
+                if (index === resolveActiveQueryIndex(sectionConfig, { initialize: false })) {
+                    return;
+                }
+
+                sectionConfig._selectedQueryIndex = index;
+                // Clear cached section URL so resolve uses the newly selected query
+                sectionConfig.viewMoreUrl = null;
+
+                const sectionIdAttr =
+                    typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+                        ? CSS.escape(String(sectionConfig.id))
+                        : String(sectionConfig.id).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+                let activeSectionEl =
+                    document.querySelector(
+                        `.verticalSection[data-section-id="${sectionIdAttr}"], .spotlight-section[data-section-id="${sectionIdAttr}"]`,
+                    ) || sectionElement;
+
+                const livePicker = activeSectionEl.querySelector('.multi-query-picker-button');
+                if (livePicker) {
+                    livePicker.textContent = getMultiQueryPickerButtonLabel(sectionConfig);
+                }
+                updateSectionTitleText(activeSectionEl, getSectionTitleForMultiQuery(sectionConfig), getSectionCaption(sectionConfig));
+
+                try {
+                    let viewMoreUrl = getActiveViewMoreUrl(sectionConfig);
+                    if (!viewMoreUrl && typeof window.sectionHelper?.resolveViewMoreUrl === 'function') {
+                        viewMoreUrl = await window.sectionHelper.resolveViewMoreUrl(sectionConfig);
+                    }
+                    if (viewMoreUrl) {
+                        sectionConfig.viewMoreUrl = viewMoreUrl;
+                    }
+                    updateSectionViewMoreLink(activeSectionEl, viewMoreUrl || null);
+
+                    const loaded = await loadActiveSectionQueryItems(sectionConfig);
+                    let newContent = null;
+
+                    if (loaded.canPaintCached) {
+                        newContent = await replaceSectionContent(sectionConfig, activeSectionEl, loaded.items);
+                    } else {
+                        activeSectionEl = showSectionQuerySkeletons(sectionConfig, activeSectionEl);
+                        const freshItems = await loaded.itemsPromise;
+                        newContent = await replaceSectionContent(sectionConfig, activeSectionEl, freshItems);
+                    }
+
+                    if (typeof sectionConfig._onMultiQueryChange === 'function') {
+                        sectionConfig._onMultiQueryChange(index, sectionConfig, newContent);
+                    }
+                } catch (error) {
+                    console.error('[KefinTweaks CardBuilder] Error switching query:', error);
+                    const live =
+                        document.querySelector(
+                            `.verticalSection[data-section-id="${sectionIdAttr}"], .spotlight-section[data-section-id="${sectionIdAttr}"]`,
+                        ) || activeSectionEl;
+                    setSectionRefreshing(live, false);
+                }
+            };
+
             queries.forEach((query, index) => {
-                const itemElement = document.createElement('div');
-                itemElement.className = 'kefinTweaks-popover-item detailsGroupItem';
+                const itemElement = document.createElement('button');
+                itemElement.type = 'button';
+                itemElement.className = 'kefinTweaks-popover-item detailsGroupItem emby-button button-flat';
                 if (index === selectedIndex) {
-                    itemElement.classList.add('selected');
+                    itemElement.classList.add('selected', 'is-active');
                     selectedItemElement = itemElement;
                 }
                 itemElement.textContent = getQueryDisplayName(query, index);
-                itemElement.addEventListener('click', async () => {
-                    closePopover();
-                    if (index === resolveActiveQueryIndex(sectionConfig, { initialize: false })) {
-                        return;
-                    }
-
-                    sectionConfig._selectedQueryIndex = index;
-
-                    const sectionIdAttr =
-                        typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
-                            ? CSS.escape(String(sectionConfig.id))
-                            : String(sectionConfig.id).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-
-                    // Prefer the live section node (may have been replaced by a prior switch).
-                    let activeSectionEl =
-                        document.querySelector(
-                            `.verticalSection[data-section-id="${sectionIdAttr}"], .spotlight-section[data-section-id="${sectionIdAttr}"]`,
-                        ) || sectionElement;
-
-                    const livePicker = activeSectionEl.querySelector('.multi-query-picker-button');
-                    if (livePicker) {
-                        livePicker.textContent = getMultiQueryPickerButtonLabel(sectionConfig);
-                    }
-                    updateSectionTitleText(activeSectionEl, getSectionTitleForMultiQuery(sectionConfig), getSectionCaption(sectionConfig));
-                    updateSectionViewMoreLink(activeSectionEl, getActiveViewMoreUrl(sectionConfig));
-                    activeSectionEl.dataset.refreshing = 'true';
-
-                    try {
-                        const loaded = await loadActiveSectionQueryItems(sectionConfig);
-                        let newContent = null;
-
-                        if (loaded.canPaintCached) {
-                            newContent = await replaceSectionContent(sectionConfig, activeSectionEl, loaded.items);
-                        } else {
-                            // Skeletons before awaiting network — cache check already finished above.
-                            activeSectionEl = showSectionQuerySkeletons(sectionConfig, activeSectionEl);
-                            const freshItems = await loaded.itemsPromise;
-                            newContent = await replaceSectionContent(sectionConfig, activeSectionEl, freshItems);
-                        }
-
-                        if (typeof sectionConfig._onMultiQueryChange === 'function') {
-                            sectionConfig._onMultiQueryChange(index, sectionConfig, newContent);
-                        }
-                    } catch (error) {
-                        console.error('[KefinTweaks CardBuilder] Error switching query:', error);
-                        const live =
-                            document.querySelector(
-                                `.verticalSection[data-section-id="${sectionIdAttr}"], .spotlight-section[data-section-id="${sectionIdAttr}"]`,
-                            ) || activeSectionEl;
-                        if (live) live.dataset.refreshing = 'false';
-                    }
+                itemElement.addEventListener('click', (ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    selectQuery(index);
                 });
-                popover.appendChild(itemElement);
+                list.appendChild(itemElement);
             });
 
-            titleContainer.style.position = 'relative';
-            selectButton.parentNode.insertBefore(popover, selectButton.nextSibling);
-            const buttonRect = selectButton.getBoundingClientRect();
-            const containerRect = titleContainer.getBoundingClientRect();
-            popover.style.left = `${Math.max(0, buttonRect.left - containerRect.left)}px`;
-            popover.style.top = '100%';
-            popover.style.bottom = 'auto';
-            popover.style.marginTop = '8px';
-            popover.style.marginBottom = '0';
-            activePopover = popover;
-
-            if (selectedItemElement) {
-                setTimeout(() => {
-                    selectedItemElement.scrollIntoView({
-                        behavior: 'instant',
-                        block: 'nearest',
-                        inline: 'nearest',
-                    });
-                }, 10);
-            }
-
-            const closeHandler = (ev) => {
-                if (!popover.contains(ev.target) && !selectButton.contains(ev.target)) {
-                    closePopover();
-                    document.removeEventListener('click', closeHandler);
-                }
-            };
-            setTimeout(() => {
-                document.addEventListener('click', closeHandler);
-            }, 100);
+            window.ModalSystem.create({
+                id: MULTI_QUERY_MODAL_ID,
+                title: null,
+                content: list,
+                footer: null,
+                showCloseButton: false,
+                closeOnBackdrop: true,
+                closeOnEscape: true,
+                fixedSize: false,
+                returnFocus: selectButton,
+                initialFocus: selectedItemElement,
+                anchor: selectButton,
+                dialogClassName: 'kefin-multi-query-modal',
+                // Match breadcrumb season popover: page scrolls unless the list itself overflows
+                lockPageScroll: false,
+                onOpen: (modal) => {
+                    if (modal.backdrop) modal.backdrop.style.background = 'transparent';
+                    // Document-absolute shell via ModalSystem.positionNearAnchor.
+                    if (modal.dialogContent) {
+                        modal.dialogContent.style.padding = '0';
+                        modal.dialogContent.style.overflowY = 'auto';
+                        modal.dialogContent.style.minHeight = '0';
+                        modal.dialogContent.style.flex = '0 1 auto';
+                        modal.dialogContent.style.overscrollBehavior = 'auto';
+                    }
+                    if (modal.dialog) {
+                        modal.dialog.style.overscrollBehavior = 'auto';
+                    }
+                    if (selectedItemElement) {
+                        requestAnimationFrame(() => {
+                            selectedItemElement.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                        });
+                    }
+                },
+            });
         });
     }
 
@@ -1910,11 +2039,12 @@
             const inline = document.createElement('div');
             inline.className = 'section-controls-inline';
 
-            const moreButton = document.createElement('button');
-            moreButton.type = 'button';
-            moreButton.className = 'section-controls-more material-icons more_vert';
-            moreButton.title = 'More';
-            moreButton.setAttribute('aria-label', 'More');
+            const moreButton = createPaperIconButton({
+                className: 'section-controls-more',
+                icon: 'more_vert',
+                title: 'More',
+                showFocus: isTvLayout(),
+            });
 
             controls.appendChild(inline);
             controls.appendChild(moreButton);
@@ -1923,9 +2053,18 @@
             mountParent.appendChild(controls);
         }
 
+        const inline = controls.querySelector('.section-controls-inline');
+        // Controls-only group must not trap L/R — title + controls share one row (below).
+        inline?.classList.remove('focuscontainer-x');
+
+        // TV: title link + section controls in one focuscontainer-x (spotlight uses headerContainer).
+        if (isTvLayout() && titleContainer.classList.contains('sectionTitleContainer')) {
+            mountParent.classList.add('focuscontainer-x');
+        }
+
         return {
             controls,
-            inline: controls.querySelector('.section-controls-inline'),
+            inline,
             moreButton: controls.querySelector('.section-controls-more'),
         };
     }
@@ -1936,7 +2075,8 @@
         const normalizeTemplate = (value) =>
             (value || '').replace(/\$\{kefinTweaksRoot\}/g, kefinTweaksRoot).replace(/\$\{serverId\}/g, serverId);
 
-        return sectionConfig.items.map((item, index) => ({
+        const visibleItems = (sectionConfig.items || []).filter((item) => item && item.hidden !== true);
+        return visibleItems.map((item, index) => ({
             Name: item.Name,
             Id: item.Id || 'static-' + sectionConfig.id + '-' + index,
             Type: item.Type || 'Folder',
@@ -1957,7 +2097,7 @@
      * @returns {Promise<HTMLElement|null>} refresh button on the new section, if any
      */
     async function executeSectionRefresh(sectionConfig, sectionElement) {
-        sectionElement.dataset.refreshing = 'true';
+        setSectionRefreshing(sectionElement, true);
 
         try {
             const hasStaticItems = Array.isArray(sectionConfig.items) && sectionConfig.items.length > 0;
@@ -1965,7 +2105,7 @@
 
             if (hasStaticItems) {
                 if (!sectionHasRandomQuerySort(sectionConfig)) {
-                    sectionElement.dataset.refreshing = 'false';
+                    setSectionRefreshing(sectionElement, false);
                     const refreshButton = sectionElement.querySelector('.section-refresh-button');
                     if (refreshButton) {
                         showRefreshComplete(refreshButton);
@@ -1975,7 +2115,7 @@
 
                 freshItems = postProcessItems(sectionConfig, normalizeStaticSectionItems(sectionConfig));
                 if (freshItems.length === 0) {
-                    sectionElement.dataset.refreshing = 'false';
+                    setSectionRefreshing(sectionElement, false);
                     return null;
                 }
             } else {
@@ -2008,7 +2148,7 @@
                 });
                 content = refreshed.content;
                 ensureCardBorders(content);
-                content.dataset.refreshing = 'false';
+                setSectionRefreshing(content, false);
                 const newButton = attachSectionControlButtons(sectionConfig, content, freshItems);
                 if (newButton) {
                     showRefreshComplete(newButton);
@@ -2026,7 +2166,7 @@
                     cardFormat: finalCardFormat,
                 });
                 unobserveSkeletonShimmer(sectionElement);
-                sectionElement.dataset.refreshing = 'false';
+                setSectionRefreshing(sectionElement, false);
                 ensureSectionRevealObservation(sectionElement);
                 // New cards: the section's own hooks (a Next Up badge, a scroll
                 // position) run again, as on the first draw. `refreshed` tells a
@@ -2057,7 +2197,6 @@
                 content.setAttribute(attr.name, attr.value);
             });
 
-            invalidateLastRowPadding(content.querySelector('.itemsContainer'));
             invalidateScrollerMetrics(sectionElement.querySelector('.emby-scroller'));
             stripCopiedSkeletonSectionClasses(content);
             unobserveSkeletonShimmer(sectionElement);
@@ -2066,7 +2205,7 @@
             ensureCardBorders(content);
 
             const newButton = attachSectionControlButtons(sectionConfig, content, freshItems);
-            content.dataset.refreshing = 'false';
+            setSectionRefreshing(content, false);
             registerLazyImagesInSection(content);
             ensureSectionRevealObservation(content);
             if (typeof sectionConfig._onSectionEnhanced === 'function') {
@@ -2078,7 +2217,7 @@
             return newButton;
         } catch (error) {
             console.error('[KefinTweaks CardBuilder] Error refreshing section:', error);
-            sectionElement.dataset.refreshing = 'false';
+            setSectionRefreshing(sectionElement, false);
             return null;
         }
     }
@@ -2111,17 +2250,41 @@
     }
 
     let cardUserDataListenerStarted = false;
+    let cardLibraryChangedListenerStarted = false;
+    let pendingLibraryUpdatedIds = new Set();
+    let libraryUpdatedFlushTimer = null;
+    let libraryUpdatedFlushRunning = false;
+    const LIBRARY_UPDATED_DEBOUNCE_MS = 750;
+    const LIVE_SYNC_REBUILD_BATCH_SIZE = 8;
+    // Match apiHelper DEFAULT_ITEM_FIELDS so rebuilt cards keep aspect/overlays/indicators.
+    const LIVE_SYNC_ITEM_FIELDS =
+        'PrimaryImageAspectRatio,DateCreated,Overview,Taglines,ProductionYear,RecursiveItemCount,ChildCount,UserData,ProviderIds,MediaSourceCount';
+
+    function scheduleLibraryUpdatedFlush() {
+        if (libraryUpdatedFlushTimer) clearTimeout(libraryUpdatedFlushTimer);
+        libraryUpdatedFlushTimer = setTimeout(() => {
+            void flushVisibleCardLibraryUpdates();
+        }, LIBRARY_UPDATED_DEBOUNCE_MS);
+    }
+
+    function yieldToMainThread() {
+        return new Promise((resolve) => {
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(() => resolve());
+            } else {
+                setTimeout(resolve, 0);
+            }
+        });
+    }
+
+    function escapeCssIdentForCardSync(value) {
+        return typeof CSS !== 'undefined' && CSS.escape
+            ? CSS.escape(String(value))
+            : String(value).replace(/["\\]/g, '\\$&');
+    }
 
     function getPrimaryUserIdForCardSync() {
         return typeof ApiClient !== 'undefined' && typeof ApiClient.getCurrentUserId === 'function' ? ApiClient.getCurrentUserId() : null;
-    }
-
-    function extractUserDataChangePayload(event) {
-        const data = event?.detail ?? event;
-        const userId = data?.Data?.UserId ?? data?.UserId ?? null;
-        const list = data?.Data?.UserDataList ?? data?.UserDataList;
-        if (!Array.isArray(list)) return { userId, entries: [] };
-        return { userId, entries: list };
     }
 
     function isPrimaryUserDataChange(userId) {
@@ -2138,8 +2301,7 @@
     function updateCardResumeAttributes(itemId, userData) {
         if (!itemId || !userData) return;
 
-        const escapedId = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(itemId) : itemId.replace(/["\\]/g, '\\$&');
-        const cards = document.querySelectorAll(`.card[data-id="${escapedId}"]`);
+        const cards = findVisibleCardsForItemId(itemId);
         if (!cards.length) return;
 
         const ticks = userData.PlaybackPositionTicks;
@@ -2167,10 +2329,12 @@
             likedHelper.set(itemId, isLiked);
         }
 
-        const escapedId = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(itemId) : itemId.replace(/["\\]/g, '\\$&');
-        document.querySelectorAll(`.watchlist-button[data-id="${escapedId}"]`).forEach((button) => {
-            button.dataset.active = isLiked ? 'true' : 'false';
-            button.title = isLiked ? 'Remove from Watchlist' : 'Add to Watchlist';
+        itemIdDomVariants(itemId).forEach((variant) => {
+            const escapedId = escapeCssIdentForCardSync(variant);
+            document.querySelectorAll(`.watchlist-button[data-id="${escapedId}"]`).forEach((button) => {
+                button.dataset.active = isLiked ? 'true' : 'false';
+                button.title = isLiked ? 'Remove from Watchlist' : 'Add to Watchlist';
+            });
         });
     }
 
@@ -2184,39 +2348,544 @@
         });
     }
 
-    function handleCardUserDataChangedEvent(event) {
-        const { userId, entries } = extractUserDataChangePayload(event);
-        if (!entries.length) return;
-        applyUserDataEntriesToCards(entries, userId);
-    }
-
     function startCardUserDataListener() {
         if (cardUserDataListenerStarted) return;
 
-        let registered = false;
-
-        if (window.ApiClient?.addEventListener) {
-            window.ApiClient.addEventListener('userdatachanged', handleCardUserDataChangedEvent);
-            registered = true;
-        }
-
-        if (window.websocketHelper?.listen) {
-            window.websocketHelper.listen('UserDataChanged', (msg) => {
-                const userId = msg?.Data?.UserId;
-                const entries = msg?.Data?.UserDataList;
-                if (!Array.isArray(entries) || !entries.length) return;
-                applyUserDataEntriesToCards(entries, userId);
-            });
-            registered = true;
-        }
-
-        if (registered) {
-            cardUserDataListenerStarted = true;
-            console.log('[KefinTweaks CardBuilder] Listening for UserDataChanged to sync card resume attributes');
+        if (!window.websocketHelper?.listen) {
+            setTimeout(startCardUserDataListener, 1000);
             return;
         }
 
-        setTimeout(startCardUserDataListener, 1000);
+        window.websocketHelper.listen('UserDataChanged', (msg) => {
+            const userId = msg?.Data?.UserId;
+            const entries = msg?.Data?.UserDataList;
+            if (!Array.isArray(entries) || !entries.length) return;
+            applyUserDataEntriesToCards(entries, userId);
+        });
+        cardUserDataListenerStarted = true;
+        console.log('[KefinTweaks CardBuilder] Listening for UserDataChanged to sync card resume attributes');
+    }
+
+    function liveSyncLog(...args) {
+        console.log('[KefinTweaks CardBuilder][LiveSync]', ...args);
+    }
+
+    function liveSyncWarn(...args) {
+        console.warn('[KefinTweaks CardBuilder][LiveSync]', ...args);
+    }
+
+    /** Strip GUID dashes for comparison (server LibraryChanged often uses "N" format). */
+    function normalizeItemIdKey(id) {
+        return String(id || '')
+            .replace(/-/g, '')
+            .toLowerCase();
+    }
+
+    /** Candidate data-id strings for DOM queries (dashed + undashed). */
+    function itemIdDomVariants(id) {
+        const raw = String(id || '').trim();
+        if (!raw) return [];
+        const variants = new Set([raw]);
+        const naked = normalizeItemIdKey(raw);
+        if (/^[0-9a-f]{32}$/.test(naked)) {
+            variants.add(naked);
+            variants.add(
+                `${naked.slice(0, 8)}-${naked.slice(8, 12)}-${naked.slice(12, 16)}-${naked.slice(16, 20)}-${naked.slice(20)}`,
+            );
+        }
+        return Array.from(variants);
+    }
+
+    function findVisibleCardsForItemId(itemId) {
+        if (!itemId) return [];
+        const found = new Set();
+        itemIdDomVariants(itemId).forEach((variant) => {
+            const escapedId = escapeCssIdentForCardSync(variant);
+            document.querySelectorAll(`.card[data-id="${escapedId}"]:not(.skeleton-card)`).forEach((card) => {
+                found.add(card);
+            });
+        });
+        return Array.from(found);
+    }
+
+    function resolveCardRebuildArgs(card) {
+        const sectionEl = card?.closest?.('[data-section-id]');
+        const sectionId = sectionEl?.getAttribute('data-section-id') || sectionEl?.dataset?.sectionId || null;
+        const runtimeCfg = sectionId ? window.KefinHomeScreenSectionRuntime?.get?.(sectionId)?.effectiveConfig : null;
+
+        const cardFormat = sectionEl?.getAttribute('data-card-format') || runtimeCfg?.cardFormat || null;
+
+        let overflowCard;
+        if (runtimeCfg && typeof runtimeCfg.overflowCard === 'boolean') {
+            overflowCard = runtimeCfg.overflowCard;
+        } else if (/\boverflow(?:Portrait|Backdrop|Square|Banner)Card\b/.test(card?.className || '')) {
+            overflowCard = true;
+        } else if (/\b(?:portrait|backdrop|square|banner)Card\b/.test(card?.className || '')) {
+            overflowCard = false;
+        } else {
+            // Home rows default to overflow sizing.
+            overflowCard = true;
+        }
+
+        const useParentCard = !!runtimeCfg?.useParentCard;
+        const borderStyle =
+            runtimeCfg?.borderStyle || sectionEl?.dataset?.borderStyle || sectionEl?.dataset?.border || null;
+
+        return { cardFormat, overflowCard, useParentCard, borderStyle, sectionId };
+    }
+
+    /** Image tags the card builder may put in data-src (any format / fallback path). */
+    function collectItemImageTagsForLiveSync(item) {
+        const tags = new Set();
+        const add = (t) => {
+            if (t != null && t !== '') tags.add(String(t));
+        };
+        const it = item?.ImageTags;
+        if (it) {
+            add(it.Primary);
+            add(it.Thumb);
+            add(it.Logo);
+            add(it.Banner);
+            add(it.Art);
+            add(it.Disc);
+        }
+        add(item?.BackdropImageTags?.[0]);
+        add(item?.PrimaryImageTag);
+        add(item?.SeriesPrimaryImageTag);
+        add(item?.SeriesThumbImageTag);
+        add(item?.ParentThumbImageTag);
+        add(item?.ParentBackdropImageTags?.[0]);
+        add(item?.ParentPrimaryImageTag);
+        add(item?.ParentLogoImageTag);
+        return tags;
+    }
+
+    function extractTagFromImageUrl(url) {
+        if (!url) return '';
+        try {
+            const m = String(url).match(/[?&]tag=([^&]*)/i);
+            return m?.[1] ? decodeURIComponent(m[1]) : '';
+        } catch (e) {
+            return '';
+        }
+    }
+
+    /**
+     * Skip DOM replace when painted card signals already match the fresh item.
+     * Compares name, image tag in data-src, resume ticks, played / unplayed indicators.
+     */
+    function cardNeedsLiveSyncRebuild(oldCard, freshItem) {
+        if (!oldCard || !freshItem) return false;
+
+        const img =
+            oldCard.querySelector?.('.cardImageContainer[data-src]') ||
+            oldCard.querySelector?.('.cardImageContainer') ||
+            null;
+        const dataSrc = img?.getAttribute('data-src') || '';
+        const paintedTag = extractTagFromImageUrl(dataSrc);
+        const paintedName = (img?.getAttribute('aria-label') || '').trim();
+        const paintedTicks = oldCard.getAttribute('data-positionticks') || '';
+        const paintedPlayed = !!oldCard.querySelector?.('.playedIndicator');
+        const paintedUnplayed = (oldCard.querySelector?.('.countIndicator.indicator')?.textContent || '').trim();
+        const paintedMediaSources = (oldCard.querySelector?.('.mediaSourceIndicator')?.textContent || '').trim();
+
+        const expectedName = String(freshItem.Name || 'Unknown').trim();
+        const nameChanged = paintedName !== expectedName && paintedName !== String(freshItem.Name || '').trim();
+
+        const freshTags = collectItemImageTagsForLiveSync(freshItem);
+        const hadImage = !!dataSrc;
+        const hasImageTags = freshTags.size > 0;
+        let imageChanged = false;
+        if (paintedTag) {
+            // Painted tag no longer on the item → artwork changed for this card.
+            imageChanged = !freshTags.has(paintedTag);
+        } else if (!hadImage && hasImageTags) {
+            imageChanged = true;
+        } else if (hadImage && !hasImageTags) {
+            imageChanged = true;
+        }
+
+        const freshPlayed = freshItem.UserData?.Played === true;
+        const freshTicks =
+            !freshPlayed && typeof freshItem.UserData?.PlaybackPositionTicks === 'number' && freshItem.UserData.PlaybackPositionTicks > 0
+                ? String(freshItem.UserData.PlaybackPositionTicks)
+                : '';
+        const ticksChanged = paintedTicks !== freshTicks;
+        const playedChanged = paintedPlayed !== freshPlayed;
+
+        const freshUnplayed =
+            freshItem.UserData?.UnplayedItemCount && freshItem.UserData.UnplayedItemCount > 0
+                ? String(freshItem.UserData.UnplayedItemCount)
+                : '';
+        const unplayedChanged = paintedUnplayed !== freshUnplayed;
+
+        const freshMediaSources =
+            typeof freshItem.MediaSourceCount === 'number' && freshItem.MediaSourceCount > 1
+                ? String(freshItem.MediaSourceCount)
+                : '';
+        const mediaSourcesChanged = paintedMediaSources !== freshMediaSources;
+
+        const needs = nameChanged || imageChanged || ticksChanged || playedChanged || unplayedChanged || mediaSourcesChanged;
+        if (!needs) {
+            liveSyncLog('Skipping rebuild — no significant painted changes', {
+                itemId: freshItem.Id,
+                name: expectedName,
+                paintedTag,
+            });
+        }
+        return needs;
+    }
+
+    function replaceVisibleCardWithFreshItem(oldCard, freshItem) {
+        if (!oldCard || !freshItem) return false;
+        if (!cardNeedsLiveSyncRebuild(oldCard, freshItem)) return false;
+
+        const { cardFormat, overflowCard, useParentCard, borderStyle, sectionId } = resolveCardRebuildArgs(oldCard);
+        liveSyncLog('Rebuilding card', {
+            itemId: freshItem.Id,
+            name: freshItem.Name,
+            sectionId,
+            cardFormat,
+            overflowCard,
+            useParentCard,
+            borderStyle,
+            imagePrimaryTag: freshItem.ImageTags?.Primary || null,
+        });
+        const next = createCardElement(
+            freshItem,
+            overflowCard,
+            cardFormat,
+            freshItem.cardFooter || freshItem.CustomFooterText || null,
+            useParentCard,
+            borderStyle,
+        );
+        const index = oldCard.getAttribute('data-index');
+        if (index != null) next.setAttribute('data-index', index);
+
+        const hadFocus = document.activeElement === oldCard;
+        oldCard.replaceWith(next);
+        // New card has data-src + .lazy but is not in any IntersectionObserver yet.
+        registerLazyImagesIn(next);
+        if (hadFocus && typeof next.focus === 'function') {
+            try {
+                next.focus({ preventScroll: true });
+            } catch (e) {
+                next.focus();
+            }
+        }
+        return true;
+    }
+
+    async function flushVisibleCardLibraryUpdates() {
+        libraryUpdatedFlushTimer = null;
+        if (libraryUpdatedFlushRunning) {
+            // Keep pending ids; schedule one follow-up after the in-flight flush
+            if (pendingLibraryUpdatedIds.size) {
+                liveSyncLog('Flush already running — deferring follow-up', {
+                    pendingSize: pendingLibraryUpdatedIds.size,
+                });
+                scheduleLibraryUpdatedFlush();
+            }
+            return;
+        }
+
+        const ids = Array.from(pendingLibraryUpdatedIds);
+        pendingLibraryUpdatedIds.clear();
+        liveSyncLog('Flush start', { pendingIds: ids });
+        if (!ids.length) return;
+
+        libraryUpdatedFlushRunning = true;
+        try {
+            const matchCounts = {};
+            const idsToFetch = ids.filter((id) => {
+                const count = findVisibleCardsForItemId(id).length;
+                matchCounts[id] = count;
+                return count > 0;
+            });
+            liveSyncLog('Visible card matches', matchCounts);
+
+            if (!idsToFetch.length) {
+                liveSyncLog('No on-page cards for updated ids — skipping fetch');
+                return;
+            }
+
+            if (typeof ApiClient === 'undefined' || typeof ApiClient.getItems !== 'function') {
+                liveSyncWarn('ApiClient.getItems unavailable — cannot refresh cards');
+                return;
+            }
+
+            const userId = ApiClient.getCurrentUserId?.();
+            liveSyncLog('Fetching items', { userId, idsToFetch, fields: LIVE_SYNC_ITEM_FIELDS });
+
+            const response = await ApiClient.getItems(userId, {
+                Ids: idsToFetch.join(','),
+                Recursive: false,
+                Fields: LIVE_SYNC_ITEM_FIELDS,
+            });
+            const itemsById = new Map();
+            (response?.Items || []).forEach((item) => {
+                if (!item?.Id) return;
+                itemsById.set(normalizeItemIdKey(item.Id), item);
+            });
+            liveSyncLog('Fetch result', {
+                requested: idsToFetch.length,
+                returned: itemsById.size,
+                itemSummaries: Array.from(itemsById.values()).map((item) => ({
+                    id: item.Id,
+                    name: item.Name,
+                    primaryTag: item.ImageTags?.Primary || null,
+                })),
+            });
+
+            // Flatten id → cards into a rebuild work list, then process in rAF batches
+            const work = [];
+            idsToFetch.forEach((id) => {
+                const freshItem = itemsById.get(normalizeItemIdKey(id));
+                if (!freshItem) {
+                    liveSyncWarn('Item missing from getItems response', id);
+                    return;
+                }
+                const cards = findVisibleCardsForItemId(id);
+                liveSyncLog('Replacing cards for item', { id, cardCount: cards.length });
+                cards.forEach((card) => {
+                    work.push({ card, freshItem });
+                });
+            });
+
+            let rebuilt = 0;
+            let skipped = 0;
+            for (let i = 0; i < work.length; i += LIVE_SYNC_REBUILD_BATCH_SIZE) {
+                if (i > 0) await yieldToMainThread();
+                const batch = work.slice(i, i + LIVE_SYNC_REBUILD_BATCH_SIZE);
+                batch.forEach(({ card, freshItem }) => {
+                    if (replaceVisibleCardWithFreshItem(card, freshItem)) rebuilt += 1;
+                    else skipped += 1;
+                });
+            }
+            liveSyncLog('Flush complete', { rebuilt, skipped, workItems: work.length });
+        } catch (err) {
+            console.error('[KefinTweaks CardBuilder][LiveSync] Visible card live sync failed:', err);
+        } finally {
+            libraryUpdatedFlushRunning = false;
+            // Ids queued during this flush — schedule another pass
+            if (pendingLibraryUpdatedIds.size) {
+                scheduleLibraryUpdatedFlush();
+            }
+        }
+    }
+
+    function queueLibraryUpdatedItemIds(ids, source = 'unknown') {
+        if (!Array.isArray(ids) || !ids.length) return;
+        const before = pendingLibraryUpdatedIds.size;
+        ids.forEach((id) => {
+            if (id == null || id === '') return;
+            pendingLibraryUpdatedIds.add(String(id));
+        });
+        liveSyncLog('Queued item ids', {
+            source,
+            incoming: ids.map(String),
+            pendingSizeBefore: before,
+            pendingSizeAfter: pendingLibraryUpdatedIds.size,
+            debounceMs: LIBRARY_UPDATED_DEBOUNCE_MS,
+            flushRunning: libraryUpdatedFlushRunning,
+        });
+        scheduleLibraryUpdatedFlush();
+    }
+
+    function handleLibraryChangedMessage(msg) {
+        const data = msg?.Data ?? msg;
+        const updated = data?.ItemsUpdated;
+        const dataKeys = data && typeof data === 'object' ? Object.keys(data) : [];
+        liveSyncLog('LibraryChanged received', {
+            deliveryMode: window.websocketHelper?.getDeliveryMode?.() || null,
+            messageType: msg?.MessageType,
+            dataKeys,
+            itemsUpdatedType: Array.isArray(updated) ? 'array' : typeof updated,
+            itemsUpdatedCount: Array.isArray(updated) ? updated.length : null,
+            itemsUpdated: Array.isArray(updated) ? updated : updated,
+            itemsAdded: data?.ItemsAdded,
+            itemsRemoved: data?.ItemsRemoved,
+        });
+        if (!Array.isArray(updated) || !updated.length) {
+            liveSyncLog('Ignoring LibraryChanged — ItemsUpdated empty or not an array');
+            return;
+        }
+        queueLibraryUpdatedItemIds(updated, 'LibraryChanged.ItemsUpdated');
+    }
+
+    function startCardLibraryChangedListener() {
+        if (cardLibraryChangedListenerStarted) return;
+
+        if (!window.websocketHelper?.listen) {
+            liveSyncLog('websocketHelper not ready — retrying listener in 1s');
+            setTimeout(startCardLibraryChangedListener, 1000);
+            return;
+        }
+
+        window.websocketHelper.listen('LibraryChanged', handleLibraryChangedMessage);
+        cardLibraryChangedListenerStarted = true;
+        liveSyncLog('Listening for LibraryChanged to sync visible card metadata', {
+            deliveryMode: window.websocketHelper?.getDeliveryMode?.() || 'pending',
+        });
+    }
+
+    let cardEditorCloseLiveSyncStarted = false;
+    const editorDialogDirty = new WeakMap();
+
+    function isImageEditorDialog(dlg) {
+        if (!dlg?.querySelector) return false;
+        return !!(dlg.querySelector('.imageEditorCard') || dlg.querySelector('#images') || dlg.querySelector('#backdrops'));
+    }
+
+    function isMetadataEditorDialog(dlg) {
+        if (!dlg?.querySelector) return false;
+        if (isImageEditorDialog(dlg)) return false;
+        return !!(
+            dlg.querySelector('.metadataEditor') ||
+            dlg.querySelector('#metadataEditor') ||
+            dlg.querySelector('.metadataEditorContent') ||
+            dlg.querySelector('form.metadataEditorForm') ||
+            dlg.querySelector('.btnSaveMetadata, #btnSaveMetadata')
+        );
+    }
+
+    function resolveEditorDialogItemId(dlg) {
+        if (!dlg) return null;
+        const fromCard = dlg.querySelector?.('.imageEditorCard[data-id], [data-id][data-imagetype], [data-itemid]');
+        const attrId =
+            fromCard?.getAttribute('data-id') ||
+            fromCard?.getAttribute('data-itemid') ||
+            dlg.getAttribute?.('data-itemid') ||
+            dlg.getAttribute?.('data-id') ||
+            dlg.dataset?.itemId ||
+            null;
+        if (attrId) return attrId;
+
+        try {
+            const hash = String(window.location.hash || '');
+            const match = hash.match(/[?&]id=([^&]+)/i);
+            if (match?.[1]) return decodeURIComponent(match[1]);
+        } catch (e) {
+            // ignore
+        }
+        return null;
+    }
+
+    function markEditorDialogDirty(dlg) {
+        if (!dlg) return;
+        editorDialogDirty.set(dlg, true);
+    }
+
+    function handleEditorDialogClose(dlg) {
+        if (!dlg) return;
+        const isImage = isImageEditorDialog(dlg);
+        const isMeta = isMetadataEditorDialog(dlg);
+        if (!isImage && !isMeta) return;
+
+        const dirty = editorDialogDirty.get(dlg) === true;
+        // Mirror imageeditor hasChanges: only rebuild when the dialog was dirtied while open.
+        if (!dirty) {
+            liveSyncLog('Editor closed without changes — skip rebuild', {
+                kind: isImage ? 'image' : 'metadata',
+            });
+            return;
+        }
+
+        const itemId = resolveEditorDialogItemId(dlg);
+        if (!itemId) {
+            liveSyncWarn('Editor closed but could not resolve item id');
+            return;
+        }
+
+        liveSyncLog('Editor closed — queueing live sync', {
+            itemId,
+            kind: isImage ? 'image' : 'metadata',
+            dirty,
+        });
+        queueLibraryUpdatedItemIds([itemId], isImage ? 'imageEditor.close' : 'metadataEditor.close');
+    }
+
+    function watchEditorDialog(dlg) {
+        if (!dlg || dlg.__kefinLiveSyncWatched) return;
+        if (!isImageEditorDialog(dlg) && !isMetadataEditorDialog(dlg)) return;
+
+        dlg.__kefinLiveSyncWatched = true;
+        editorDialogDirty.set(dlg, false);
+
+        if (isImageEditorDialog(dlg)) {
+            // imageeditor.js mutates #images during initial reload — ignore until settled.
+            let armed = false;
+            const armTimer = setTimeout(() => {
+                armed = true;
+                editorDialogDirty.set(dlg, false);
+            }, 800);
+            dlg.__kefinLiveSyncArmTimer = armTimer;
+
+            const mo = new MutationObserver(() => {
+                if (!armed) return;
+                markEditorDialogDirty(dlg);
+            });
+            const images = dlg.querySelector('#images') || dlg.querySelector('#backdrops') || dlg;
+            try {
+                mo.observe(images, {
+                    childList: true,
+                    subtree: true,
+                    attributes: true,
+                    attributeFilter: ['data-src', 'style', 'src'],
+                });
+            } catch (e) {
+                mo.observe(dlg, { childList: true, subtree: true });
+            }
+            dlg.__kefinLiveSyncMo = mo;
+        } else if (isMetadataEditorDialog(dlg)) {
+            const onFieldEdit = () => markEditorDialogDirty(dlg);
+            dlg.addEventListener('input', onFieldEdit, true);
+            dlg.addEventListener('change', onFieldEdit, true);
+            dlg.__kefinLiveSyncFieldEdit = onFieldEdit;
+        }
+
+        const onClose = () => {
+            if (dlg.__kefinLiveSyncArmTimer) {
+                clearTimeout(dlg.__kefinLiveSyncArmTimer);
+            }
+            if (dlg.__kefinLiveSyncFieldEdit) {
+                dlg.removeEventListener('input', dlg.__kefinLiveSyncFieldEdit, true);
+                dlg.removeEventListener('change', dlg.__kefinLiveSyncFieldEdit, true);
+            }
+            try {
+                dlg.__kefinLiveSyncMo?.disconnect?.();
+            } catch (e) {
+                // ignore
+            }
+            handleEditorDialogClose(dlg);
+            dlg.removeEventListener('close', onClose);
+        };
+        dlg.addEventListener('close', onClose);
+
+        liveSyncLog('Watching editor dialog for close', {
+            image: isImageEditorDialog(dlg),
+            metadata: isMetadataEditorDialog(dlg),
+            itemId: resolveEditorDialogItemId(dlg),
+        });
+    }
+
+    function startCardEditorCloseLiveSync() {
+        if (cardEditorCloseLiveSyncStarted) return;
+        cardEditorCloseLiveSyncStarted = true;
+
+        document.querySelectorAll('.formDialog').forEach((dlg) => watchEditorDialog(dlg));
+
+        const bodyObserver = new MutationObserver((mutations) => {
+            mutations.forEach((m) => {
+                m.addedNodes.forEach((node) => {
+                    if (!(node instanceof HTMLElement)) return;
+                    if (node.matches?.('.formDialog')) watchEditorDialog(node);
+                    node.querySelectorAll?.('.formDialog').forEach((dlg) => watchEditorDialog(dlg));
+                });
+            });
+        });
+        bodyObserver.observe(document.body, { childList: true, subtree: true });
+        liveSyncLog('Editor-close live sync observer started');
     }
 
     // Main card builder object
@@ -2237,13 +2906,15 @@
         getActiveViewMoreUrl: getActiveViewMoreUrl,
         refreshSectionQueries: refreshSectionQueries,
         loadActiveSectionQueryItems: loadActiveSectionQueryItems,
+        createSectionScrollableContainer: createSectionScrollableContainer,
+        applySectionPresentationAttrs: applySectionPresentationAttrs,
         attachSectionControlButtons: attachSectionControlButtons,
         ensureCardBorders: ensureCardBorders,
         applyItemsLayoutState: applyItemsLayoutState,
         resolveItemsLayout: resolveItemsLayout,
+        resolveGridShape: resolveGridShape,
         resolveSpotlightPresentation: resolveSpotlightPresentation,
         resolveUseGaplessCards: resolveUseGaplessCards,
-        invalidateLastRowPadding: invalidateLastRowPadding,
         invalidateCardRadiusCache: invalidateCardRadiusCache,
         ensureCardRadiusCssVar: ensureCardRadiusCssVar,
         getScrollerPosition: getScrollerPosition,
@@ -2270,7 +2941,7 @@
             useParentCard = false,
             borderStyle = null,
         ) {
-            return createJellyfinCardElement(item, overflowCard, cardFormat, customFooterText, useParentCard, borderStyle);
+            return createCardElement(item, overflowCard, cardFormat, customFooterText, useParentCard, borderStyle);
         },
 
         /** Push-register lazy images under an attached root (parallel native path). */
@@ -2452,6 +3123,7 @@
                 enhanceOnVisible = false,
                 enhanceRootMargin = '30% 0px 30% 0px',
                 showStaleDataBeforeRefresh = true,
+                insertBefore = null,
             } = options;
 
             const renderProgressiveSectionsStartTime = performance.now();
@@ -2464,6 +3136,8 @@
                 const sectionPromiseEndTime = performance.now();
                 const sectionPromiseDuration = sectionPromiseEndTime - sectionPromiseStartTime;
                 console.log(`Section promise initialization time: ${sectionPromiseDuration.toFixed(2)}ms`);
+
+                if (!section) continue;
 
                 const sectionStartTime = performance.now();
 
@@ -2514,6 +3188,8 @@
                             ...sectionConfig.spotlightConfig,
                         });
                     } else {
+                        // Stale cached paint may still refresh — defer scroll-button register until final apply
+                        const registerScrollButtons = isStaticQuery || section.result?.isStale !== true;
                         content = createScrollableContainer(
                             dataItems,
                             getSectionTitleForMultiQuery(sectionConfig),
@@ -2521,6 +3197,7 @@
                             sectionConfig.overflowCard,
                             finalCardFormat,
                             sectionConfig,
+                            registerScrollButtons,
                         );
                     }
 
@@ -2623,7 +3300,11 @@
                 const batch = sectionNodes.slice(i, i + BATCH_SIZE);
                 const batchFragment = document.createDocumentFragment();
                 batch.forEach((node) => batchFragment.appendChild(node));
-                container.appendChild(batchFragment);
+                if (insertBefore && insertBefore.parentNode === container) {
+                    container.insertBefore(batchFragment, insertBefore);
+                } else {
+                    container.appendChild(batchFragment);
+                }
                 batch.forEach((sectionEl) => {
                     if (sectionEl?.nodeType === 1) registerLazyImagesInSection(sectionEl);
                 });
@@ -3596,13 +4277,12 @@
 
         const cardLinkId = useParentCard && (item.SeriesId || item.ParentId) ? item.SeriesId || item.ParentId : itemId;
 
-        // Jellyfin's mobile layout gives its cards no hover menu, only a
-        // visible play button bottom-right, and no card-hoverable
-        // (cardbuilder/cardBuilder.js and Card/CardBox.tsx, useCard.ts). Ours
-        // match it there: the hover menu was invisible on a phone but its
-        // buttons still took taps, so the middle of a card played it and the
-        // corners marked it played or favourite. Keyed on Jellyfin's layout,
-        // not isMobileLayout(), which also counts any window under 900px.
+        // Jellyfin's mobile layout gives its cards no card-hoverable
+        // (Card/CardBox.tsx, useCard.ts). Ours match it there, and the
+        // overlay further down follows the same test: upstream keys it on
+        // isMobileLayout(), which also counts any window under 900px, and a
+        // narrow desktop window lost its hover menu with it. Jellyfin's own
+        // layout class, so desktop and tablet cards keep theirs.
         const mobileLayout = document.documentElement.classList.contains('layout-mobile');
 
         // Create the main card container
@@ -3839,12 +4519,8 @@
             imageUrl = `${serverAddress}/Items/${itemId}/Images/Logo?${imageParams}&quality=96&tag=${logoTag}`;
         } else if (cardFormat === 'clear art' && item.ImageTags?.Art) {
             imageUrl = `${serverAddress}/Items/${item.Id}/Images/Art?${imageParams}&quality=96&tag=${item.ImageTags.Art}`;
-        } else if (cardFormat === 'banner') {
-            if (item.ImageTags?.Banner) {
-                imageUrl = `${serverAddress}/Items/${item.Id}/Images/Banner?${imageParams}&quality=96&tag=${item.ImageTags.Banner}`;
-            } else {
-                imageUrl = `${serverAddress}/Items/${item.SeriesId || item.ParentId}/Images/Banner?${imageParams}&quality=96`;
-            }
+        } else if (cardFormat === 'banner' && item.ImageTags?.Banner) {
+            imageUrl = `${serverAddress}/Items/${item.Id}/Images/Banner?${imageParams}&quality=96&tag=${item.ImageTags.Banner}`;
         } else if (cardFormat === 'disc' && item.ImageTags?.Disc) {
             imageUrl = `${serverAddress}/Items/${item.Id}/Images/Disc?${imageParams}&quality=96&tag=${item.ImageTags.Disc}`;
         } else if (item.ImageTags?.Primary) {
@@ -4051,47 +4727,66 @@
             }
         }
 
-        // The mobile play button, on the same terms as jellyfin-web's: none on
-        // a placeholder, a missing episode or a person.
-        let mobilePlayButton = null;
-        if (mobileLayout && !isCustomCard
-            && !['CollectionFolder', 'Folder', 'UserView', 'Person'].includes(item.Type)
-            && !item.IsPlaceHolder && item.LocationType !== 'Virtual') {
-            mobilePlayButton = document.createElement('button');
-            mobilePlayButton.setAttribute('is', 'paper-icon-button-light');
-            mobilePlayButton.className = 'cardOverlayButton cardOverlayButton-br itemAction';
-            mobilePlayButton.setAttribute('data-action', 'play');
-            mobilePlayButton.title = 'Play';
-            const mobilePlayIcon = document.createElement('span');
-            mobilePlayIcon.className = 'material-icons cardOverlayButtonIcon play_arrow';
-            mobilePlayIcon.setAttribute('aria-hidden', 'true');
-            mobilePlayButton.appendChild(mobilePlayIcon);
-        }
+        // Overlays: desktop = hover FAB + br actions; mobile = native bottom-right play only
+        const NON_PLAYABLE_TYPES = ['CollectionFolder', 'Folder', 'UserView', 'Virtual', 'Studio', 'Genre', 'Person'];
+        const NO_RATE_TYPES = ['UserView', 'CollectionFolder', 'Folder', 'Program', 'Timer', 'SeriesTimer', 'Channel'];
+        const canShowPlayOverlay =
+            !isCustomCard
+            && !NON_PLAYABLE_TYPES.includes(item.Type)
+            && item.LocationType !== 'Virtual'
+            && item.Type !== 'Person';
+        // Match jellyfin-web itemHelper.canMarkPlayed (cards: no Folder/CollectionFolder/UserView)
+        const canMarkPlayed =
+            item.Type !== 'Program'
+            && (
+                (item.MediaType === 'Video' && item.Type !== 'TvChannel')
+                || (item.MediaType === 'Audio' && item.Type === 'AudioBook')
+                || item.Type === 'Series'
+                || item.Type === 'Season'
+                || item.Type === 'BoxSet'
+                || item.MediaType === 'Book'
+            )
+            && !NON_PLAYABLE_TYPES.includes(item.Type);
+        // Match jellyfin-web itemHelper.canRate type denylist (do not gate on missing UserData)
+        const canRate = !NO_RATE_TYPES.includes(item.Type);
 
-        // Card overlay container
-        const cardOverlayContainer = document.createElement('div');
-        cardOverlayContainer.className = 'cardOverlayContainer';
+        let cardOverlayContainer = null;
+        let mobileOverlayPlayButton = null;
 
         if (isCustomCard) {
-            // Overlay link (first so it sits under buttons)
+            cardOverlayContainer = document.createElement('div');
+            cardOverlayContainer.className = 'cardOverlayContainer';
             const overlayLink = document.createElement('a');
             overlayLink.href = cardUrl;
             overlayLink.className = 'button-link';
             overlayLink.setAttribute('is', 'emby-linkbutton');
-
-            // Add target=_blank if its an external link, internal links will start with / or #
             if (!cardUrl.startsWith('/') && !cardUrl.startsWith('#')) {
                 overlayLink.setAttribute('target', '_blank');
             }
-
             cardOverlayContainer.appendChild(overlayLink);
-        } else if (!mobileLayout) {
+        } else if (mobileLayout) {
+            // Match jellyfin-web layoutManager.mobile: play button with cardOverlayButton-br on the button
+            // jellyfin-web gives a placeholder no play button here either.
+            if (canShowPlayOverlay && !item.IsPlaceHolder) {
+                mobileOverlayPlayButton = document.createElement('button');
+                mobileOverlayPlayButton.type = 'button';
+                mobileOverlayPlayButton.className =
+                    'cardOverlayButton cardOverlayButton-br itemAction paper-icon-button-light';
+                mobileOverlayPlayButton.setAttribute('data-action', 'play');
+                mobileOverlayPlayButton.title = 'Play';
+                const playIcon = document.createElement('span');
+                playIcon.className = 'material-icons cardOverlayButtonIcon play_arrow';
+                playIcon.setAttribute('aria-hidden', 'true');
+                mobileOverlayPlayButton.appendChild(playIcon);
+            }
+        } else {
+            cardOverlayContainer = document.createElement('div');
             cardOverlayContainer.className = 'cardOverlayContainer itemAction';
             cardOverlayContainer.setAttribute('data-action', 'link');
-            // Play button
+
             const playButton = document.createElement('button');
-            playButton.setAttribute('is', 'paper-icon-button-light');
-            playButton.className = 'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light cardOverlayFab-primary';
+            playButton.className =
+                'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light cardOverlayFab-primary';
             playButton.setAttribute('data-action', 'resume');
 
             const playIcon = document.createElement('span');
@@ -4099,11 +4794,9 @@
             playIcon.setAttribute('aria-hidden', 'true');
             playButton.appendChild(playIcon);
 
-            // Button container for additional overlay buttons (watchlist, etc.)
             const buttonContainer = document.createElement('div');
             buttonContainer.className = 'cardOverlayButton-br flex';
 
-            // Watchlist button (active state from UserData.Likes; click bound by watchlist.js)
             const watchlistSupportedTypes = ['Movie', 'Series', 'Season', 'Episode', 'BoxSet', 'Playlist', 'Video'];
             if (state.watchlist && watchlistSupportedTypes.includes(itemType)) {
                 const isLiked = item.UserData?.Likes === true;
@@ -4123,45 +4816,46 @@
                 buttonContainer.appendChild(watchlistButton);
             }
 
-            // Watched button
-            const watchedButton = document.createElement('button');
-            watchedButton.setAttribute('is', 'emby-playstatebutton');
-            watchedButton.type = 'button';
-            watchedButton.setAttribute('data-action', 'none');
-            watchedButton.className = 'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light emby-button';
-            watchedButton.setAttribute('data-id', itemId);
-            watchedButton.setAttribute('data-serverid', serverId);
-            watchedButton.setAttribute('data-itemtype', itemType);
-            watchedButton.setAttribute('data-played', item.UserData?.Played || 'false');
-            watchedButton.title = 'Mark played';
+            if (canMarkPlayed) {
+                const watchedButton = document.createElement('button');
+                watchedButton.setAttribute('is', 'emby-playstatebutton');
+                watchedButton.type = 'button';
+                watchedButton.setAttribute('data-action', 'none');
+                watchedButton.className = 'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light emby-button';
+                watchedButton.setAttribute('data-id', itemId);
+                watchedButton.setAttribute('data-serverid', serverId);
+                watchedButton.setAttribute('data-itemtype', itemType);
+                watchedButton.setAttribute('data-played', item.UserData?.Played || 'false');
+                watchedButton.title = 'Mark played';
 
-            const watchedIcon = document.createElement('span');
-            watchedIcon.className = 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover check playstatebutton-icon-unplayed';
-            watchedIcon.setAttribute('aria-hidden', 'true');
-            watchedButton.appendChild(watchedIcon);
-            buttonContainer.appendChild(watchedButton);
+                const watchedIcon = document.createElement('span');
+                watchedIcon.className = 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover check playstatebutton-icon-unplayed';
+                watchedIcon.setAttribute('aria-hidden', 'true');
+                watchedButton.appendChild(watchedIcon);
+                buttonContainer.appendChild(watchedButton);
+            }
 
-            // Favorite button
-            const favoriteButton = document.createElement('button');
-            favoriteButton.setAttribute('is', 'emby-ratingbutton');
-            favoriteButton.type = 'button';
-            favoriteButton.setAttribute('data-action', 'none');
-            favoriteButton.className = 'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light emby-button';
-            favoriteButton.setAttribute('data-id', itemId);
-            favoriteButton.setAttribute('data-serverid', serverId);
-            favoriteButton.setAttribute('data-itemtype', itemType);
-            favoriteButton.setAttribute('data-likes', '');
-            favoriteButton.setAttribute('data-isfavorite', item.UserData?.IsFavorite || 'false');
-            favoriteButton.title = 'Add to favorites';
+            if (canRate) {
+                const favoriteButton = document.createElement('button');
+                favoriteButton.setAttribute('is', 'emby-ratingbutton');
+                favoriteButton.type = 'button';
+                favoriteButton.setAttribute('data-action', 'none');
+                favoriteButton.className = 'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light emby-button';
+                favoriteButton.setAttribute('data-id', itemId);
+                favoriteButton.setAttribute('data-serverid', serverId);
+                favoriteButton.setAttribute('data-itemtype', itemType);
+                favoriteButton.setAttribute('data-likes', '');
+                favoriteButton.setAttribute('data-isfavorite', item.UserData?.IsFavorite || 'false');
+                favoriteButton.title = 'Add to favorites';
 
-            const favoriteIcon = document.createElement('span');
-            favoriteIcon.className = 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover favorite';
-            favoriteIcon.setAttribute('aria-hidden', 'true');
-            favoriteButton.appendChild(favoriteIcon);
-            buttonContainer.appendChild(favoriteButton);
+                const favoriteIcon = document.createElement('span');
+                favoriteIcon.className = 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover favorite';
+                favoriteIcon.setAttribute('aria-hidden', 'true');
+                favoriteButton.appendChild(favoriteIcon);
+                buttonContainer.appendChild(favoriteButton);
+            }
 
             const moreButton = document.createElement('button');
-            moreButton.setAttribute('is', 'paper-icon-button-light');
             moreButton.className = 'cardOverlayButton cardOverlayButton-hover itemAction paper-icon-button-light';
             moreButton.setAttribute('data-action', 'menu');
             moreButton.title = 'More';
@@ -4169,11 +4863,9 @@
             moreIcon.className = 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover more_vert';
             moreIcon.setAttribute('aria-hidden', 'true');
             moreButton.appendChild(moreIcon);
-
             buttonContainer.appendChild(moreButton);
 
-			const NON_PLAYABLE_TYPES = ['CollectionFolder', 'Folder', 'UserView', 'Virtual', 'Studio', 'Genre', 'Person'];
-            if (!NON_PLAYABLE_TYPES.includes(item.Type) && item.LocationType !== 'Virtual') {
+            if (canShowPlayOverlay) {
                 cardOverlayContainer.appendChild(playButton);
             }
             cardOverlayContainer.appendChild(buttonContainer);
@@ -4395,10 +5087,9 @@
             cardScalable.appendChild(blurhashCanvas);
         }
         cardScalable.appendChild(cardImageContainer);
-        // A custom card keeps its overlay on a phone: its link lives there.
-        if (mobileLayout && !isCustomCard) {
-            if (mobilePlayButton) cardScalable.appendChild(mobilePlayButton);
-        } else {
+        if (mobileOverlayPlayButton) {
+            cardScalable.appendChild(mobileOverlayPlayButton);
+        } else if (cardOverlayContainer) {
             cardScalable.appendChild(cardOverlayContainer);
         }
         cardScalable.appendChild(createCardBorderHost());
@@ -4424,18 +5115,244 @@
     }
 
     /**
-     * Renders a spotlight section (Netflix-style slim banner carousel)
-     * @param {Array} items - Array of Jellyfin item objects
-     * @param {string} title - Title for the spotlight section
-     * @param {Object} options - Options for the spotlight carousel
-     * @param {boolean} options.autoPlay - Auto-cycle through items (default: true)
-     * @param {number} options.interval - Auto-play interval in ms (default: 10000)
-     * @param {boolean} options.showSlideState - Show slide state container (dots or numeric) (default: true)
-     * @param {boolean} options.showDots - When showSlideState is true: true = dots (max 5), false = numeric "N / X" (default: true)
-     * @param {boolean} options.showNavButtons - Show prev/next buttons (default: true)
-     * @param {boolean} options.pauseOnHover - Pause auto-cycle when cursor is over spotlight (default: true, false when fullScreen)
-     * @returns {HTMLElement} - The constructed spotlight container
+     * TV layout detection (Jellyfin sets layout-tv on <html>).
+     * Evaluated at call time so Display Mode changes are respected after re-render.
      */
+    function isTvLayout() {
+        return document.documentElement.classList.contains('layout-tv');
+    }
+
+    /** Feature-detect flex gap once; JMP/Qt WebEngine often lacks it. */
+    function ensureNoFlexGapClass() {
+        const root = document.documentElement;
+        if (root.dataset.kefinFlexGapChecked === 'true') return;
+        root.dataset.kefinFlexGapChecked = 'true';
+        try {
+            const probe = document.createElement('div');
+            probe.style.cssText =
+                'display:flex;gap:1px;position:absolute;left:-9999px;top:0;width:auto;height:auto;visibility:hidden';
+            const a = document.createElement('div');
+            const b = document.createElement('div');
+            a.style.cssText = 'width:1px;height:1px';
+            b.style.cssText = 'width:1px;height:1px';
+            probe.appendChild(a);
+            probe.appendChild(b);
+            document.body.appendChild(probe);
+            const supported = probe.scrollWidth >= 3;
+            probe.remove();
+            root.classList.toggle('no-flex-gap', !supported);
+        } catch (_) {
+            root.classList.add('no-flex-gap');
+        }
+    }
+
+    function isFocusableTvEl(el) {
+        if (!el || el.nodeType !== 1) return false;
+        if (el.getAttribute('tabindex') === '-1') return false;
+        if (el.disabled || el.getAttribute('aria-hidden') === 'true') return false;
+        const tag = el.tagName;
+        if (tag === 'A' && el.hasAttribute('href')) return true;
+        if (tag === 'BUTTON' || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return true;
+        const ti = el.getAttribute('tabindex');
+        return ti != null && ti !== '' && Number(ti) >= 0;
+    }
+
+    function getTvFocusables(root) {
+        if (!root?.querySelectorAll) return [];
+        return Array.from(root.querySelectorAll('a[href], button, [tabindex]')).filter(isFocusableTvEl);
+    }
+
+    /** Leftmost TV focus stop in spotlight header (skips plain section labels). */
+    function getFirstSpotlightHeaderFocusable(headerCluster) {
+        if (!headerCluster) return null;
+        return getTvFocusables(headerCluster)[0] || null;
+    }
+
+    function focusTvEl(el) {
+        if (!el || typeof el.focus !== 'function') return false;
+        try {
+            el.focus({ preventScroll: true });
+        } catch (_) {
+            el.focus();
+        }
+        return document.activeElement === el;
+    }
+
+    function getMetadataLinkFocusables(metaContainer) {
+        if (!metaContainer) return [];
+        return Array.from(
+            metaContainer.querySelectorAll(
+                'a.spotlight-genre-link, a.spotlight-person-link, a.spotlight-studio-link',
+            ),
+        ).filter((el) => el.getAttribute('tabindex') !== '-1' || metaContainer.dataset.metadataDrilled === 'true');
+    }
+
+    function getMetadataRows(metaContainer) {
+        if (!metaContainer) return [];
+        return Array.from(metaContainer.querySelectorAll(':scope > .spotlight-metadata-row'));
+    }
+
+    function setMetadataDrilled(metaContainer, drilled) {
+        if (!metaContainer) return;
+        metaContainer.dataset.metadataDrilled = drilled ? 'true' : 'false';
+        const links = metaContainer.querySelectorAll(
+            'a.spotlight-genre-link, a.spotlight-person-link, a.spotlight-studio-link',
+        );
+        links.forEach((link) => {
+            if (drilled) {
+                link.classList.add('show-focus');
+                if (link.getAttribute('tabindex') === '-1') link.removeAttribute('tabindex');
+            } else {
+                link.setAttribute('tabindex', '-1');
+            }
+        });
+        if (drilled) {
+            metaContainer.setAttribute('tabindex', '-1');
+        } else {
+            metaContainer.setAttribute('tabindex', '0');
+            metaContainer.classList.add('show-focus');
+        }
+    }
+
+    function collapseAllMetadataDrillIn(root) {
+        root?.querySelectorAll?.('.metadata-container').forEach((meta) => {
+            setMetadataDrilled(meta, false);
+        });
+    }
+
+    /**
+     * Prefer TV button cards when layout-tv is active; otherwise desktop cards.
+     */
+    function createCardElement(
+        item,
+        overflowCard = false,
+        cardFormat = null,
+        customFooterText = null,
+        useParentCard = false,
+        borderStyle = null,
+    ) {
+        if (isTvLayout()) {
+            return buildTvCardElement(item, overflowCard, cardFormat, customFooterText, useParentCard, borderStyle);
+        }
+        return createJellyfinCardElement(item, overflowCard, cardFormat, customFooterText, useParentCard, borderStyle);
+    }
+
+    /**
+     * Convert a desktop card DOM tree into a Jellyfin TV focusable button card.
+     * Reuses desktop image/footer construction, then strips hover overlays and linked titles.
+     */
+    function convertDesktopCardToTvButton(sourceCard, item) {
+        const button = document.createElement('button');
+        button.type = 'button';
+
+        Array.from(sourceCard.attributes).forEach((attr) => {
+            if (attr.name === 'class') return;
+            button.setAttribute(attr.name, attr.value);
+        });
+
+        const classes = String(sourceCard.className || '')
+            .split(/\s+/)
+            .filter((c) => c && c !== 'card-hoverable');
+        if (!classes.includes('show-focus')) classes.push('show-focus');
+        if (!classes.includes('show-animation')) classes.push('show-animation');
+        if (!classes.includes('itemAction')) classes.push('itemAction');
+        button.className = classes.join(' ');
+        button.setAttribute('data-action', 'link');
+        button.setAttribute('aria-label', item?.Name || sourceCard.getAttribute('aria-label') || 'Unknown');
+
+        while (sourceCard.firstChild) {
+            button.appendChild(sourceCard.firstChild);
+        }
+
+        const imageLink = button.querySelector('a.cardImageContainer');
+        if (imageLink) {
+            const imageDiv = document.createElement('div');
+            Array.from(imageLink.attributes).forEach((attr) => {
+                if (attr.name === 'href') return;
+                imageDiv.setAttribute(attr.name, attr.value);
+            });
+            while (imageLink.firstChild) {
+                imageDiv.appendChild(imageLink.firstChild);
+            }
+            imageLink.replaceWith(imageDiv);
+        }
+
+        button.querySelectorAll('.cardOverlayContainer').forEach((el) => el.remove());
+
+        button.querySelectorAll('a.textActionButton').forEach((link) => {
+            const text = link.textContent || '';
+            const bdi = link.closest('bdi');
+            if (bdi) {
+                bdi.textContent = text;
+            } else {
+                link.replaceWith(document.createTextNode(text));
+            }
+        });
+
+        // Match Jellyfin TV backdrop image request size when easy
+        const imageEl = button.querySelector('.cardImageContainer[data-src]');
+        if (imageEl) {
+            const src = imageEl.getAttribute('data-src') || '';
+            if (src.includes('fillHeight=267') && src.includes('fillWidth=474')) {
+                imageEl.setAttribute(
+                    'data-src',
+                    src
+                        .replace('fillHeight=267', 'fillHeight=335')
+                        .replace('fillWidth=474', 'fillWidth=596'),
+                );
+            }
+        }
+
+        // Custom / external cards: overlay link was removed — navigate on activate
+        const customUrl = item?.cardUrl;
+        if (customUrl) {
+            button.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (customUrl.startsWith('#') || customUrl.startsWith('/')) {
+                    window.location.href = customUrl;
+                } else {
+                    window.open(customUrl, '_blank', 'noopener,noreferrer');
+                }
+            });
+        }
+
+        return button;
+    }
+
+    /**
+     * Dedicated TV card builder (button root, no overlays, plain titles).
+     * Same argument shape as createJellyfinCardElement.
+     */
+    function buildTvCardElement(
+        item,
+        overflowCard = false,
+        cardFormat = null,
+        customFooterText = null,
+        useParentCard = false,
+        borderStyle = null,
+    ) {
+        const normalizedFormat = (cardFormat || '').toLowerCase() || null;
+        if (normalizedFormat === 'button') {
+            const libraryButton = createLibraryButtonElement(item);
+            libraryButton.classList.add('show-focus', 'show-animation', 'itemAction');
+            if (!libraryButton.getAttribute('data-action')) {
+                libraryButton.setAttribute('data-action', 'link');
+            }
+            return libraryButton;
+        }
+
+        const desktopCard = createJellyfinCardElement(
+            item,
+            overflowCard,
+            cardFormat,
+            customFooterText,
+            useParentCard,
+            borderStyle,
+        );
+        return convertDesktopCardToTvButton(desktopCard, item);
+    }
+
     /**
      * Resolve spotlight layout/size/tileCount from options (incl. legacy fullScreen).
      * Shared by live create, skeleton create, and configure/defaults callers.
@@ -4535,9 +5452,14 @@
         const bannerContainer = document.createElement('div');
         bannerContainer.className = 'spotlight-banner-container';
 
+        // Header wraps title + nav so TV Left/Right stays in-family (one focuscontainer-x).
         // Title container hosts section name + refresh/configure controls.
         // Always create it so controls can attach even when the section has no name.
         {
+            const headerContainer = document.createElement('div');
+            headerContainer.className = 'spotlight-header-container';
+            if (isTvLayout()) headerContainer.classList.add('focuscontainer-x');
+
             const sectionTitleContainer = document.createElement('div');
             sectionTitleContainer.className = 'spotlight-section-title-container';
 
@@ -4546,12 +5468,14 @@
 
                 if (viewMoreUrl) {
                     const titleLink = document.createElement('a');
-                    titleLink.className = 'emby-tab-button emby-tab-button-active';
+                    titleLink.className = 'emby-tab-button emby-tab-button-active emby-button-foreground emby-button';
                     titleLink.textContent = title;
                     titleLink.title = 'See All';
                     titleLink.style.textDecoration = 'none';
+                    if (isTvLayout()) titleLink.classList.add('show-focus');
 
                     if (typeof viewMoreUrl === 'function') {
+                        if (isTvLayout()) titleLink.setAttribute('tabindex', '0');
                         titleLink.addEventListener('click', (e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -4566,8 +5490,9 @@
 
                     sectionTitleEl = titleLink;
                 } else {
+                    // Label only — not a focus stop; section-controls / nav are first when entering header
                     sectionTitleEl = document.createElement('div');
-                    sectionTitleEl.className = 'emby-tab-button emby-tab-button-active emby-button-foreground';
+                    sectionTitleEl.className = 'emby-tab-button emby-tab-button-active emby-button-foreground emby-button';
                     sectionTitleEl.textContent = title;
                 }
 
@@ -4577,7 +5502,8 @@
                 sectionTitleContainer.appendChild(sectionTitleWrapper);
             }
 
-            bannerContainer.appendChild(sectionTitleContainer);
+            headerContainer.appendChild(sectionTitleContainer);
+            bannerContainer.appendChild(headerContainer);
         }
 
         // Create items container (for fade transitions)
@@ -4618,16 +5544,40 @@
                     itemId: item.Id,
                     tag,
                 }));
-            }
+            } else {
+				// Handle Custom items with static images
+				const customImageOrder = [
+					"backdropUrl",
+					"thumbUrl",
+					"bannerUrl",
+					"squareUrl",
+					"posterUrl",
+					"imageUrl",
+					"logoUrl"
+				];
+				for (const key of customImageOrder) {
+					const url = item[key];
+					if (typeof url === "string" && url.trim()) {
+						// Use custom URL as only 'backdrop' for static slides
+						backdropSources = [{
+							itemId: null,
+							tag: null,
+							url: url.trim(),
+							key
+						}];
+						break;
+					}
+				}
+			}
 
             // Set backdrop width based on layout-mobile presence
-            let backdropWidth = 0;
+            let backdropWidth = 2560;
             if (document.querySelector('.layout-mobile')) {
-                backdropWidth = 640;
+                backdropWidth = 1920;
             }
 
-            const buildBackdropUrl = (src, idx) =>
-                `${serverAddress}/Items/${src.itemId}/Images/Backdrop/${idx}?fillWidth=${backdropWidth}&quality=96&tag=${src.tag}`;
+            const buildBackdropUrl = (src, idx) => src.url ? src.url :
+                `${serverAddress}/Items/${src.itemId}/Images/Backdrop/${idx}?maxWidth=${backdropWidth}&quality=96&tag=${src.tag}`;
 
             /* Cap layers by available backdrops so we never build dual/triple with undefined sources. */
             const effectiveTileCount = Math.min(tileCount, Math.max(1, backdropSources.length));
@@ -4692,20 +5642,22 @@
                 itemDiv.appendChild(dualBackgroundContainer);
             } else {
                 let singleUrl = '';
-                if (cycleBackdrops && tileCount === 1 && backdropSources.length > 0) {
-                    const shuffled = shuffleArray(backdropSources.map((s, i) => ({ src: s, idx: i })));
+				const shuffled = shuffleArray(backdropSources.map((s, i) => ({ src: s, idx: i })));
+				if (shuffled.length > 0 && shuffled.some(s => s.src.url)) {
+					singleUrl = shuffled.find(s => s.src.url).src.url;
+				} else if (cycleBackdrops && tileCount === 1 && backdropSources.length > 0) {
                     const urls = shuffled.map(
                         ({ src, idx }) =>
-                            `${serverAddress}/Items/${src.itemId}/Images/Backdrop/${idx}?fillWidth=${backdropWidth}&quality=96&tag=${src.tag}`,
+                            `${serverAddress}/Items/${src.itemId}/Images/Backdrop/${idx}?maxWidth=${backdropWidth}&quality=96&tag=${src.tag}`,
                     );
                     const mapKey = sectionKey + '_' + item.Id;
                     cycleBackdropMap.set(mapKey, { shuffledUrls: urls, currentIndex: 0 });
                     singleUrl = urls[0];
                 } else if (backdropSources.length) {
                     const first = backdropSources[0];
-                    singleUrl = `${serverAddress}/Items/${first.itemId}/Images/Backdrop?fillWidth=${backdropWidth}&quality=96&tag=${first.tag}`;
+                    singleUrl = `${serverAddress}/Items/${first.itemId}/Images/Backdrop?maxWidth=${backdropWidth}&quality=96&tag=${first.tag}`;
                 } else if (item.ImageTags?.Primary) {
-                    singleUrl = `${serverAddress}/Items/${item.Id}/Images/Primary?fillWidth=${backdropWidth}&quality=96&tag=${item.ImageTags.Primary}`;
+                    singleUrl = `${serverAddress}/Items/${item.Id}/Images/Primary?maxWidth=${backdropWidth}&quality=96&tag=${item.ImageTags.Primary}`;
                 }
                 if (singleUrl) {
                     const singleBackdropContainer = document.createElement('div');
@@ -4747,7 +5699,7 @@
             if (hasLogo) {
                 // Use logo image instead of text title
                 const logoHeight = size === 'full' ? '300' : size === 'large' ? '250' : '200';
-                const logoUrl = `${serverAddress}/Items/${item.Id}/Images/Logo?fillHeight=${logoHeight}&quality=96&tag=${item.ImageTags.Logo}`;
+                const logoUrl = `${serverAddress}/Items/${item.Id}/Images/Logo?maxHeight=${logoHeight}&quality=96&tag=${item.ImageTags.Logo}`;
                 titleEl = document.createElement('div');
                 titleEl.className = 'spotlight-item-logo';
                 titleEl.setAttribute('data-background-url', logoUrl);
@@ -4881,6 +5833,7 @@
                         nameElement.className = 'spotlight-person-link';
                         nameElement.href = `${serverAddress}/web/#/details?id=${itemData.id}&serverId=${serverId}`;
                         nameElement.textContent = itemData.name;
+                        if (isTvLayout()) nameElement.classList.add('show-focus');
                         nameElement.addEventListener('click', (e) => {
                             e.stopPropagation();
                         });
@@ -4889,12 +5842,14 @@
                         nameElement.className = 'spotlight-genre-link';
                         nameElement.href = `${serverAddress}/web/#/list.html?genreId=${itemData.id}&serverId=${serverId}`;
                         nameElement.textContent = itemData.name;
+                        if (isTvLayout()) nameElement.classList.add('show-focus');
                         nameElement.addEventListener('click', (e) => e.stopPropagation());
                     } else if (useStudioLinks && itemData.id) {
                         nameElement = document.createElement('a');
                         nameElement.className = 'spotlight-studio-link';
                         nameElement.href = `${serverAddress}/web/#/list.html?studioId=${itemData.id}&serverId=${serverId}`;
                         nameElement.textContent = itemData.name;
+                        if (isTvLayout()) nameElement.classList.add('show-focus');
                         nameElement.addEventListener('click', (e) => e.stopPropagation());
                     } else {
                         nameElement = document.createElement('span');
@@ -4915,8 +5870,8 @@
                     }
                 });
 
-                // Tooltip when more items exist (full list on hover)
-                if (hasMore) {
+                // Tooltip when more items exist (full list on hover) — skip on TV (no hover; links steal focus)
+                if (hasMore && !isTvLayout()) {
                     // Tooltip: full list as vertical stack with clickable links (no layout shift)
                     const tooltip = document.createElement('div');
                     tooltip.className = 'spotlight-truncated-list-tooltip';
@@ -5109,11 +6064,13 @@
             // Buttons container
             const buttonsContainer = document.createElement('div');
             buttonsContainer.className = 'spotlight-buttons-container mainDetailButtons';
+            if (isTvLayout()) buttonsContainer.classList.add('focuscontainer-x');
 
             // Play button (material icon span button)
             const playButton = document.createElement('button');
             playButton.className = 'emby-button raised button-flat btnPlay detailButton';
             playButton.title = 'Play';
+            if (isTvLayout()) playButton.classList.add('show-focus');
             const playIcon = document.createElement('span');
             playIcon.className = 'material-icons';
             playIcon.textContent = 'play_arrow';
@@ -5145,6 +6102,7 @@
                 watchlistButton = document.createElement('button');
                 watchlistButton.type = 'button';
                 watchlistButton.className = 'watchlist-button spotlight-watchlist-button emby-button button-flat paper-icon-button-light';
+                if (isTvLayout()) watchlistButton.classList.add('show-focus');
                 watchlistButton.setAttribute('data-action', 'none');
                 watchlistButton.setAttribute('data-id', item.Id);
                 watchlistButton.setAttribute('data-active', isLiked ? 'true' : 'false');
@@ -5163,14 +6121,15 @@
             // Info button (shows overview on hover)
             const infoButton = document.createElement('button');
             infoButton.className = 'emby-button button-flat spotlight-info-button paper-icon-button-light';
+            if (isTvLayout()) infoButton.classList.add('show-focus');
             const infoIcon = document.createElement('span');
             infoIcon.className = 'material-icons';
             infoIcon.textContent = 'info';
             infoIcon.title = 'Go To Item';
             infoButton.appendChild(infoIcon);
 
-            // Overview tooltip (hidden by default, shown on hover)
-            if (item.Overview) {
+            // Overview tooltip (hover only) — skip on TV
+            if (item.Overview && !isTvLayout()) {
                 const overviewTooltip = document.createElement('div');
                 overviewTooltip.className = 'spotlight-overview-tooltip';
                 overviewTooltip.textContent = item.Overview;
@@ -5203,15 +6162,35 @@
             // Build overlay content in order: Name, Rating, Year+Time+EndsAt+Genres, Directed by, Written by, Taglines, Buttons
             overlay.appendChild(titleEl);
 
-            const metadataContainer = document.createElement('div');
-            metadataContainer.className = 'metadata-container';
+            // TV: real emby-button so Jellyfin spatial nav lands on metadata (plain div is Tab-only)
+            const metadataContainer = isTvLayout()
+                ? document.createElement('button')
+                : document.createElement('div');
+            metadataContainer.className = isTvLayout()
+                ? 'metadata-container emby-button show-focus'
+                : 'metadata-container';
+            if (isTvLayout()) {
+                metadataContainer.type = 'button';
+                metadataContainer.setAttribute('tabindex', '0');
+                metadataContainer.setAttribute('aria-label', 'Item metadata');
+                metadataContainer.dataset.metadataDrilled = 'false';
+                // Collapsed click must not navigate; drill-in is Right/Enter only
+                metadataContainer.addEventListener('click', (e) => {
+                    if (metadataContainer.dataset.metadataDrilled !== 'true') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                });
+            }
 
+            if (isTvLayout()) metadataRow.classList.add('focuscontainer-x');
             if (metadataRow.children.length > 0) {
                 metadataContainer.appendChild(metadataRow);
             }
             // For Series, show seasons/episodes. For Movies, show director/writer
             if (itemType === 'Series' || itemType === 'Season' || itemType === 'Episode') {
                 if (seriesInfoContainer) {
+                    if (isTvLayout()) seriesInfoContainer.classList.add('focuscontainer-x');
                     metadataContainer.appendChild(seriesInfoContainer);
                 }
             } else {
@@ -5224,12 +6203,14 @@
                 if (combinedContainer) {
                     const creditsRow = document.createElement('div');
                     creditsRow.className = 'spotlight-metadata-row spotlight-credits-row';
+                    if (isTvLayout()) creditsRow.classList.add('focuscontainer-x');
                     if (studioContainer) creditsRow.appendChild(studioContainer);
                     creditsRow.appendChild(combinedContainer);
                     metadataContainer.appendChild(creditsRow);
                 } else if (directorContainer || writerContainer) {
                     const creditsRow = document.createElement('div');
                     creditsRow.className = 'spotlight-metadata-row spotlight-credits-row';
+                    if (isTvLayout()) creditsRow.classList.add('focuscontainer-x');
                     if (studioContainer) creditsRow.appendChild(studioContainer);
                     if (directorContainer) creditsRow.appendChild(directorContainer);
                     if (writerContainer) creditsRow.appendChild(writerContainer);
@@ -5237,9 +6218,14 @@
                 } else if (studioContainer) {
                     const studioRow = document.createElement('div');
                     studioRow.className = 'spotlight-metadata-row spotlight-credits-row';
+                    if (isTvLayout()) studioRow.classList.add('focuscontainer-x');
                     studioRow.appendChild(studioContainer);
                     metadataContainer.appendChild(studioRow);
                 }
+            }
+            if (isTvLayout()) {
+                // Collapsed by default: links not in vertical focus path until Right/OK drill-in
+                setMetadataDrilled(metadataContainer, false);
             }
             // Fixed 4-section grid: Logo, Metadata, Overview, Buttons (always render all to prevent layout shift)
             const logoSection = document.createElement('div');
@@ -5299,6 +6285,140 @@
             firstItemActive.setAttribute('data-active', 'true');
         }
 
+        function syncSpotlightTvFocus() {
+            if (!isTvLayout()) return;
+            const isTooltipFocusable = (el) =>
+                !!el.closest?.('.spotlight-truncated-list-tooltip, .spotlight-overview-tooltip');
+            const isMetaLink = (el) =>
+                el.classList?.contains('spotlight-genre-link') ||
+                el.classList?.contains('spotlight-person-link') ||
+                el.classList?.contains('spotlight-studio-link');
+            bannerContainer.querySelectorAll('.spotlight-item').forEach((slide) => {
+                const active = slide.getAttribute('data-active') === 'true';
+                const meta = slide.querySelector('.metadata-container');
+                const drilled = meta?.dataset?.metadataDrilled === 'true';
+
+                slide.querySelectorAll('a[href], button').forEach((el) => {
+                    if (el.classList.contains('spotlight-dot') || isTooltipFocusable(el)) {
+                        el.setAttribute('tabindex', '-1');
+                        return;
+                    }
+                    if (!active) {
+                        el.setAttribute('tabindex', '-1');
+                        return;
+                    }
+                    // Active slide: metadata links gated by drill-in
+                    if (isMetaLink(el)) {
+                        if (drilled) {
+                            if (el.getAttribute('tabindex') === '-1') el.removeAttribute('tabindex');
+                        } else {
+                            el.setAttribute('tabindex', '-1');
+                        }
+                        return;
+                    }
+                    if (el.getAttribute('tabindex') === '-1') el.removeAttribute('tabindex');
+                });
+
+                if (meta) {
+                    if (!active) {
+                        meta.setAttribute('tabindex', '-1');
+                    } else if (drilled) {
+                        meta.setAttribute('tabindex', '-1');
+                    } else {
+                        meta.setAttribute('tabindex', '0');
+                        meta.classList.add('show-focus');
+                    }
+                }
+            });
+            bannerContainer.querySelectorAll('.spotlight-dot').forEach((dot) => {
+                dot.setAttribute('tabindex', '-1');
+            });
+        }
+
+        function captureSpotlightFocusSlot() {
+            if (!isTvLayout()) return null;
+            const ae = document.activeElement;
+            if (!ae || !container.contains(ae)) return null;
+            if (ae.closest('.spotlight-section-title-container')) return { slot: 'title' };
+            if (ae.closest('.spotlight-nav-container')) return { slot: 'nav' };
+            const meta = ae.closest('.metadata-container');
+            if (meta && container.contains(meta)) {
+                if (meta.dataset.metadataDrilled === 'true') {
+                    const links = Array.from(
+                        meta.querySelectorAll(
+                            'a.spotlight-genre-link, a.spotlight-person-link, a.spotlight-studio-link',
+                        ),
+                    );
+                    return { slot: 'metadata-drilled', linkIndex: Math.max(0, links.indexOf(ae)) };
+                }
+                return { slot: 'metadata' };
+            }
+            const btn = ae.closest('.spotlight-buttons-container');
+            if (btn && container.contains(btn)) {
+                let role = 'play';
+                if (ae.classList.contains('watchlist-button') || ae.closest('.watchlist-button')) role = 'watchlist';
+                else if (ae.classList.contains('spotlight-info-button') || ae.closest('.spotlight-info-button'))
+                    role = 'info';
+                else if (ae.classList.contains('btnPlay') || ae.closest('.btnPlay')) role = 'play';
+                return { slot: 'buttons', role };
+            }
+            return null;
+        }
+
+        function restoreSpotlightFocusSlot(slot) {
+            if (!slot || !isTvLayout()) return;
+            const activeSlide = bannerContainer.querySelector('.spotlight-item[data-active="true"]');
+            if (slot.slot === 'title') {
+                const headerCluster = bannerContainer.querySelector('.spotlight-header-container');
+                const first = getFirstSpotlightHeaderFocusable(headerCluster);
+                if (first) focusTvEl(first);
+                return;
+            }
+            if (slot.slot === 'nav') {
+                const nav = bannerContainer.querySelector('.spotlight-nav-buttons-container');
+                const first = getTvFocusables(nav)[0];
+                if (first) focusTvEl(first);
+                return;
+            }
+            if (!activeSlide) return;
+            if (slot.slot === 'metadata') {
+                collapseAllMetadataDrillIn(activeSlide);
+                const meta = activeSlide.querySelector('.metadata-container');
+                if (meta) {
+                    setMetadataDrilled(meta, false);
+                    focusTvEl(meta);
+                }
+                return;
+            }
+            if (slot.slot === 'metadata-drilled') {
+                const meta = activeSlide.querySelector('.metadata-container');
+                if (!meta) return;
+                setMetadataDrilled(meta, true);
+                const links = Array.from(
+                    meta.querySelectorAll(
+                        'a.spotlight-genre-link, a.spotlight-person-link, a.spotlight-studio-link',
+                    ),
+                );
+                const idx = Math.min(slot.linkIndex || 0, Math.max(0, links.length - 1));
+                if (links[idx]) focusTvEl(links[idx]);
+                else if (links[0]) focusTvEl(links[0]);
+                else {
+                    setMetadataDrilled(meta, false);
+                    focusTvEl(meta);
+                }
+                return;
+            }
+            if (slot.slot === 'buttons') {
+                const buttons = activeSlide.querySelector('.spotlight-buttons-container');
+                if (!buttons) return;
+                let target = null;
+                if (slot.role === 'watchlist') target = buttons.querySelector('.watchlist-button');
+                else if (slot.role === 'info') target = buttons.querySelector('.spotlight-info-button');
+                else target = buttons.querySelector('.btnPlay');
+                focusTvEl(target || getTvFocusables(buttons)[0]);
+            }
+        }
+
         if (!inert) {
             // Delegated handler: info button click -> navigate to item details for the current slide
             bannerContainer.addEventListener('click', (e) => {
@@ -5323,22 +6443,17 @@
                 }
             });
 
-            // Apply initial pan animation to the starting slide (helper also sets up completion tracking)
-            if (panAnimation && items.length > 0) {
-                const firstItemPan = bannerContainer.querySelector(`.spotlight-item[data-index="${currentIndex}"]`);
-                if (firstItemPan) {
-                    applyPanAnimationToSlide(firstItemPan);
-                    startCycleBackdropTimer(firstItemPan, items[currentIndex].Id);
-                }
-            }
+            // Initial Ken Burns (.animate) is deferred until first visibilityObserver intersect + one rAF
+            // (see visibilityObserver below). Navigation/timer still applies sync via goToItem.
 
             // Navigation buttons (top right)
             if (showNavButtons && items.length > 1) {
                 const navButtonsContainer = document.createElement('div');
-                navButtonsContainer.className = 'spotlight-nav-buttons-container emby-tab-button emby-tab-button-active';
+                navButtonsContainer.className = 'spotlight-nav-buttons-container emby-tab-button emby-tab-button-active emby-button-foreground';
 
                 const prevButton = document.createElement('button');
                 prevButton.className = 'spotlight-nav-button spotlight-nav-prev emby-button';
+                if (isTvLayout()) prevButton.classList.add('show-focus');
                 const prevIcon = document.createElement('span');
                 prevIcon.className = 'material-icons';
                 prevIcon.textContent = 'chevron_left';
@@ -5351,6 +6466,7 @@
 
                 const nextButton = document.createElement('button');
                 nextButton.className = 'spotlight-nav-button spotlight-nav-next emby-button';
+                if (isTvLayout()) nextButton.classList.add('show-focus');
                 const nextIcon = document.createElement('span');
                 nextIcon.className = 'material-icons';
                 nextIcon.textContent = 'chevron_right';
@@ -5368,7 +6484,9 @@
                 navContainer.className = 'spotlight-nav-container headerTabs sectionTabs';
                 navContainer.appendChild(navButtonsContainer);
 
-                bannerContainer.appendChild(navContainer);
+                const headerContainer =
+                    bannerContainer.querySelector('.spotlight-header-container') || bannerContainer;
+                headerContainer.appendChild(navContainer);
             }
 
             // Pause button (bottom right) — only when nav chrome exists (showNavButtons)
@@ -5377,6 +6495,7 @@
                 if (navButtonsContainer) {
                     const pauseButton = document.createElement('button');
                     pauseButton.className = 'spotlight-pause-button spotlight-nav-button emby-button';
+                    if (isTvLayout()) pauseButton.classList.add('show-focus');
                     const pauseIcon = document.createElement('span');
                     pauseIcon.className = 'material-icons';
                     pauseIcon.textContent = 'pause';
@@ -5613,6 +6732,7 @@
             // Go to item function (crossfade transition, then only active slide is visible)
             function goToItem(index, resetTimer = true) {
                 if (index === currentIndex) return;
+                const focusSlot = captureSpotlightFocusSlot();
                 if (cycleBackdropTimer) {
                     clearInterval(cycleBackdropTimer);
                     cycleBackdropTimer = null;
@@ -5702,6 +6822,11 @@
                     advanceDue = false;
                     startAutoPlay();
                 }
+
+                syncSpotlightTvFocus();
+                if (focusSlot) {
+                    requestAnimationFrame(() => restoreSpotlightFocusSlot(focusSlot));
+                }
             }
 
             // Auto-play: single-timeout per slide, controlled only by pause/visibility (hover is ignored)
@@ -5729,7 +6854,9 @@
                 }
             }
 
-            // Only cycle when spotlight is in view: pause CSS pan + stop timers when off-screen
+            // Only cycle when spotlight is in view: pause CSS pan + stop timers when off-screen.
+            // First intersect also gates initial .animate (post one rAF so IO + animate don't stack).
+            let initialPanScheduled = false;
             const visibilityObserver = new IntersectionObserver(
                 (entries) => {
                     const entry = entries[0];
@@ -5747,15 +6874,44 @@
                         }
                         setSlideAnimationPlayState(currentSlide, 'paused');
                     } else {
-                        // Re-entering viewport: resume pan, ensure current media painted, restart timers
-                        setSlideAnimationPlayState(currentSlide, 'running');
                         ensureSlideImagesLoaded(currentIndex);
                         if (items.length > 1) {
                             ensureSlideImagesLoaded((currentIndex + 1) % items.length);
                         }
-                        if (currentSlide && items[currentIndex]) {
-                            startCycleBackdropTimer(currentSlide, items[currentIndex].Id);
+
+                        const needsInitialPan =
+                            panAnimation &&
+                            currentSlide &&
+                            !initialPanScheduled &&
+                            !currentSlide.querySelector(
+                                '.spotlight-background-layer img.animate, .spotlight-background-single img.animate',
+                            );
+
+                        if (needsInitialPan) {
+                            initialPanScheduled = true;
+                            requestAnimationFrame(() => {
+                                if (!container.isConnected || !panAnimation || !isVisible) return;
+                                const slide = getCurrentSpotlightSlide();
+                                if (!slide) return;
+                                if (
+                                    !slide.querySelector(
+                                        '.spotlight-background-layer img.animate, .spotlight-background-single img.animate',
+                                    )
+                                ) {
+                                    applyPanAnimationToSlide(slide);
+                                }
+                                if (items[currentIndex]) {
+                                    startCycleBackdropTimer(slide, items[currentIndex].Id);
+                                }
+                            });
+                        } else {
+                            // Re-entering viewport: resume pan, restart timers
+                            setSlideAnimationPlayState(currentSlide, 'running');
+                            if (currentSlide && items[currentIndex]) {
+                                startCycleBackdropTimer(currentSlide, items[currentIndex].Id);
+                            }
                         }
+
                         if (autoPlay && !isPaused) {
                             startAutoPlay();
                         }
@@ -5791,6 +6947,217 @@
             // Preload next slide soon after mount so transition has no pop
             if (items.length > 1) {
                 requestAnimationFrame(() => ensureSlideImagesLoaded(1));
+            }
+
+            // TV D-pad: metadata drill-in, row-scoped seams (header L/R is native focuscontainer-x)
+            if (isTvLayout()) {
+                const ARROW = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']);
+
+                function getHeaderCluster() {
+                    return bannerContainer.querySelector('.spotlight-header-container');
+                }
+                function getActiveMeta() {
+                    return bannerContainer.querySelector(
+                        '.spotlight-item[data-active="true"] .metadata-container',
+                    );
+                }
+                function getActiveButtons() {
+                    return bannerContainer.querySelector(
+                        '.spotlight-item[data-active="true"] .spotlight-buttons-container',
+                    );
+                }
+
+                function exitMetadataTo(direction) {
+                    const meta = getActiveMeta();
+                    if (meta) setMetadataDrilled(meta, false);
+                    if (direction === 'up') {
+                        focusTvEl(getFirstSpotlightHeaderFocusable(getHeaderCluster()));
+                    } else {
+                        const buttons = getActiveButtons();
+                        focusTvEl(getTvFocusables(buttons)[0]);
+                    }
+                }
+
+                function enterMetadataDrillIn() {
+                    const meta = getActiveMeta();
+                    if (!meta) return false;
+                    setMetadataDrilled(meta, true);
+                    const rows = getMetadataRows(meta);
+                    for (const row of rows) {
+                        const links = Array.from(
+                            row.querySelectorAll(
+                                'a.spotlight-genre-link, a.spotlight-person-link, a.spotlight-studio-link',
+                            ),
+                        );
+                        if (links[0]) {
+                            focusTvEl(links[0]);
+                            return true;
+                        }
+                    }
+                    setMetadataDrilled(meta, false);
+                    return false;
+                }
+
+                bannerContainer.addEventListener(
+                    'keydown',
+                    (e) => {
+                        if (!ARROW.has(e.key) && e.key !== 'Enter' && e.key !== ' ') return;
+                        const ae = document.activeElement;
+                        if (!ae || !bannerContainer.contains(ae)) return;
+
+                        const meta = getActiveMeta();
+                        const inMeta = !!(meta && meta.contains(ae));
+                        const drilled = meta?.dataset?.metadataDrilled === 'true';
+
+                        // Metadata container: Right/Enter drills in; Up/Down leave to neighbors
+                        if (inMeta && ae === meta && !drilled) {
+                            if (e.key === 'ArrowRight' || e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                enterMetadataDrillIn();
+                                return;
+                            }
+                            if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                exitMetadataTo('up');
+                                return;
+                            }
+                            if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                exitMetadataTo('down');
+                                return;
+                            }
+                        }
+
+                        // Metadata drilled: row-scoped L/R + Up/Down exit
+                        if (inMeta && drilled && meta) {
+                            const rows = getMetadataRows(meta).filter((row) =>
+                                row.querySelector(
+                                    'a.spotlight-genre-link, a.spotlight-person-link, a.spotlight-studio-link',
+                                ),
+                            );
+                            const row = ae.closest('.spotlight-metadata-row');
+                            const rowIndex = rows.indexOf(row);
+                            const rowLinks = row
+                                ? Array.from(
+                                      row.querySelectorAll(
+                                          'a.spotlight-genre-link, a.spotlight-person-link, a.spotlight-studio-link',
+                                      ),
+                                  )
+                                : [];
+                            const linkIndex = rowLinks.indexOf(ae);
+
+                            if (e.key === 'ArrowUp') {
+                                if (rowIndex <= 0) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    exitMetadataTo('up');
+                                    return;
+                                }
+                                // Move to previous row rightmost for predictability when using Up between rows
+                                const prevLinks = Array.from(
+                                    rows[rowIndex - 1].querySelectorAll(
+                                        'a.spotlight-genre-link, a.spotlight-person-link, a.spotlight-studio-link',
+                                    ),
+                                );
+                                if (prevLinks.length) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    focusTvEl(prevLinks[prevLinks.length - 1]);
+                                }
+                                return;
+                            }
+                            if (e.key === 'ArrowDown') {
+                                if (rowIndex < 0 || rowIndex >= rows.length - 1) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    exitMetadataTo('down');
+                                    return;
+                                }
+                                const nextLinks = Array.from(
+                                    rows[rowIndex + 1].querySelectorAll(
+                                        'a.spotlight-genre-link, a.spotlight-person-link, a.spotlight-studio-link',
+                                    ),
+                                );
+                                if (nextLinks[0]) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    focusTvEl(nextLinks[0]);
+                                }
+                                return;
+                            }
+                            if (e.key === 'ArrowLeft' && linkIndex === 0) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (rowIndex > 0) {
+                                    // Bottom/mid row first link → previous row (not category rail)
+                                    const prevLinks = Array.from(
+                                        rows[rowIndex - 1].querySelectorAll(
+                                            'a.spotlight-genre-link, a.spotlight-person-link, a.spotlight-studio-link',
+                                        ),
+                                    );
+                                    focusTvEl(prevLinks[prevLinks.length - 1] || meta);
+                                } else {
+                                    // Top row first link → title / header
+                                    exitMetadataTo('up');
+                                }
+                                return;
+                            }
+                            if (e.key === 'ArrowRight' && linkIndex === rowLinks.length - 1) {
+                                if (rowIndex >= 0 && rowIndex < rows.length - 1) {
+                                    const nextLinks = Array.from(
+                                        rows[rowIndex + 1].querySelectorAll(
+                                            'a.spotlight-genre-link, a.spotlight-person-link, a.spotlight-studio-link',
+                                        ),
+                                    );
+                                    if (nextLinks[0]) {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        focusTvEl(nextLinks[0]);
+                                    }
+                                } else {
+                                    // Right on last bottom link → buttons row
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    exitMetadataTo('down');
+                                }
+                                return;
+                            }
+                            // Left/Right mid-row: let focuscontainer-x / browser handle
+                        }
+                    },
+                    true,
+                );
+
+                // Vertical entry into header / buttons → snap leftmost
+                bannerContainer.addEventListener(
+                    'focusin',
+                    (e) => {
+                        const target = e.target;
+                        if (!target || !bannerContainer.contains(target)) return;
+                        const related = e.relatedTarget;
+
+                        const headerCluster = getHeaderCluster();
+                        const buttons = getActiveButtons();
+
+                        const enteredHeader =
+                            headerCluster?.contains(target) &&
+                            (!related || !headerCluster.contains(related));
+                        const enteredButtons =
+                            buttons?.contains(target) && (!related || !buttons.contains(related));
+
+                        if (enteredHeader) {
+                            const first = getFirstSpotlightHeaderFocusable(headerCluster);
+                            if (first && target !== first) focusTvEl(first);
+                        } else if (enteredButtons) {
+                            const fs = getTvFocusables(buttons);
+                            if (fs[0] && target !== fs[0]) focusTvEl(fs[0]);
+                        }
+                    },
+                    true,
+                );
             }
 
             // Touch swipe handling
@@ -5889,7 +7256,10 @@
                 if (!items[idx]) return;
                 createAndAppendSlide(items[idx], idx, idx === currentIndex);
             });
+            syncSpotlightTvFocus();
         };
+
+        syncSpotlightTvFocus();
 
         return container;
     }
@@ -5923,8 +7293,12 @@
 
     function setShowAllIcon(button, layout) {
         if (!button) return;
+        const iconName = ITEMS_LAYOUT_ICONS[layout] || 'view_array';
+        const icon = button.querySelector('.material-icons') || button;
+        icon.classList.remove('view_array', 'grid_view', 'grid_on');
+        icon.classList.add(iconName);
+        // Keep glyph classes off the paper-icon button itself
         button.classList.remove('view_array', 'grid_view', 'grid_on');
-        button.classList.add(ITEMS_LAYOUT_ICONS[layout] || 'view_array');
     }
 
     function isButtonCardFormat(cardFormat) {
@@ -5936,199 +7310,12 @@
         if (isButtonCardFormat(cardFormat)) {
             return Array.from(itemsContainer.querySelectorAll(':scope > .homeLibraryButton'));
         }
-        return Array.from(itemsContainer.querySelectorAll(':scope > .card:not(.card-layout-dummy)'));
+        return Array.from(itemsContainer.querySelectorAll(':scope > .card'));
     }
 
     function getRealLayoutCards(itemsContainer) {
         if (!itemsContainer) return [];
-        return Array.from(itemsContainer.querySelectorAll(':scope > .card:not(.card-layout-dummy)'));
-    }
-
-    function removeLayoutDummies(itemsContainer) {
-        if (!itemsContainer) return;
-        itemsContainer.querySelectorAll(':scope > .card-layout-dummy').forEach((el) => el.remove());
-    }
-
-    function invalidateLastRowPadding(itemsContainer) {
-        if (!itemsContainer) return;
-        removeLayoutDummies(itemsContainer);
-        itemsContainer.removeAttribute('data-last-row-padding');
-        itemsContainer.removeAttribute('data-last-row-padding-layout');
-        itemsContainer.removeAttribute('data-measuring');
-    }
-
-    function canMeasureLastRowPadding(itemsContainer) {
-        return !!(itemsContainer?.isConnected && itemsContainer.clientWidth >= 1);
-    }
-
-    function createLayoutDummyCard(templateCard, layout) {
-        const dummy = document.createElement('div');
-        dummy.className = templateCard?.className || 'card';
-        dummy.classList.add('card', 'card-layout-dummy');
-        dummy.classList.remove('card-hoverable');
-        dummy.setAttribute('aria-hidden', 'true');
-        dummy.setAttribute('tabindex', '-1');
-
-        // cardBox
-        const cardBox = document.createElement('div');
-        cardBox.className = 'cardBox';
-        dummy.appendChild(cardBox);
-
-        // cardScalable
-        const cardScalable = document.createElement('div');
-        cardScalable.className = 'cardScalable';
-        cardBox.appendChild(cardScalable);
-
-        if (layout === 'grid') {
-            const templatePadder = templateCard?.querySelector('.cardPadder');
-            const padder = document.createElement('div');
-            padder.className = templatePadder?.className || 'cardPadder cardPadder-portrait lazy-hidden-children';
-            const cardIcon = document.createElement('span');
-            cardIcon.className = 'cardImageIcon material-icons';
-            cardIcon.setAttribute('aria-hidden', 'true');
-            cardIcon.textContent = 'folder';
-            padder.appendChild(cardIcon);
-            cardScalable.appendChild(padder);
-
-            const border = createCardBorderHost();
-            const section = templateCard?.closest('[data-border],[data-border-style]');
-            const raw =
-                section?.dataset?.border ||
-                section?.dataset?.borderStyle ||
-                templateCard?.querySelector('.cardBorder')?.dataset?.style ||
-                '';
-            const style = normalizeCardBorderStyle(raw);
-            if (style) fillCardBorder(border, style);
-            cardScalable.appendChild(border);
-        }
-
-        return dummy;
-    }
-
-    /**
-     * Count how many real cards fit on the first row at natural (non-growing) width.
-     * @param {HTMLElement} itemsContainer
-     * @returns {number}
-     */
-    function countItemsPerRow(itemsContainer) {
-        if (!canMeasureLastRowPadding(itemsContainer)) return 0;
-        const cards = getRealLayoutCards(itemsContainer);
-        if (!cards.length) return 0;
-        itemsContainer.setAttribute('data-measuring', 'true');
-        void itemsContainer.offsetWidth;
-        const firstTop = cards[0].offsetTop;
-        let count = 0;
-        for (const card of cards) {
-            if (card.offsetTop !== firstTop) break;
-            count++;
-        }
-        itemsContainer.removeAttribute('data-measuring');
-        return count;
-    }
-
-    /**
-     * Pad the last flex row with invisible dummy cards so grow distribution matches full rows.
-     * Reuses data-last-row-padding when cached for the same layout.
-     * @param {HTMLElement} itemsContainer
-     * @param {'grid'} layout
-     */
-    function syncLastRowPadding(itemsContainer, layout) {
-        if (!itemsContainer || layout !== 'grid') return;
-
-        const cachedPad = itemsContainer.getAttribute('data-last-row-padding');
-        const cachedLayout = itemsContainer.getAttribute('data-last-row-padding-layout');
-        const hasCache = cachedPad != null && cachedPad !== '' && cachedLayout === layout && /^\d+$/.test(cachedPad);
-
-        // Disconnected / zero-width: do not measure or cache (retry when laid out).
-        if (!hasCache && !canMeasureLastRowPadding(itemsContainer)) return;
-
-        removeLayoutDummies(itemsContainer);
-
-        let padding;
-        if (hasCache) {
-            padding = parseInt(cachedPad, 10);
-        } else {
-            itemsContainer.removeAttribute('data-last-row-padding');
-            itemsContainer.removeAttribute('data-last-row-padding-layout');
-            const cards = getRealLayoutCards(itemsContainer);
-            if (!cards.length) return;
-            const perRow = countItemsPerRow(itemsContainer);
-            if (perRow <= 0) return;
-            const rem = cards.length % perRow;
-            padding = rem === 0 ? 0 : perRow - rem;
-            itemsContainer.setAttribute('data-last-row-padding', String(padding));
-            itemsContainer.setAttribute('data-last-row-padding-layout', layout);
-        }
-
-        if (padding <= 0) return;
-        if (!itemsContainer.isConnected) return;
-        const template = getRealLayoutCards(itemsContainer)[0];
-        if (!template) return;
-        const frag = document.createDocumentFragment();
-        for (let i = 0; i < padding; i++) {
-            frag.appendChild(createLayoutDummyCard(template, layout));
-        }
-        itemsContainer.appendChild(frag);
-    }
-
-    let lastRowPaddingResizeTimer = null;
-    function handleLastRowPaddingWindowResize() {
-        clearTimeout(lastRowPaddingResizeTimer);
-        lastRowPaddingResizeTimer = setTimeout(() => {
-            document.querySelectorAll('.itemsContainer[data-layout="grid"]').forEach((container) => {
-                const layout = container.getAttribute('data-layout');
-                invalidateLastRowPadding(container);
-                syncLastRowPadding(container, layout);
-            });
-        }, 150);
-    }
-    if (!window.__kefinLastRowPaddingResizeBound) {
-        window.__kefinLastRowPaddingResizeBound = true;
-        window.addEventListener('resize', handleLastRowPaddingWindowResize);
-    }
-
-    let lastRowPaddingRo = null;
-    let lastRowPaddingRoTimer = null;
-    const lastRowPaddingRoPending = new Set();
-
-    function ensureLastRowPaddingResizeObserver() {
-        if (lastRowPaddingRo || typeof ResizeObserver === 'undefined') return lastRowPaddingRo;
-        lastRowPaddingRo = new ResizeObserver((entries) => {
-            entries.forEach((entry) => {
-                if (entry?.target) lastRowPaddingRoPending.add(entry.target);
-            });
-            clearTimeout(lastRowPaddingRoTimer);
-            lastRowPaddingRoTimer = setTimeout(() => {
-                const targets = [...lastRowPaddingRoPending];
-                lastRowPaddingRoPending.clear();
-                targets.forEach((el) => {
-                    const layout = el.getAttribute?.('data-layout');
-                    if (layout !== 'grid') return;
-                    invalidateLastRowPadding(el);
-                    syncLastRowPadding(el, layout);
-                });
-            }, 80);
-        });
-        return lastRowPaddingRo;
-    }
-
-    function observeLastRowPadding(itemsContainer) {
-        const ro = ensureLastRowPaddingResizeObserver();
-        if (!ro || !itemsContainer) return;
-        try {
-            ro.observe(itemsContainer);
-        } catch (_) {
-            /* ignore */
-        }
-    }
-
-    function unobserveLastRowPadding(itemsContainer) {
-        if (!lastRowPaddingRo || !itemsContainer) return;
-        try {
-            lastRowPaddingRo.unobserve(itemsContainer);
-        } catch (_) {
-            /* ignore */
-        }
+        return Array.from(itemsContainer.querySelectorAll(':scope > .card'));
     }
 
     /**
@@ -6153,8 +7340,6 @@
             itemsContainer.removeAttribute('data-gapless');
         }
         if (resolved === 'row') {
-            unobserveLastRowPadding(itemsContainer);
-            removeLayoutDummies(itemsContainer);
             if (scrollButtons) scrollButtons.style.display = '';
         } else if (scrollButtons) {
             scrollButtons.style.display = 'none';
@@ -6165,31 +7350,6 @@
             showAllButton.setAttribute('aria-label', showAllButton.title);
             setShowAllIcon(showAllButton, nextLayout);
         }
-        if (resolved === 'grid') {
-            observeLastRowPadding(itemsContainer);
-            // Two frames so wrap layout is settled before measuring / padding
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    if (itemsContainer.getAttribute('data-layout') !== resolved) return;
-                    syncLastRowPadding(itemsContainer, resolved);
-                });
-            });
-        }
-    }
-
-    function syncAttachedGridTilesLayouts(root) {
-        if (!root?.querySelectorAll) return;
-        root.querySelectorAll('.itemsContainer[data-layout="grid"]').forEach((itemsContainer) => {
-            const layout = itemsContainer.getAttribute('data-layout');
-            const gapless = itemsContainer.getAttribute('data-gapless') === 'true';
-            const section = itemsContainer.closest('.verticalSection, .emby-scroller-container') || itemsContainer.parentElement;
-            if (section) applyItemsLayoutState(section, layout, gapless);
-            else {
-                observeLastRowPadding(itemsContainer);
-                invalidateLastRowPadding(itemsContainer);
-                syncLastRowPadding(itemsContainer, layout);
-            }
-        });
     }
 
     /** @deprecated Use applyItemsLayoutState */
@@ -6233,6 +7393,13 @@
         const currentLayout = itemsContainer?.getAttribute('data-layout') || 'row';
         const resolved = currentLayout === 'grid' ? currentLayout : 'row';
         return ITEMS_LAYOUT_NEXT_TITLE[resolved] || ITEMS_LAYOUT_NEXT_TITLE.row;
+    }
+
+    function getShowAllControlIcon(sectionElement) {
+        const itemsContainer = sectionElement?.querySelector('.itemsContainer');
+        const currentLayout = itemsContainer?.getAttribute('data-layout') || 'row';
+        const resolved = currentLayout === 'grid' ? currentLayout : 'row';
+        return ITEMS_LAYOUT_ICONS[nextItemsLayout(resolved)] || 'grid_view';
     }
 
     function handleShowAllLayoutToggle(sectionElement) {
@@ -6285,6 +7452,7 @@
             definitions.push({
                 id: 'showAll',
                 icon: 'grid_view',
+                getIcon: () => getShowAllControlIcon(sectionElement),
                 getLabel: () => getShowAllControlLabel(sectionElement),
                 label: 'Grid layout',
                 className: 'show-all-button',
@@ -6318,11 +7486,13 @@
 
         visibleDefinitions.forEach((def) => {
             const label = typeof def.getLabel === 'function' ? def.getLabel() : def.label;
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = `${def.className} material-icons ${def.icon}`;
-            button.title = label;
-            button.setAttribute('aria-label', label);
+            const icon = typeof def.getIcon === 'function' ? def.getIcon() : def.icon;
+            const button = createPaperIconButton({
+                className: def.className || '',
+                icon: icon || '',
+                title: label,
+                showFocus: isTvLayout(),
+            });
             button.dataset.sectionControlId = def.id;
             button.addEventListener('click', (e) => {
                 def.onClick(e, button);
@@ -6334,6 +7504,16 @@
         });
 
         const newMoreButton = moreButton.cloneNode(true);
+        newMoreButton.classList.add('paper-icon-button-light');
+        if (isTvLayout()) newMoreButton.classList.add('show-focus');
+        if (!newMoreButton.querySelector('.material-icons')) {
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'material-icons more_vert';
+            iconSpan.setAttribute('aria-hidden', 'true');
+            newMoreButton.appendChild(iconSpan);
+        }
+        // Ensure legacy more buttons no longer carry icon font classes on the button itself
+        newMoreButton.classList.remove('material-icons', 'more_vert');
         moreButton.replaceWith(newMoreButton);
 
         const MORE_CONTROLS_MODAL_ID = 'kefin-section-controls-more';
@@ -6355,13 +7535,14 @@
                 : 'kefinTweaks-popover section-controls-more-popover';
             visibleDefinitions.forEach((def) => {
                 const label = typeof def.getLabel === 'function' ? def.getLabel() : def.label;
+                const icon = typeof def.getIcon === 'function' ? def.getIcon() : def.icon;
                 const item = document.createElement('div');
                 item.className = 'kefinTweaks-popover-item detailsGroupItem section-controls-more-item';
                 item.setAttribute('role', 'button');
                 item.setAttribute('tabindex', '0');
 
                 const iconSpan = document.createElement('span');
-                iconSpan.className = `material-icons section-controls-more-item-icon ${def.icon}`;
+                iconSpan.className = `material-icons section-controls-more-item-icon ${icon || ''}`.trim();
                 iconSpan.setAttribute('aria-hidden', 'true');
 
                 const labelSpan = document.createElement('span');
@@ -6587,6 +7768,12 @@
         return pad;
     }
 
+    /** Frame content-box width (clientWidth minus horizontal padding) — viewport for slidee math. */
+    function getScrollerViewportWidth(scroller, pad) {
+        const p = pad || readScrollerPadding(scroller);
+        return Math.max(0, (scroller?.clientWidth || 0) - (p.left || 0) - (p.right || 0));
+    }
+
     function readCardPadding(card) {
         if (!card) return { left: 0, right: 0 };
         const cached = cardPaddingByEl.get(card);
@@ -6606,33 +7793,16 @@
         const metrics = getScrollerMetrics(scroller);
         if (metrics.cardPad) return metrics.cardPad;
 
-        const sampleCard = scroller.querySelector?.('.itemsContainer > .card:not(.card-layout-dummy):not(.skeleton-card)');
+        const sampleCard = scroller.querySelector?.('.itemsContainer > .card:not(.skeleton-card)');
         const pad = readCardPadding(sampleCard);
         metrics.cardPad = pad;
         return pad;
     }
 
-    function getFullyVisibleCardCount(scroller, cards) {
-        const epsilon = 1;
-        const pad = readScrollerPadding(scroller);
-        const cardPad = readSampleCardPadding(scroller);
-        const endInset = Math.max(pad.right, pad.left);
-        const scrollerRect = scroller.getBoundingClientRect();
-        const currentPosition = getCurrentPosition(scroller);
-        const contentWidth = Math.max(0, scroller.clientWidth - pad.left - endInset);
-        const visibleLeft = scrollerRect.left + currentPosition + pad.left;
-        const visibleRight = visibleLeft + contentWidth;
-        let count = 0;
-        cards.forEach((card) => {
-            const cardRect = card.getBoundingClientRect();
-            if (cardRect.width <= 0) return;
-            const cardContentLeft = cardRect.left + cardPad.left;
-            const cardContentRight = cardRect.right - cardPad.right;
-            if (cardContentLeft >= visibleLeft - epsilon && cardContentRight <= visibleRight + epsilon) {
-                count++;
-            }
-        });
-        return count;
+    /** Inner slidee that receives translateX (Jellyfin .scrollSlider), not the outer frame. */
+    function getScrollSlidee(scroller) {
+        if (!scroller) return null;
+        return scroller.querySelector('.scrollSlider') || scroller.querySelector('.itemsContainer');
     }
 
     function getCurrentPosition(scroller) {
@@ -6653,11 +7823,140 @@
     }
 
     /**
-     * Max transform/scroll offset so the trailing content edge matches the leading
-     * gutter when the skin only pads the left (e.g. Fin --sidePadding), plus the
-     * sample card's horizontal padding so the last card's right padding clears the clip.
+     * Apply row scroll as translateX on the slidee (itemsContainer), matching Jellyfin.
+     * Clears any leftover transform on the outer scroller frame.
      */
-    function getMaxPositionFromPadding(scroller, pad, cardPad) {
+    function setSlideePosition(scroller, position, options = {}) {
+        if (!scroller) return 0;
+        const opts = options || {};
+        const slidee = getScrollSlidee(scroller);
+
+        if (opts.freshMax) {
+            const metrics = getScrollerMetrics(scroller);
+            if (metrics) {
+                metrics.maxScroll = null;
+                metrics.pad = null;
+                metrics.cardPad = null;
+            }
+        }
+
+        const max = Math.max(
+            0,
+            getMaxPositionFromPadding(scroller, readScrollerPadding(scroller), readSampleCardPadding(scroller)),
+        );
+        const scrollPosition = Math.min(Math.max(position, 0), max);
+        const clampedPosition = scrollPosition > 20 ? scrollPosition : 0;
+
+        if (scroller.style.transform) scroller.style.transform = '';
+        if (scroller.style.transition) scroller.style.transition = '';
+
+        if (slidee) {
+            if (opts.animate) {
+                slidee.style.transition = 'transform 270ms ease-out';
+                slidee.style.willChange = 'transform';
+            } else {
+                slidee.style.transition = 'none';
+            }
+            slidee.style.transform = `translateX(-${clampedPosition}px)`;
+        }
+
+        setStoredScrollPosition(scroller, clampedPosition);
+        return clampedPosition;
+    }
+
+    /**
+     * Content-space X of a card relative to the scroller frame (undoes slidee translate).
+     */
+    function getCardContentOffsetX(scroller, card) {
+        if (!scroller || !card) return 0;
+        const current = getCurrentPosition(scroller);
+        const scrollerRect = scroller.getBoundingClientRect();
+        const cardRect = card.getBoundingClientRect();
+        return cardRect.left - scrollerRect.left + current;
+    }
+
+    /**
+     * JF-style toCenter: put card center on frame center, clamped to [0, max].
+     * Early cards stay left-aligned (desired < 0 → 0); mid/late track center.
+     */
+    function toCenterCard(scroller, card, options = {}) {
+        if (!scroller || !card || !scroller.contains(card)) return;
+        if (card.classList.contains('skeleton-card')) return;
+
+        const animate = options.animate !== false;
+        const metrics = getScrollerMetrics(scroller);
+        if (metrics) metrics.maxScroll = null;
+
+        const pad = readScrollerPadding(scroller);
+        const cardPad = readSampleCardPadding(scroller);
+        const contentOffset = getCardContentOffsetX(scroller, card);
+        const cardWidth = card.offsetWidth || card.getBoundingClientRect().width || 0;
+        // Center within the frame content box (same viewport as max-scroll)
+        const frameInnerWidth = getScrollerViewportWidth(scroller, pad);
+        const cardCenterInContent = contentOffset + cardWidth / 2 - pad.left;
+        const desired = cardCenterInContent - frameInnerWidth / 2;
+        const max = getMaxPositionFromPadding(scroller, pad, cardPad);
+        setSlideePosition(scroller, Math.min(Math.max(desired, 0), max), { animate: animate });
+    }
+
+    function attachTvFocusScroll(scroller) {
+        if (!scroller || scroller.dataset.tvFocusScroll === '1') return;
+        scroller.dataset.tvFocusScroll = '1';
+
+        let rafId = 0;
+        let pendingCard = null;
+
+        scroller.addEventListener(
+            'focusin',
+            (e) => {
+                const card = e.target?.closest?.('.card');
+                if (!card || !scroller.contains(card)) return;
+                if (card.classList.contains('skeleton-card')) return;
+                pendingCard = card;
+                if (rafId) return;
+                rafId = requestAnimationFrame(() => {
+                    rafId = 0;
+                    const target = pendingCard;
+                    pendingCard = null;
+                    if (target && scroller.contains(target)) {
+                        toCenterCard(scroller, target, { animate: true });
+                    }
+                });
+            },
+            true,
+        );
+    }
+
+    function getFullyVisibleCardCount(scroller, cards) {
+        const epsilon = 1;
+        const pad = readScrollerPadding(scroller);
+        const cardPad = readSampleCardPadding(scroller);
+        const scrollerRect = scroller.getBoundingClientRect();
+        // Slidee is translated; frame is fixed — visible window is the content box
+        const contentWidth = getScrollerViewportWidth(scroller, pad);
+        const visibleLeft = scrollerRect.left + pad.left;
+        const visibleRight = visibleLeft + contentWidth;
+        let count = 0;
+        cards.forEach((card) => {
+            const cardRect = card.getBoundingClientRect();
+            if (cardRect.width <= 0) return;
+            const cardContentLeft = cardRect.left + cardPad.left;
+            const cardContentRight = cardRect.right - cardPad.right;
+            if (cardContentLeft >= visibleLeft - epsilon && cardContentRight <= visibleRight + epsilon) {
+                count++;
+            }
+        });
+        return count;
+    }
+
+    /**
+     * Max translateX so slidee content flushes to the frame content-box right edge.
+     * Pairs slidee.scrollWidth with viewport = clientWidth - padL - padR (not clientWidth + endInset hacks).
+     * @param {HTMLElement} scroller
+     * @param {{left:number,right:number}} [pad]
+     * @param {{left:number,right:number}} [_cardPad] unused; kept for call-site compatibility
+     */
+    function getMaxPositionFromPadding(scroller, pad, _cardPad) {
         if (!scroller) return 0;
 
         const metrics = getScrollerMetrics(scroller);
@@ -6665,18 +7964,18 @@
             return metrics.maxScroll;
         }
 
-        const cards = scroller.querySelectorAll('.itemsContainer > .card:not(.card-layout-dummy):not(.skeleton-card)');
+        const cards = scroller.querySelectorAll('.itemsContainer > .card:not(.skeleton-card)');
         const fullyVisible = getFullyVisibleCardCount(scroller, cards);
         if (fullyVisible === cards.length) {
             setMaxScrollPosition(scroller, 0);
             return 0;
         }
 
-        const { left, right } = pad || { left: 0, right: 0 };
-        const cp = cardPad || { left: 0, right: 0 };
-        const endInset = Math.max(right, left);
-        const base = Math.max(0, scroller.scrollWidth - scroller.clientWidth + endInset);
-        const maxScroll = base + (cp.left || 0) + (cp.right || 0);
+        const resolvedPad = pad || readScrollerPadding(scroller);
+        const slidee = getScrollSlidee(scroller);
+        const contentWidth = slidee ? slidee.scrollWidth : scroller.scrollWidth;
+        const viewport = getScrollerViewportWidth(scroller, resolvedPad);
+        const maxScroll = Math.max(0, contentWidth - viewport);
         setMaxScrollPosition(scroller, maxScroll);
         return maxScroll;
     }
@@ -6688,12 +7987,16 @@
         scroller.setAttribute('data-horizontal', 'true');
         scroller.setAttribute('data-centerfocus', 'true');
         scroller.className = `padded-top-focusscale padded-bottom-focusscale emby-scroller padded-left custom-scroller${isMobile ? " scrollX hiddenScrollX" : ""}`;
-        scroller.setAttribute('data-scroll-mode-x', 'custom');
+        scroller.setAttribute('data-scroll-mode-x', isMobile ? 'native' : 'custom');
         scroller.style.scrollSnapType = 'none';
         scroller.style.touchAction = 'auto';
         scroller.style.overscrollBehaviorX = 'contain';
         scroller.style.overscrollBehaviorY = 'auto';
         scroller.style.webkitOverflowScrolling = 'touch';
+        // Desktop custom path: clip frame + translateX slidee. Mobile scrollX: native overflow swipe.
+        if (!isMobile) {
+            scroller.style.overflow = 'hidden';
+        }
         setStoredScrollPosition(scroller, 0);
 
         return scroller;
@@ -6705,7 +8008,8 @@
         if (isEmbyItemscontainer) {
             itemsContainer.setAttribute('is', 'emby-itemscontainer');
         }
-        itemsContainer.className = `focuscontainer-x itemsContainer scrollSlider${!isMobile ? " animatedScrollX" : ""}`;
+        const tvClass = isTvLayout() ? ' itemsContainer-tv' : '';
+        itemsContainer.className = `focuscontainer-x itemsContainer scrollSlider${!isMobile ? " animatedScrollX" : ""}${tvClass}`;
         itemsContainer.style.whiteSpace = 'nowrap';
         return itemsContainer;
     }
@@ -6769,64 +8073,54 @@
 
         function setPosition(newPosition, options) {
             const opts = options || {};
-            const maxPosition = Math.max(0, opts.freshMax ? getMaxPositionFresh() : getMaxPosition());
-            const position = Math.min(Math.max(newPosition, 0), maxPosition);
-            const clampedPosition = position > 20 ? position : 0;
-
-            if (opts.animate) {
-                scroller.style.transition = 'transform 270ms ease-out';
-            } else {
-                scroller.style.transition = 'none';
-            }
-
-            scroller.style.transform = `translateX(-${clampedPosition}px)`;
-            setStoredScrollPosition(scroller, clampedPosition);
+            const slidee = getScrollSlidee(scroller);
+            const clampedPosition = setSlideePosition(scroller, newPosition, {
+                animate: !!opts.animate,
+                freshMax: !!opts.freshMax,
+            });
 
             const section = scroller.closest('.emby-scroller-container');
             if (section && typeof applyScrollButtonState === 'function') {
-                if (opts.animate) {
-                    const onTransitionEnd = () => {
-                        scroller.removeEventListener('transitionend', onTransitionEnd);
+                if (opts.animate && slidee) {
+                    const onTransitionEnd = (e) => {
+                        if (e && e.target !== slidee) return;
+                        slidee.removeEventListener('transitionend', onTransitionEnd);
                         applyScrollButtonState(section);
                     };
-                    scroller.addEventListener('transitionend', onTransitionEnd);
+                    slidee.addEventListener('transitionend', onTransitionEnd);
                 } else {
                     requestAnimationFrame(() => applyScrollButtonState(section));
                 }
             }
+            return clampedPosition;
         }
 
         function getScrollCards() {
             const itemsContainer = scroller.querySelector('.itemsContainer');
             if (!itemsContainer) return [];
-            return Array.from(itemsContainer.querySelectorAll(':scope > .card:not(.card-layout-dummy):not(.skeleton-card)'));
+            return Array.from(itemsContainer.querySelectorAll(':scope > .card:not(.skeleton-card)'));
         }
 
         function getCardScrollLeft(card) {
             // Align card content edge (border-box left + card paddingLeft) to the
-            // scroller's padded content gutter.
+            // scroller's padded content gutter. Content-space (undoes slidee translate).
             const pad = readScrollerPadding(scroller);
             const cardPad = readSampleCardPadding(scroller);
-            const scrollerRect = scroller.getBoundingClientRect();
-            const cardRect = card.getBoundingClientRect();
-            return cardRect.left - scrollerRect.left - pad.left + cardPad.left;
+            return getCardContentOffsetX(scroller, card) - pad.left + cardPad.left;
         }
 
         /**
-         * Cards fully inside the padded content clip (not the browser viewport / border box).
-         * Undo translateX, then inset by scroller + card padding so visibility matches snap targets.
-         * When the skin only pads the left, treat trailing inset as max(left, right).
+         * Cards fully inside the frame content-box clip.
+         * Frame is fixed; slidee translate moves cards — use live rects vs content-box edges.
          */
         function getFullyVisibleCardIndices(cards) {
             const fullyVisible = [];
             const epsilon = 1;
             const pad = readScrollerPadding(scroller);
             const cardPad = readSampleCardPadding(scroller);
-            const endInset = Math.max(pad.right, pad.left);
             const scrollerRect = scroller.getBoundingClientRect();
-            const currentPosition = getCurrentPosition();
-            const contentWidth = Math.max(0, scroller.clientWidth - pad.left - endInset);
-            const visibleLeft = scrollerRect.left + currentPosition + pad.left;
+            const contentWidth = getScrollerViewportWidth(scroller, pad);
+            const visibleLeft = scrollerRect.left + pad.left;
             const visibleRight = visibleLeft + contentWidth;
             cards.forEach((card, index) => {
                 const cardRect = card.getBoundingClientRect();
@@ -6844,7 +8138,7 @@
         function snapScrollToCardIndex(cards, targetIndex) {
             if (!cards.length) return;
             const clampedIndex = Math.max(0, Math.min(targetIndex, cards.length - 1));
-            // Last card: use max (scroller end inset + card L+R padding), not left-align snap
+            // Last card: flush to frame content-box end (getMaxPositionFresh)
             if (clampedIndex === cards.length - 1) {
                 setPosition(getMaxPositionFresh(), { animate: true, freshMax: true });
                 return;
@@ -7073,6 +8367,7 @@
             }
 
             scroller.addEventListener('mousedown', onPointerDown);
+            scroller.addEventListener('touchstart', onPointerDown, { passive: true });
 
             // Trackpad / mouse wheel → custom transform scroll (native overflow scrollers handle this themselves).
             // Keep passive:false so we can preventDefault on horizontal gestures, but coalesce apply work
@@ -7182,6 +8477,7 @@
         } else if (viewMoreUrl) {
             const titleLink = document.createElement('a');
             titleLink.className = 'sectionTitle-link button-flat button-flat-mini sectionTitleTextButton emby-button';
+            if (isTvLayout()) titleLink.classList.add('show-focus');
             titleLink.style.cssText = 'text-decoration: none; cursor: pointer; display: flex; align-items: center;';
 
             if (typeof viewMoreUrl === 'function') {
@@ -7223,6 +8519,7 @@
             } else if (captionUrl) {
                 captionEl = document.createElement('a');
                 captionEl.className = 'sectionTitle sectionCaption button-flat button-flat-mini sectionTitleTextButton emby-button';
+                if (isTvLayout()) captionEl.classList.add('show-focus');
                 if (typeof captionUrl === 'function') {
                     captionEl.addEventListener('click', (e) => {
                         e.preventDefault();
@@ -7241,9 +8538,16 @@
         }
     }
 
-    function createScrollableContainer(items, title, viewMoreUrl = null, overflowCard = false, cardFormat = null, sectionConfig = null) {
+    function createScrollableContainer(
+        items,
+        title,
+        viewMoreUrl = null,
+        overflowCard = false,
+        cardFormat = null,
+        sectionConfig = null,
+        registerScrollButtons = true,
+    ) {
         const normalizedFormat = (cardFormat || '').toLowerCase();
-        const isButtonLayout = normalizedFormat === 'button';
 
         // Create the main vertical section container
         const verticalSection = document.createElement('div');
@@ -7272,38 +8576,27 @@
 
         ensureSectionControlsMount(sectionTitleContainer);
 
-        /* if (isButtonLayout) {
-            const itemsContainer = document.createElement('div');
-            //itemsContainer.setAttribute('is', 'emby-itemscontainer');
-            itemsContainer.className = 'itemsContainer padded-left padded-right focuscontainer-x';
-
-            items.forEach((item, index) => {
-                const button = createLibraryButtonElement(item);
-                button.setAttribute('data-index', index);
-                itemsContainer.appendChild(button);
-            });
-
-            verticalSection.appendChild(sectionTitleContainer);
-            verticalSection.appendChild(itemsContainer);
-            return verticalSection;
-        } */
-
         // Create scroller container
         const scroller = createScrollerElement();
         const itemsContainer = createItemsSliderElement();
 
-        // Add items to container
+        // Add items to container (TV → button cards via createCardElement)
         const useParentCard = !!sectionConfig?.useParentCard;
         const borderStyle = sectionConfig?.borderStyle || null;
         items.forEach((item, index) => {
-            const card = createJellyfinCardElement(item, overflowCard, cardFormat, item.cardFooter, useParentCard, borderStyle);
+            const card = createCardElement(item, overflowCard, cardFormat, item.cardFooter, useParentCard, borderStyle);
             card.setAttribute('data-index', index);
             itemsContainer.appendChild(card);
         });
 
         scroller.appendChild(itemsContainer);
 
-        const scrollButtons = attachScrollableSectionChrome(verticalSection, scroller);
+        let scrollButtons = null;
+        if (isTvLayout()) {
+            attachTvFocusScroll(scroller);
+        } else {
+            scrollButtons = attachScrollableSectionChrome(verticalSection, scroller);
+        }
 
         // Assemble the section
         verticalSection.appendChild(sectionTitleContainer);
@@ -7312,7 +8605,9 @@
         }
         verticalSection.appendChild(scroller);
 
-        registerScrollSectionScrollButtons(verticalSection);
+        if (registerScrollButtons && scrollButtons) {
+            registerScrollSectionScrollButtons(verticalSection);
+        }
         return verticalSection;
     }
 
@@ -7429,9 +8724,13 @@
         const bannerContainer = document.createElement('div');
         bannerContainer.className = 'spotlight-banner-container';
 
+        // Header wraps title (+ nav when present) to match live spotlight DOM.
         // Title container hosts section name + refresh/configure controls.
         // Always create it so controls can attach even when the section has no name.
         {
+            const headerContainer = document.createElement('div');
+            headerContainer.className = 'spotlight-header-container';
+
             const sectionTitleContainer = document.createElement('div');
             sectionTitleContainer.className = 'spotlight-section-title-container';
             if (useSkeletonTitle || title) {
@@ -7482,7 +8781,8 @@
                     sectionTitleContainer.appendChild(captionEl);
                 }
             }
-            bannerContainer.appendChild(sectionTitleContainer);
+            headerContainer.appendChild(sectionTitleContainer);
+            bannerContainer.appendChild(headerContainer);
         }
 
         // Create skeleton item (single full-container placeholder)
@@ -7497,6 +8797,7 @@
 
         itemsContainer.appendChild(skeletonItem);
         bannerContainer.appendChild(itemsContainer);
+        ensureSkeletonShimmerSibling(itemsContainer);
         container.appendChild(bannerContainer);
 
         container.classList.add('skeleton-section');
@@ -7520,6 +8821,8 @@
         overflowCard = false,
         sectionConfig = null,
     ) {
+        const tvLayout = isTvLayout();
+
         // Create the main vertical section container (same structure as createScrollableContainer)
         const verticalSection = document.createElement('div');
         verticalSection.className = 'verticalSection emby-scroller-container custom-scroller-container';
@@ -7554,7 +8857,6 @@
         ensureSectionControlsMount(sectionTitleContainer);
 
         const scroller = createScrollerElement();
-        // Sticky is=emby-itemscontainer on skeleton shell — never recreate on enhance
         const itemsContainer = createItemsSliderElement(true);
 
         const itemsLayout = resolveItemsLayout(sectionConfig);
@@ -7566,12 +8868,16 @@
         }
 
         scroller.appendChild(itemsContainer);
-
-        const scrollButtons = attachScrollableSectionChrome(verticalSection, scroller);
+        ensureSkeletonShimmerSibling(itemsContainer);
 
         verticalSection.appendChild(sectionTitleContainer);
-        if (scrollButtons) {
-            verticalSection.appendChild(scrollButtons);
+        if (tvLayout) {
+            attachTvFocusScroll(scroller);
+        } else {
+            const scrollButtons = attachScrollableSectionChrome(verticalSection, scroller);
+            if (scrollButtons) {
+                verticalSection.appendChild(scrollButtons);
+            }
         }
         verticalSection.appendChild(scroller);
 
@@ -7662,10 +8968,44 @@
         return skeletonShimmerObserver;
     }
 
+    /**
+     * Insert a .skeleton-shimmer sibling after the items host (inside scroller / banner).
+     * @param {HTMLElement|null|undefined} itemsHost .itemsContainer or .spotlight-items-container
+     * @returns {HTMLElement|null}
+     */
+    function ensureSkeletonShimmerSibling(itemsHost) {
+        if (!itemsHost?.parentElement) return null;
+        const parent = itemsHost.parentElement;
+        let shimmer = null;
+        if (itemsHost.nextElementSibling?.classList?.contains('skeleton-shimmer')) {
+            shimmer = itemsHost.nextElementSibling;
+        } else {
+            shimmer = parent.querySelector(':scope > .skeleton-shimmer');
+        }
+        if (!shimmer) {
+            shimmer = document.createElement('div');
+            shimmer.className = 'skeleton-shimmer';
+            shimmer.setAttribute('aria-hidden', 'true');
+            itemsHost.insertAdjacentElement('afterend', shimmer);
+        } else if (shimmer.previousElementSibling !== itemsHost) {
+            itemsHost.insertAdjacentElement('afterend', shimmer);
+        }
+        return shimmer;
+    }
+
+    function removeSkeletonShimmerOverlays(root) {
+        if (!root?.querySelectorAll) return;
+        root.querySelectorAll('.skeleton-shimmer').forEach((el) => el.remove());
+    }
+
     function observeSkeletonShimmer(sectionElement) {
         if (!sectionElement?.classList) return;
         sectionElement.classList.add('skeleton-section');
         sectionElement.classList.remove('skeleton-shimmer-active');
+        const itemsHost =
+            sectionElement.querySelector('.spotlight-items-container') ||
+            sectionElement.querySelector('.itemsContainer');
+        ensureSkeletonShimmerSibling(itemsHost);
         const observer = ensureSkeletonShimmerObserver();
         if (observer) observer.observe(sectionElement);
     }
@@ -7678,6 +9018,7 @@
             skeletonShimmerRafBySection.delete(sectionElement);
         }
         sectionElement.classList?.remove('skeleton-shimmer-active', 'skeleton-section');
+        removeSkeletonShimmerOverlays(sectionElement);
         if (skeletonShimmerObserver) {
             try {
                 skeletonShimmerObserver.unobserve(sectionElement);
@@ -7689,6 +9030,7 @@
 
     function stripCopiedSkeletonSectionClasses(el) {
         el?.classList?.remove('skeleton-section', 'skeleton-shimmer-active');
+        removeSkeletonShimmerOverlays(el);
     }
 
     // Add skeleton loading animation CSS if not already present
@@ -7773,6 +9115,7 @@
         if (cardImageContainer.getAttribute('data-src') !== imageUrl) return;
         // Cancelled / unloaded before apply drained
         if (!cardImageContainer.hasAttribute('data-loading')) return;
+        // Style writes first, then one class/attr batch so paint absorbs a single invalidation.
         if (isSvg) {
             const maskUrl = `url("${imageUrl}")`;
             cardImageContainer.style.webkitMaskImage = maskUrl;
@@ -7784,14 +9127,16 @@
             cardImageContainer.style.webkitMaskSize = 'contain';
             cardImageContainer.style.maskSize = 'contain';
             cardImageContainer.style.backgroundColor = 'white';
-            cardImageContainer.classList.add('lazy-masked-svg');
         } else {
             cardImageContainer.style.backgroundImage = `url("${imageUrl}")`;
         }
-        cardImageContainer.classList.remove('lazy');
-        cardImageContainer.classList.add('lazy-loaded');
+        cardImageContainer.classList.remove('lazy', 'lazy-hidden');
+        if (isSvg) {
+            cardImageContainer.classList.add('lazy-loaded', 'lazy-masked-svg');
+        } else {
+            cardImageContainer.classList.add('lazy-loaded');
+        }
         cardImageContainer.removeAttribute('data-loading');
-        cardImageContainer.classList.remove('lazy-hidden');
         const icon = cardImageContainer.querySelector('.cardImageIcon');
         if (icon) icon.remove();
         const canvas = cardImageContainer.previousElementSibling;
@@ -8047,6 +9392,7 @@
         }
         leftButton.disabled = scrollX <= 20;
         rightButton.disabled = scrollX >= maxScroll - 1;
+        scrollButtons.classList.toggle('hide', leftButton.disabled && rightButton.disabled);
     }
 
     /**
@@ -8418,7 +9764,7 @@
     }
 
     function getPaintedCardIds(sectionElement) {
-        const cards = sectionElement.querySelectorAll('.itemsContainer > .card[data-id]:not(.card-layout-dummy):not(.skeleton-card)');
+        const cards = sectionElement.querySelectorAll('.itemsContainer > .card[data-id]:not(.skeleton-card)');
         if (cards.length) {
             return Array.from(cards)
                 .map((card) => card.getAttribute('data-id'))
@@ -8535,28 +9881,48 @@
         if (!scroller) return;
         const metrics = getScrollerMetrics(scroller);
         if (metrics) metrics.maxScroll = null;
-        const maxPosition = getMaxPositionFromPadding(scroller, readScrollerPadding(scroller), readSampleCardPadding(scroller));
-        const scrollPosition = Math.min(Math.max(position, 0), maxPosition);
-        const clamped = scrollPosition > 20 ? scrollPosition : 0;
 
         if (scroller.classList.contains('scrollX')) {
+            const maxPosition = getMaxPositionFromPadding(
+                scroller,
+                readScrollerPadding(scroller),
+                readSampleCardPadding(scroller),
+            );
+            const scrollPosition = Math.min(Math.max(position, 0), maxPosition);
+            const clamped = scrollPosition > 20 ? scrollPosition : 0;
+            // Clear any desktop slidee transform so it cannot fight native scrollLeft
+            const slidee = getScrollSlidee(scroller);
+            if (slidee) {
+                if (slidee.style.transform) slidee.style.transform = '';
+                if (slidee.style.transition) slidee.style.transition = '';
+            }
+            if (scroller.style.transform) scroller.style.transform = '';
             scroller.scrollTo({ left: clamped, behavior: animate ? 'smooth' : 'auto' });
             setStoredScrollPosition(scroller, clamped);
         } else {
-            scroller.style.transition = animate ? 'transform 400ms ease-out' : 'none';
-            scroller.style.transform = `translateX(-${clamped}px)`;
-            setStoredScrollPosition(scroller, clamped);
+            const slidee = getScrollSlidee(scroller);
+            setSlideePosition(scroller, position, { animate: !!animate, freshMax: true });
+
+            const section = scroller.closest('.emby-scroller-container');
+            if (section) {
+                if (animate && slidee) {
+                    const onTransitionEnd = (e) => {
+                        if (e && e.target !== slidee) return;
+                        slidee.removeEventListener('transitionend', onTransitionEnd);
+                        applyScrollButtonState(section);
+                    };
+                    slidee.addEventListener('transitionend', onTransitionEnd);
+                    requestAnimationFrame(() => applyScrollButtonState(section));
+                } else {
+                    applyScrollButtonState(section);
+                }
+            }
+            return;
         }
 
         const section = scroller.closest('.emby-scroller-container');
         if (section) {
             if (animate) {
-                const onTransitionEnd = () => {
-                    scroller.removeEventListener('transitionend', onTransitionEnd);
-                    applyScrollButtonState(section);
-                };
-                scroller.addEventListener('transitionend', onTransitionEnd);
-                // Native scrollX has no transitionend — refresh after a frame too
                 requestAnimationFrame(() => applyScrollButtonState(section));
             } else {
                 applyScrollButtonState(section);
@@ -8575,7 +9941,7 @@
         const animate = options.animate === true;
         const itemsContainer = scroller.querySelector('.itemsContainer');
         if (!itemsContainer) return;
-        const cards = Array.from(itemsContainer.querySelectorAll(':scope > .card:not(.card-layout-dummy):not(.skeleton-card)'));
+        const cards = Array.from(itemsContainer.querySelectorAll(':scope > .card:not(.skeleton-card)'));
         if (!cards.length) return;
 
         const clampedIndex = Math.max(0, Math.min(index, cards.length - 1));
@@ -8597,9 +9963,7 @@
 
         const pad = readScrollerPadding(scroller);
         const cardPad = readSampleCardPadding(scroller);
-        const scrollerRect = scroller.getBoundingClientRect();
-        const cardRect = cards[clampedIndex].getBoundingClientRect();
-        const targetLeft = cardRect.left - scrollerRect.left - pad.left + cardPad.left;
+        const targetLeft = getCardContentOffsetX(scroller, cards[clampedIndex]) - pad.left + cardPad.left;
         setScrollerPosition(scroller, targetLeft, animate);
 
         const section = scroller.closest('.emby-scroller-container');
@@ -8623,7 +9987,7 @@
     ) {
         const cards = [];
         items.forEach((item, offset) => {
-            const card = createJellyfinCardElement(item, overflowCard, cardFormat, item.cardFooter, useParentCard, borderStyle);
+            const card = createCardElement(item, overflowCard, cardFormat, item.cardFooter, useParentCard, borderStyle);
             card.setAttribute('data-index', String(startIndex + offset));
             itemsContainer.appendChild(card);
             cards.push(card);
@@ -8676,6 +10040,7 @@
     }
 
     function reconcileRowItems(sectionElement, items, sectionConfig, onComplete) {
+		console.log(`[KefinTweaks CardBuilder] Reconciling row items for section: ${sectionConfig.name} with ${items.length} items`);
         const itemsContainer = sectionElement.querySelector('.itemsContainer');
         const scroller = sectionElement.querySelector('.emby-scroller');
         if (!itemsContainer) return false;
@@ -8709,13 +10074,13 @@
             if (existing) {
                 seenKept = true;
                 nextNode = existing.nextElementSibling;
-                while (nextNode && (nextNode.classList.contains('card-layout-dummy') || nextNode.classList.contains('skeleton-card'))) {
+                while (nextNode && nextNode.classList.contains('skeleton-card')) {
                     nextNode = nextNode.nextElementSibling;
                 }
                 return;
             }
 
-            const card = createJellyfinCardElement(
+            const card = createCardElement(
                 item,
                 overflowCard,
                 cardFormat,
@@ -8791,12 +10156,14 @@
                     outgoing.forEach((card) => card.remove());
                     inserted.forEach(clearCardReconcileStyles);
                     itemsContainer.classList.remove('cardbuilder-row-animating');
-                    if (scroller) scroller.style.transition = '';
+                    if (scroller) {
+                        scroller.style.transition = '';
+                        const slidee = getScrollSlidee(scroller);
+                        if (slidee) slidee.style.transition = '';
+                    }
                     reindexSectionCards(itemsContainer);
-                    invalidateLastRowPadding(itemsContainer);
                     patchCardsUserData(sectionElement, items);
                     ensureCardBorders(sectionElement);
-                    //updateScrollButtonStateForSection(sectionElement);
                     if (typeof onComplete === 'function') {
                         onComplete();
                     }
@@ -8815,10 +10182,11 @@
         const cardFormat = sectionElement.getAttribute('data-card-format') || sectionConfig.cardFormat;
         const normalizedFormat = (cardFormat || '').toLowerCase();
         const layoutFromDom = itemsContainer.getAttribute('data-layout');
-        const layout = layoutFromDom === 'grid' || layoutFromDom === 'row' ? layoutFromDom : resolveItemsLayout(sectionConfig);
+        const layout =
+            layoutFromDom === 'grid' || layoutFromDom === 'row'
+                ? layoutFromDom
+                : resolveItemsLayout(sectionConfig);
         const gapless = itemsContainer.getAttribute('data-gapless') === 'true' || resolveUseGaplessCards(sectionConfig);
-
-        invalidateLastRowPadding(itemsContainer);
 
         const fragment = document.createDocumentFragment();
         if (normalizedFormat === 'button' || isButtonCardFormat(cardFormat)) {
@@ -8831,7 +10199,7 @@
             const useParentCard = !!sectionConfig?.useParentCard;
             const borderStyle = sectionConfig?.borderStyle || null;
             items.forEach((item, index) => {
-                const card = createJellyfinCardElement(item, overflowCard, cardFormat, item.cardFooter, useParentCard, borderStyle);
+                const card = createCardElement(item, overflowCard, cardFormat, item.cardFooter, useParentCard, borderStyle);
                 card.setAttribute('data-index', String(index));
                 fragment.appendChild(card);
             });
@@ -8843,7 +10211,16 @@
         ensureCardBorders(sectionElement);
         attachSectionControlButtons(sectionConfig, sectionElement, items);
         registerLazyImagesIn(itemsContainer);
-        invalidateScrollerMetrics(sectionElement.querySelector('.emby-scroller'));
+
+        const scroller = sectionElement.querySelector('.emby-scroller');
+        invalidateScrollerMetrics(scroller);
+        if (scroller && isTvLayout()) {
+            attachTvFocusScroll(scroller);
+            const focusedCard = document.activeElement?.closest?.('.card');
+            if (focusedCard && scroller.contains(focusedCard)) {
+                requestAnimationFrame(() => toCenterCard(scroller, focusedCard, { animate: false }));
+            }
+        }
 
         return sectionElement;
     }
@@ -8910,6 +10287,7 @@
             sectionConfig.overflowCard,
             finalCardFormat,
             sectionConfig,
+            false,
         );
         content.style.cssText = sectionElement.style.cssText;
         content.className = sectionElement.className;
@@ -8923,7 +10301,6 @@
         const gapless = oldItemsContainer
             ? oldItemsContainer.getAttribute('data-gapless') === 'true'
             : resolveUseGaplessCards(sectionConfig);
-        invalidateLastRowPadding(content.querySelector('.itemsContainer'));
         attachSectionControlButtons(sectionConfig, content, items);
         invalidateScrollerMetrics(sectionElement.querySelector('.emby-scroller'));
         stripCopiedSkeletonSectionClasses(content);
@@ -8946,12 +10323,27 @@
         });
     }
 
-    function markSectionEnhanced(sectionElement, sectionConfig) {
+    function markSectionEnhanced(sectionElement, sectionConfig, { updateScrollButtons = false } = {}) {
         if (!sectionElement) return;
         unobserveSkeletonShimmer(sectionElement);
         sectionElement.dataset.enhanced = 'true';
         if (typeof sectionConfig?._onSectionEnhanced === 'function') {
             sectionConfig._onSectionEnhanced(sectionElement, sectionConfig);
+        }
+        if (updateScrollButtons) {
+            const scroller = sectionElement.querySelector?.('.emby-scroller');
+            if (scroller) invalidateScrollerMetrics(scroller);
+            if (isTvLayout()) {
+                if (scroller) {
+                    attachTvFocusScroll(scroller);
+                    const focusedCard = document.activeElement?.closest?.('.card');
+                    if (focusedCard && scroller.contains(focusedCard)) {
+                        requestAnimationFrame(() => toCenterCard(scroller, focusedCard, { animate: false }));
+                    }
+                }
+            } else {
+                registerScrollSectionScrollButtons(sectionElement);
+            }
         }
     }
 
@@ -8995,6 +10387,7 @@
                 const body = sectionElement.querySelector('.spotlight-banner-container') || sectionElement;
                 Array.from(body.children).forEach((child) => {
                     if (
+                        !child.classList.contains('spotlight-header-container') &&
                         !child.classList.contains('spotlight-section-title-container') &&
                         !child.classList.contains('sectionTitleContainer')
                     ) {
@@ -9039,10 +10432,15 @@
         return result.dataPromise || null;
     }
 
-    function applyProgressiveEnhancement(sectionElement, section, result, { revealSectionsSequentially = false } = {}) {
+    function applyProgressiveEnhancement(
+        sectionElement,
+        section,
+        result,
+        { revealSectionsSequentially = false, updateScrollButtons = false } = {},
+    ) {
         if (!sectionElement?.isConnected || !section?.config) return;
 
-        sectionElement.dataset.refreshing = 'false';
+        setSectionRefreshing(sectionElement, false);
         sectionElement.dataset.enhanceApplied = 'true';
 
         const sectionConfig = section.config;
@@ -9053,6 +10451,7 @@
         const isSpotlight = sectionConfig.spotlight || sectionConfig.renderMode === 'Spotlight';
         const isSkeleton = !!sectionElement.querySelector('.skeleton-card, .skeleton-spotlight-item');
         const hasSkeletonTitle = !!sectionElement.querySelector('.skeleton-section-title');
+        const enhanceMarkOpts = { updateScrollButtons: !!updateScrollButtons };
 
         if (items.length === 0) {
             const holdMs = getDismissEmptySectionTimerMs();
@@ -9067,7 +10466,7 @@
         // Skeleton spotlight needs full createSpotlightSection wiring via replaceWith
         if (isSkeleton && isSpotlight) {
             const content = replaceSectionWithFreshCards(sectionElement, items, sectionConfig, dataItems, revealSectionsSequentially);
-            markSectionEnhanced(content, sectionConfig);
+            markSectionEnhanced(content, sectionConfig, enhanceMarkOpts);
             return;
         }
 
@@ -9075,7 +10474,7 @@
         if (isSkeleton && hasSkeletonTitle && !isSpotlight) {
             rebuildSectionTitleInPlace(sectionElement, sectionConfig);
             replaceItemsContainerContents(sectionElement, items, sectionConfig);
-            markSectionEnhanced(sectionElement, sectionConfig);
+            markSectionEnhanced(sectionElement, sectionConfig, enhanceMarkOpts);
             return;
         }
 
@@ -9091,7 +10490,7 @@
                 : items.map((item) => item?.Id).filter(Boolean);
             const match = classifyIdSequence(paintedIds, freshIds);
             if (match.type === 'perfect') {
-                markSectionEnhanced(sectionElement, sectionConfig);
+                markSectionEnhanced(sectionElement, sectionConfig, enhanceMarkOpts);
                 return;
             }
             // In-place inactive slides only (keepCurrentSlide); no full-section replaceWith
@@ -9102,7 +10501,7 @@
                 dataItems,
                 revealSectionsSequentially,
             );
-            markSectionEnhanced(spotlightContent, sectionConfig);
+            markSectionEnhanced(spotlightContent, sectionConfig, enhanceMarkOpts);
             return;
         }
 
@@ -9115,7 +10514,7 @@
 
             if (match.type === 'perfect') {
                 patchCardsUserData(sectionElement, items);
-                markSectionEnhanced(sectionElement, sectionConfig);
+                markSectionEnhanced(sectionElement, sectionConfig, enhanceMarkOpts);
                 return;
             }
 
@@ -9125,7 +10524,7 @@
 
             if (match.type === 'reconcile' && layout === 'row') {
                 reconcileRowItems(sectionElement, items, sectionConfig, () => {
-                    markSectionEnhanced(sectionElement, sectionConfig);
+                    markSectionEnhanced(sectionElement, sectionConfig, enhanceMarkOpts);
                 });
                 return;
             }
@@ -9133,19 +10532,19 @@
             const cardFormat = sectionElement.getAttribute('data-card-format') || sectionConfig.cardFormat;
             if (isButtonCardFormat(cardFormat) && match.type === 'replace') {
                 replaceItemsContainerContents(sectionElement, items, sectionConfig);
-                markSectionEnhanced(sectionElement, sectionConfig);
+                markSectionEnhanced(sectionElement, sectionConfig, enhanceMarkOpts);
                 return;
             }
 
             fadeReplaceRowItems(sectionElement, items, sectionConfig, () => {
-                markSectionEnhanced(sectionElement, sectionConfig);
+                markSectionEnhanced(sectionElement, sectionConfig, enhanceMarkOpts);
             });
             return;
         }
 
         // Skeleton cards without skeleton title: swap itemsContainer contents in place
         replaceItemsContainerContents(sectionElement, items, sectionConfig);
-        markSectionEnhanced(sectionElement, sectionConfig);
+        markSectionEnhanced(sectionElement, sectionConfig, enhanceMarkOpts);
     }
 
     function parseEnhanceRootMargin(rootMargin) {
@@ -9195,12 +10594,6 @@
 
         const enhanceOptions = { revealSectionsSequentially, deferUntilVisible };
 
-        section.result.isStalePromise?.then((isStale) => {
-            if (isStale) {
-                sectionElement.dataset.refreshing = 'true';
-            }
-        });
-
         dataPromise
             .then((result) => {
                 if (!sectionElement.isConnected) return;
@@ -9212,77 +10605,82 @@
                 // Non-spotlight Random: keep skeleton until fresh refresh — avoid stale paint → fadeReplace
                 const skipStalePaint = hasPendingRefresh && sectionHasRandomQuerySort(sectionConfig) && !isSpotlight;
 
-                // Keep refreshing indicator while a background revalidate is in flight
-                sectionElement.dataset.refreshing = hasPendingRefresh ? 'true' : 'false';
-
                 let items = result?.Items ?? result ?? [];
                 if (!Array.isArray(items)) items = [];
 
-                const applyOrDefer = (payload) => {
+                const applyOrDefer = (payload, { updateScrollButtons = false } = {}) => {
+                    const applyOpts = {
+                        ...enhanceOptions,
+                        updateScrollButtons: !!updateScrollButtons,
+                    };
                     if (!deferUntilVisible) {
-                        applyProgressiveEnhancementQueued(sectionElement, section, payload, enhanceOptions);
+                        applyProgressiveEnhancementQueued(sectionElement, section, payload, applyOpts);
                         return;
                     }
                     const margin = sectionEnhanceObserverRootMargin || '30% 0px 30% 0px';
                     const inMargin = isSectionWithinEnhanceMargin(sectionElement, margin);
                     if (inMargin) {
-                        applyProgressiveEnhancementQueued(sectionElement, section, payload, enhanceOptions);
+                        applyProgressiveEnhancementQueued(sectionElement, section, payload, applyOpts);
                     } else {
                         // Data ready but section left the enhance margin — wait until it re-enters
                         delete sectionElement.dataset.enhanceScheduled;
                         sectionEnhancePending.set(sectionElement, {
                             section,
-                            options: enhanceOptions,
+                            options: applyOpts,
                             pendingResult: payload,
                         });
                         observeSectionForEnhance(sectionElement);
                     }
                 };
 
-                if (skipStalePaint) {
-                    // Do not paint stale Random cache or stash it in pending — wait for refreshPromise
-                    sectionElement.dataset.refreshing = 'true';
-                } else if (items.length === 0) {
-                    // Empty sections: dismiss immediately even if scrolled away
-                    applyProgressiveEnhancementQueued(sectionElement, section, result, enhanceOptions);
-                    return;
-                } else {
-                    applyOrDefer(result);
+                if (!skipStalePaint) {
+                    if (items.length === 0) {
+                        // Empty sections: dismiss immediately even if scrolled away
+                        applyProgressiveEnhancementQueued(sectionElement, section, result, {
+                            ...enhanceOptions,
+                            updateScrollButtons: !hasPendingRefresh,
+                        });
+                        return;
+                    }
+                    applyOrDefer(result, { updateScrollButtons: !hasPendingRefresh });
                 }
+                // skipStalePaint: do not paint stale Random cache — wait for refreshPromise below
 
                 if (!hasPendingRefresh) return;
 
                 refreshPromise
                     .then((fresh) => {
                         if (!sectionElement.isConnected) return;
-                        sectionElement.dataset.refreshing = 'false';
                         // Prefer live DOM apply; if still pending observe, update pending snapshot
                         const pending = sectionEnhancePending.get(sectionElement);
                         if (pending && pending.pendingResult !== undefined) {
                             pending.pendingResult = fresh;
+                            pending.options = {
+                                ...(pending.options || enhanceOptions),
+                                updateScrollButtons: true,
+                            };
                             return;
                         }
                         if (skipStalePaint) {
-                            applyOrDefer(fresh);
+                            applyOrDefer(fresh, { updateScrollButtons: true });
                             return;
                         }
                         // Refresh through same FIFO + margin gate as initial enhance
-                        applyOrDefer(fresh);
+                        applyOrDefer(fresh, { updateScrollButtons: true });
                     })
                     .catch((err) => {
                         console.warn('[KefinTweaks CardBuilder] Background refresh failed:', section?.config?.id, err);
                         if (!sectionElement.isConnected) return;
-                        sectionElement.dataset.refreshing = 'false';
                         // Random non-spotlight skipped stale paint — fall back so we are not stuck on skeletons
                         if (skipStalePaint) {
-                            applyOrDefer(result);
+                            applyOrDefer(result, { updateScrollButtons: true });
                         }
                     });
             })
             .catch((err) => {
                 console.error('[KefinTweaks CardBuilder] Progressive enhance failed:', section?.config?.id, err);
                 if (!sectionElement.isConnected) return;
-                sectionElement.dataset.refreshing = 'false';
+                setSectionRefreshing(sectionElement, false);
                 delete sectionElement.dataset.enhanceScheduled;
                 applyProgressiveEnhancementQueued(sectionElement, section, { Items: [] }, enhanceOptions);
             });
@@ -9455,6 +10853,8 @@
             await window.userHelper.waitForLogin();
         }
         startCardUserDataListener();
+        startCardLibraryChangedListener();
+        startCardEditorCloseLiveSync();
         try {
             const userId = typeof ApiClient !== 'undefined' && ApiClient.getCurrentUserId ? ApiClient.getCurrentUserId() : null;
             if (userId) {

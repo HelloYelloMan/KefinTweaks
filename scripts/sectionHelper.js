@@ -95,11 +95,107 @@
         }
     }
 
+    /** Section configs waiting for movie-genres catalog before See All can resolve. */
+    const pendingGenreViewMoreConfigs = new Set();
+
+    function sectionNeedsGenreNameResolve(sectionConfig) {
+        if (!sectionConfig || sectionConfig.viewMoreUrl) return false;
+        const genres = sectionConfig.queries?.[0]?.queryOptions?.Genres;
+        if (typeof genres !== 'string' || !genres) return false;
+        return !/^\d+$/.test(genres);
+    }
+
+    function applyViewMoreUrlToSection(sectionConfig, viewMoreUrl) {
+        if (!sectionConfig || !viewMoreUrl) return;
+        sectionConfig.viewMoreUrl = viewMoreUrl;
+        const id = sectionConfig.id;
+        if (!id) return;
+        const escaped = typeof CSS !== 'undefined' && CSS.escape
+            ? CSS.escape(id)
+            : String(id).replace(/["\\]/g, '\\$&');
+
+        // Do not upgrade skeleton/empty titles into links — that eats .skeleton-section-title
+        // and leaves an empty <a>, so enhance skips rebuildSectionTitleInPlace.
+        // viewMoreUrl stays on sectionConfig for rebuild / appendSectionTitleContent.
+        const titleReadyForLinkUpgrade = (el) => {
+            if (!el) return false;
+            if (el.querySelector?.('.skeleton-section-title, .skeleton-text-line')) return false;
+            return !!(el.textContent && el.textContent.trim());
+        };
+
+        document.querySelectorAll(
+            `.verticalSection[data-section-id="${escaped}"], .spotlight-section[data-section-id="${escaped}"]`
+        ).forEach((sectionElement) => {
+            const existingLink =
+                sectionElement.querySelector('a.sectionTitle-link') ||
+                sectionElement.querySelector('.spotlight-section-title a.emby-tab-button');
+            if (existingLink) {
+                existingLink.href = viewMoreUrl;
+                // Recover empty links left by an earlier race (href only, no title text)
+                if (!existingLink.textContent?.trim() && sectionConfig.name) {
+                    const nestedTitle = existingLink.querySelector('.sectionTitle.sectionTitle-cards');
+                    if (nestedTitle) nestedTitle.textContent = sectionConfig.name;
+                    else existingLink.textContent = sectionConfig.name;
+                }
+                return;
+            }
+            const plainTitle = sectionElement.querySelector(
+                '.sectionTitleContainer .sectionTitle.sectionTitle-cards:not(a)'
+            );
+            if (plainTitle) {
+                if (!titleReadyForLinkUpgrade(plainTitle)) return;
+                const link = document.createElement('a');
+                link.className = 'sectionTitle sectionTitle-cards sectionTitle-link emby-button';
+                link.href = viewMoreUrl;
+                link.textContent = plainTitle.textContent;
+                plainTitle.replaceWith(link);
+                return;
+            }
+            const spotTitle = sectionElement.querySelector(
+                '.spotlight-section-title .emby-tab-button:not(a)'
+            );
+            if (spotTitle) {
+                if (!titleReadyForLinkUpgrade(spotTitle)) return;
+                const link = document.createElement('a');
+                link.className = 'emby-tab-button emby-tab-button-active emby-button';
+                link.href = viewMoreUrl;
+                link.title = 'See All';
+                link.style.textDecoration = 'none';
+                link.textContent = spotTitle.textContent;
+                spotTitle.replaceWith(link);
+                sectionElement.querySelector('.spotlight-section-title')?.classList.remove('spotlight-title-link');
+            }
+        });
+    }
+
     function scheduleViewMoreUrl(sectionConfig) {
         resolveViewMoreUrl(sectionConfig).then((viewMoreUrl) => {
-            if (viewMoreUrl) sectionConfig.viewMoreUrl = viewMoreUrl;
+            if (viewMoreUrl) {
+                applyViewMoreUrlToSection(sectionConfig, viewMoreUrl);
+                pendingGenreViewMoreConfigs.delete(sectionConfig);
+                return;
+            }
+            if (sectionNeedsGenreNameResolve(sectionConfig)) {
+                pendingGenreViewMoreConfigs.add(sectionConfig);
+            }
         }).catch((err) => {
             WARN(`Failed to resolve viewMoreUrl for ${sectionConfig?.id}:`, err);
+            if (sectionNeedsGenreNameResolve(sectionConfig)) {
+                pendingGenreViewMoreConfigs.add(sectionConfig);
+            }
+        });
+    }
+
+    function reschedulePendingGenreViewMoreUrls() {
+        const pending = Array.from(pendingGenreViewMoreConfigs);
+        pending.forEach((sectionConfig) => {
+            resolveViewMoreUrl(sectionConfig).then((viewMoreUrl) => {
+                if (!viewMoreUrl) return;
+                applyViewMoreUrlToSection(sectionConfig, viewMoreUrl);
+                pendingGenreViewMoreConfigs.delete(sectionConfig);
+            }).catch((err) => {
+                WARN(`Failed to re-resolve viewMoreUrl for ${sectionConfig?.id}:`, err);
+            });
         });
     }
 
@@ -149,7 +245,8 @@
                 .replace(/\$\{kefinTweaksRoot\}/g, kefinTweaksRoot)
                 .replace(/\$\{serverId\}/g, serverId);
 
-            const normalizedItems = sectionConfig.items.map((item, index) => {
+            const visibleItems = sectionConfig.items.filter((item) => item && item.hidden !== true);
+            const normalizedItems = visibleItems.map((item, index) => {
                 const posterUrl = normalizeTemplate(item.posterUrl);
                 const thumbUrl = normalizeTemplate(item.thumbUrl);
                 const squareUrl = normalizeTemplate(item.squareUrl);
@@ -181,6 +278,7 @@
             if (window.cardBuilder.postProcessItems) {
                 postProcessedItems = window.cardBuilder.postProcessItems(sectionConfig, normalizedItems);
             }
+            postProcessedItems = applyExcludeItemIdFilter(sectionConfig, postProcessedItems);
 
             return {
                 config: sectionConfig,
@@ -194,14 +292,14 @@
             return null;
         }
 
-        scheduleViewMoreUrl(sectionConfig);
-
         // External list (MDBList) — progressive for network fetch when caches are already ready
         if (Array.isArray(sectionConfig.externalListUrls) && sectionConfig.externalListUrls.length > 0) {
             if (!window.KefinExternalList?.resolveExternalListItems) {
                 WARN(`Section ${sectionConfig.id}: externalListUrls set but KefinExternalList unavailable`);
                 return null;
             }
+
+            scheduleViewMoreUrl(sectionConfig);
 
             let mappedDataPromise = null;
             const ensureData = () => {
@@ -215,7 +313,7 @@
                         if (window.cardBuilder.postProcessItems) {
                             items = window.cardBuilder.postProcessItems(sectionConfig, items);
                         }
-                        return items;
+                        return applyExcludeItemIdFilter(sectionConfig, items);
                     })();
                 }
                 return mappedDataPromise;
@@ -252,6 +350,7 @@
         const userId = ApiClient.getCurrentUserId();
         const serverUrl = ApiClient.serverAddress();
 
+        // Initialize active query index before view-more resolution (multi-picker / random)
         const resolveQueries = window.cardBuilder?.resolveQueriesToLoad;
         const queriesToLoad = typeof resolveQueries === 'function'
             ? resolveQueries(sectionConfig, { initialize: true })
@@ -272,11 +371,14 @@
             LOG(`Section ${sectionConfig.id}: useRandomQuery — selected query index ${index}`);
         }
 
+        scheduleViewMoreUrl(sectionConfig);
+
         const postProcess = (cfg, items) => {
             let postProcessedItems = items;
             if (window.cardBuilder.postProcessItems) {
                 postProcessedItems = window.cardBuilder.postProcessItems(cfg, items);
             }
+            postProcessedItems = applyExcludeItemIdFilter(cfg, postProcessedItems);
             return sortItemsByConfiguredIds(cfg, postProcessedItems);
         };
 
@@ -512,10 +614,32 @@
     }
 
     /**
-     * Resolve view more URL from queryOptions / known section ids
+     * Active query index for multi-query picker sections (falls back to 0).
+     */
+    function getActiveQueryIndexForViewMore(sectionConfig) {
+        const queries = sectionConfig?.queries || [];
+        if (queries.length <= 1) return 0;
+        if (sectionConfig.useMultiQueryPicker !== true) return 0;
+        const stored = sectionConfig._selectedQueryIndex;
+        if (Number.isInteger(stored) && stored >= 0 && stored < queries.length) {
+            return stored;
+        }
+        return 0;
+    }
+
+    /**
+     * Resolve view more URL from queryOptions / known section ids.
+     * Multi-query picker sections resolve from the active query (not always queries[0]).
      */
     async function resolveViewMoreUrl(sectionConfig) {
-        if (sectionConfig.viewMoreUrl) return sectionConfig.viewMoreUrl;
+        const queries = sectionConfig?.queries || [];
+        const isMultiPicker = sectionConfig?.useMultiQueryPicker === true && queries.length > 1;
+
+        // Section-level URL is authoritative for single-query sections only.
+        // Multi-picker keeps a cached sectionConfig.viewMoreUrl that goes stale on switch.
+        if (sectionConfig.viewMoreUrl && !isMultiPicker) {
+            return sectionConfig.viewMoreUrl;
+        }
 
         const { id } = sectionConfig;
 
@@ -549,10 +673,14 @@
             return null;
         }
 
-        // Infer from queries array
-        if (sectionConfig.queries && sectionConfig.queries.length > 0) {
-            const firstQuery = sectionConfig.queries[0];
-            const queryOptions = firstQuery.queryOptions || {};
+        // Infer from active query (multi-picker) or first query
+        if (queries.length > 0) {
+            const activeQuery = queries[getActiveQueryIndexForViewMore(sectionConfig)] || queries[0];
+            if (activeQuery?.viewMoreUrl) {
+                return activeQuery.viewMoreUrl;
+            }
+
+            const queryOptions = activeQuery.queryOptions || {};
             const serverId = window.ApiClient ? window.ApiClient.serverId() : '';
 
             // Check for Tags
@@ -560,14 +688,13 @@
                 return `#/list.html?type=tag&tag=${encodeURIComponent(queryOptions.Tags)}&serverId=${serverId}`;
             }
 
-            // Check for Genres
+            // Check for Genres (name → Id via local catalog; never use unresolved names as genreId)
             if (queryOptions.Genres) {
                 let genreId = queryOptions.Genres;
                 if (typeof genreId === 'string' && !genreId.match(/^\d+$/)) {
                     const resolvedId = await ApiHelper.getGenreId(genreId);
-                    if (resolvedId) {
-                        genreId = resolvedId;
-                    }
+                    if (!resolvedId) return null;
+                    genreId = resolvedId;
                 }
                 return `#/list.html?genreId=${genreId}&serverId=${serverId}`;
             }
@@ -597,17 +724,17 @@
             }
 
             // Check for custom path
-            if (firstQuery.path) {
+            if (activeQuery.path) {
                 // Derive URL from path if possible
-                if (firstQuery.path.includes('NextUp')) {
+                if (activeQuery.path.includes('NextUp')) {
                     return `#/tv.html?collectionType=tvshows&tab=1`;
                 }
-                if (firstQuery.path.includes('Upcoming')) {
+                if (activeQuery.path.includes('Upcoming')) {
                     return `#/tv.html?collectionType=tvshows&tab=2`;
                 }
                 // If query path is Items/itemid/Similar then return the details page for the item
-                if (firstQuery.path.includes('Similar')) {
-                    const itemId = firstQuery.path.split('/')[2];
+                if (activeQuery.path.includes('Similar')) {
+                    const itemId = activeQuery.path.split('/')[2];
                     return `#/details?id=${itemId}&serverId=${serverId}`;
                 }
             }
@@ -874,6 +1001,23 @@
         return item.Id;
     }
 
+    /** Drop discovery source title(s) from result lists (API ExcludeItemIds fallback). */
+    function applyExcludeItemIdFilter(sectionConfig, items) {
+        const raw = sectionConfig?.excludeItemId;
+        if (raw == null || items == null) return items;
+        const ids = new Set((Array.isArray(raw) ? raw : [raw]).map(String));
+        if (Array.isArray(items)) {
+            return items.filter((item) => item?.Id != null && !ids.has(String(item.Id)));
+        }
+        if (Array.isArray(items.Items)) {
+            return {
+                ...items,
+                Items: items.Items.filter((item) => item?.Id != null && !ids.has(String(item.Id)))
+            };
+        }
+        return items;
+    }
+
     function resolveTitleMetadata(item, itemType) {
         const title = item?.SeriesName || item?.Name || '';
         const meta = { Title: title };
@@ -906,7 +1050,8 @@
                 return {
                     id: person.Id,
                     name: person.Name,
-                    excludeItemId: item.Id,
+                    // Episode history sources used for Series results must exclude SeriesId
+                    excludeItemId: resolveSimilarSourceId(item) || item.Id,
                     metadata: buildPersonMetadata(person.Name, personType, item, itemType)
                 };
             }
@@ -985,21 +1130,21 @@
         }
 
         if (discoveryType === 'Studio') {
+            const settings = getDiscoverySettings();
+            const minCount = itemType === 'Series'
+                ? (settings.minStudioSeriesCount ?? settings.minStudioMovieCount ?? 25)
+                : (settings.minStudioMovieCount ?? 25);
+            const countField = itemType === 'Series' ? 'SeriesCount' : 'MovieCount';
             const dedupe = getStudioDedupeSet(config);
-            /* Pick only a studio that can fill the row. /Studios reports how many
-             * series and movies each studio has, and most of this library's 246
-             * studios have one to three -- so a random pick usually landed on one
-             * too small for the section's Minimum Items, which then hid the row
-             * and spent the discovery slot. Counts are the studio's whole
+            /* The discovery settings' Studio Movie/Series Count is the main
+             * filter. The section's own Minimum Items raises it when higher: a
+             * studio with fewer items than that cannot fill the row, which then
+             * hides and spends the discovery slot. Counts are the studio's whole
              * catalogue, watched included, so this is a floor, not a guarantee;
              * the rendered row is checked again (enforceMinimumItems). */
             const minimum = parseInt(config.minimumItems, 10) > 1 ? parseInt(config.minimumItems, 10) : 0;
-            const countKey = itemType === 'Series' ? 'SeriesCount' : itemType === 'Movie' ? 'MovieCount' : null;
-            const eligible = pool.filter((s) => {
-                if (!s?.Id || dedupe.has(s.Id)) return false;
-                if (!minimum || !countKey || typeof s[countKey] !== 'number') return true;
-                return s[countKey] >= minimum;
-            });
+            const threshold = Math.max(minCount, minimum - 1);
+            const eligible = pool.filter((s) => s?.Id && !dedupe.has(s.Id) && (s[countField] || 0) > threshold);
             if (!eligible.length) return null;
             const selected = eligible[Math.floor(Math.random() * eligible.length)];
             dedupe.add(selected.Id);
@@ -1216,16 +1361,26 @@
          * serves these rows as one of those providers wherever a library selects
          * it. The separate SmartSimilar sections and their direct
          * /SmartSimilar/Items/{id}/Similar client were removed on 2026-09-25. */
+
+        const applyExcludeItemIdsToQueryOptions = (opts) => {
+            if (!instanceConfig.excludeItemId || !opts) return opts;
+            opts.ExcludeItemIds = Array.isArray(instanceConfig.excludeItemId)
+                ? instanceConfig.excludeItemId
+                : [instanceConfig.excludeItemId];
+            return opts;
+        };
+
         if (discoveryKind === 'Similar' || discoveryKind === 'Watchlist') {
             const similarId = dynamicResult.similarSourceId || resolvedSource;
+            const similarQueryOptions = applyExcludeItemIdsToQueryOptions({
+                Limit: instanceConfig.itemLimit || 20,
+                Fields: queryOptions.Fields || 'PrimaryImageAspectRatio,DateCreated,Overview,Taglines,ProductionYear,RecursiveItemCount,ChildCount,UserData',
+                IncludeItemTypes: queryOptions.IncludeItemTypes || contentTypes
+            });
             instanceConfig.queries = [{
                 ...(hasTemplateQueries ? instanceConfig.queries[0] : {}),
                 path: `/Items/${similarId}/Similar`,
-                queryOptions: {
-                    Limit: instanceConfig.itemLimit || 20,
-                    Fields: queryOptions.Fields || 'PrimaryImageAspectRatio,DateCreated,Overview,Taglines,ProductionYear,RecursiveItemCount,ChildCount,UserData',
-                    IncludeItemTypes: queryOptions.IncludeItemTypes || contentTypes
-                }
+                queryOptions: similarQueryOptions
             }];
         } else {
             switch (discoveryKind) {
@@ -1252,11 +1407,6 @@
                             queryOptions.IncludeItemTypes = ['Episode'];
                         }
                     }
-                    if (instanceConfig.excludeItemId) {
-                        queryOptions.ExcludeItemIds = Array.isArray(instanceConfig.excludeItemId)
-                            ? instanceConfig.excludeItemId
-                            : [instanceConfig.excludeItemId];
-                    }
                     break;
                 case 'Studio':
                     if (resolvedSource && resolvedSource.match(/^[a-f0-9]{32}$/)) {
@@ -1279,6 +1429,8 @@
             } else if (!queryOptions.Fields) {
                 queryOptions.Fields = 'PrimaryImageAspectRatio,DateCreated,Overview,Taglines,ProductionYear,RecursiveItemCount,ChildCount,UserData';
             }
+
+            applyExcludeItemIdsToQueryOptions(queryOptions);
 
             instanceConfig.queries = [{
                 ...(hasTemplateQueries ? instanceConfig.queries[0] : {}),
@@ -1461,6 +1613,16 @@
         markEmptyDiscoverySourceTemplate,
         isEmptyDiscoverySourceTemplate
     };
+
+    // After movie-genres catalog sync, fill in See All links that waited on name→Id
+    function bindMovieGenresSynced() {
+        const api = window.apiHelper || ApiHelper;
+        if (api?.onMovieGenresSynced) {
+            api.onMovieGenresSynced(reschedulePendingGenreViewMoreUrls);
+        }
+        window.addEventListener('kefinTweaksMovieGenresSynced', reschedulePendingGenreViewMoreUrls);
+    }
+    bindMovieGenresSynced();
 
     LOG('sectionHelper ready');
 })();

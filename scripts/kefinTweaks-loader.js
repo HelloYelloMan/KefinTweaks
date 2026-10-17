@@ -264,13 +264,6 @@
             description: 'Library cache facade for KefinTweaks'
         },
         {
-            name: 'externalList',
-            script: 'externalList.js',
-            css: null,
-            dependencies: ['libraryCache', 'libraryCacheUtils', 'apiHelper'],
-            description: 'MDBList external list matching for home sections'
-        },
-        {
             name: 'skinManager',
             script: 'skinManager.js',
             css: 'defaultSkin.css',
@@ -394,7 +387,7 @@
             name: 'watchlist',
             script: 'watchlist.js',
             css: 'watchlist.css',
-            dependencies: ['cardBuilder', 'localStorageCache', 'modal', 'utils', 'statistics', 'watchlist-configuration'],
+            dependencies: ['cardBuilder', 'localStorageCache', 'modal', 'utils', 'statistics', 'watchlist-configuration', 'websocketHelper'],
             thirdParty: ['chartjs'],
             description: 'Adds watchlist functionality throughout Jellyfin interface'
         },
@@ -402,7 +395,7 @@
             name: 'homeScreen',
             script: 'homeScreen3.js',
             css: 'homeScreen.css',
-            dependencies: ['cardBuilder', 'localStorageCache', 'utils', 'userHelper', 'homeScreenConfig2', 'homeScreen-configuration', 'peopleCache', 'studiosCache', 'moviesCache', 'seriesCache', 'libraryCache', 'libraryCacheUtils', 'externalList', 'indexedDBCache', 'homeScreenConfigCommunity', 'dataHelper', 'apiHelper', 'sectionHelper', 'homeScreen-migration', 'homeScreen-user-configuration', 'homeScreenSectionConfigure', 'homeScreenPin', 'websocketHelper'],
+            dependencies: ['cardBuilder', 'localStorageCache', 'utils', 'userHelper', 'homeScreenConfig2', 'homeScreen-configuration', 'peopleCache', 'studiosCache', 'moviesCache', 'seriesCache', 'libraryCache', 'libraryCacheUtils', 'indexedDBCache', 'homeScreenConfigCommunity', 'dataHelper', 'apiHelper', 'sectionHelper', 'homeScreen-migration', 'homeScreen-user-configuration', 'homeScreenSectionConfigure', 'homeScreenPin'],
             priority: true, // Load immediately after dependencies to reduce UI disruption
             description: 'Adds custom home screen sections'
         },
@@ -748,11 +741,17 @@
         };
     }
 
-    function resolveAssetUrl(root, relativePath) {
+    /**
+     * Join kefin root + scripts/ + relativePath, collapsing . / .. for site-absolute roots.
+     * Shared by live resolveAssetUrl and the baked KefinTweaks-injector joinAssetUrl.
+     */
+    function joinAssetUrlForRoot(resolvedRoot, relativePath) {
         if (!relativePath) return null;
         if (/^https?:\/\//i.test(relativePath)) return relativePath;
 
-        const normalizedRoot = normalizeRoot(root);
+        const normalizedRoot = normalizeRoot(resolvedRoot);
+        if (!normalizedRoot) return null;
+
         const base = normalizedRoot + 'scripts/';
         const joined = (base + relativePath).replace(/\\/g, '/');
 
@@ -761,7 +760,7 @@
             try {
                 return new URL(relativePath, base).href;
             } catch (e) {
-                /* fall through */
+                /* fall through to collapse */
             }
         }
 
@@ -779,6 +778,39 @@
         }
         const resolved = stack.join('/');
         return isSiteAbsolute ? '/' + resolved : resolved;
+    }
+
+    function resolveAssetUrl(root, relativePath) {
+        return joinAssetUrlForRoot(root, relativePath);
+    }
+
+    /**
+     * ES5 joinAssetUrl source for buildInjectorScript (closes over resolvedRoot).
+     * Must stay algorithmically identical to joinAssetUrlForRoot.
+     */
+    function getJoinAssetUrlRuntimeSource() {
+        return [
+            '  function joinAssetUrl(relativePath) {',
+            '    if (!relativePath) return null;',
+            '    if (/^https?:\\/\\//i.test(relativePath)) return relativePath;',
+            '    var base = resolvedRoot + \'scripts/\';',
+            '    var joined = (base + relativePath).replace(/\\\\/g, \'/\');',
+            '    if (/^https?:\\/\\//i.test(resolvedRoot)) {',
+            '      try { return new URL(relativePath, base).href; } catch (e) {}',
+            '    }',
+            '    var isSiteAbsolute = joined.charAt(0) === \'/\';',
+            '    var parts = joined.split(\'/\');',
+            '    var stack = [];',
+            '    for (var pi = 0; pi < parts.length; pi++) {',
+            '      var p = parts[pi];',
+            '      if (!p || p === \'.\') continue;',
+            '      if (p === \'..\') { stack.pop(); continue; }',
+            '      stack.push(p);',
+            '    }',
+            '    var resolved = stack.join(\'/\');',
+            '    return isSiteAbsolute ? \'/\' + resolved : resolved;',
+            '  }'
+        ].join('\n');
     }
 
     function expandScriptToAssets(scriptDef, root, urlSuffix, thirdParty) {
@@ -912,7 +944,8 @@
             // or existing installs keep running the old script. g2: console gate.
             // g3: Jellyfin 12's URI-encoded app name in version detection.
             // g4: our files carry ?v=<config.assetVersion>.
-            'g4',
+            // g5: upstream's shared joinAssetUrl and KefinTweaksInjectorAttached.
+            'g5',
             root,
             String(majorVersion == null ? 'unknown' : majorVersion),
             featuresDisabled ? 'config-only' : 'full',
@@ -1084,6 +1117,7 @@
             '// kefinTweaksInjectorStamp=' + stamp,
             '(function () {',
             '  if (window.KefinTweaksScriptsPreloaded) return;',
+            '  window.KefinTweaksInjectorAttached = true;',
             '  var cfg = window.KefinTweaksConfig || {};',
             '  if (cfg.enabled !== true) return;',
             // Same console gate as injector.js and kefinTweaks-plugin.js. This
@@ -1104,15 +1138,13 @@
             '  if (resolvedRoot.charAt(resolvedRoot.length - 1) !== \'/\') resolvedRoot += \'/\';',
             // Read from the config at run time, not baked: a deploy changes the
             // token without rebuilding this entry, and the live plan reads the
-            // same value, so both name each file identically.
+            // same value, so both name each file identically. Applied where the
+            // asset loop calls upstream's joinAssetUrl, which must stay identical
+            // to joinAssetUrlForRoot.
             '  var assetSuffix = cfg.assetVersion ? \'?v=\' + encodeURIComponent(String(cfg.assetVersion)) : \'\';',
-            '  window.KefinTweaksAssetUrl = function (url) { return (url && assetSuffix && url.indexOf(\'?\') === -1) ? url + assetSuffix : url; };',
-            '  function joinAssetUrl(relativePath) {',
-            '    if (!relativePath) return null;',
-            '    if (/^https?:\\/\\//i.test(relativePath)) return relativePath;',
-            '    var base = resolvedRoot + \'scripts/\';',
-            '    try { return new URL(relativePath, base).href + assetSuffix; } catch (e) { return base + relativePath + assetSuffix; }',
-            '  }',
+            '  function withAssetSuffix(url) { return (url && assetSuffix && url.indexOf(\'?\') === -1) ? url + assetSuffix : url; }',
+            '  window.KefinTweaksAssetUrl = withAssetSuffix;',
+            getJoinAssetUrlRuntimeSource(),
             '  window.KefinTweaksScriptsPreloaded = true;',
             '  window.KefinTweaksInjectorStamp = ' + stampJson + ';',
             '  var SCRIPT_DEFINITIONS_BAKED = ' + defsJson + ';',
@@ -1165,7 +1197,7 @@
             '  for (var i = 0; i < assets.length; i++) {',
             '    var a = assets[i];',
             '    if (!a) continue;',
-            '    var href = a.url || joinAssetUrl(a.path);',
+            '    var href = a.url || withAssetSuffix(joinAssetUrl(a.path));',
             '    if (!href) continue;',
             '    if (a.kind === \'css\') {',
             '      if (document.querySelector(\'link[href="\' + href + \'"]\')) continue;',
@@ -1388,6 +1420,7 @@
         mergeEnabledScripts: mergeEnabledScripts,
         normalizeRoot: normalizeRoot,
         getResolvedKefinRoot: getResolvedKefinRoot,
+        joinAssetUrlForRoot: joinAssetUrlForRoot,
         resolveAssetUrl: resolveAssetUrl,
         buildLoadPlan: buildLoadPlan,
         buildInjectorScript: buildInjectorScript,

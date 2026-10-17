@@ -432,7 +432,7 @@
 
     const RANDOM_QUERY_TOGGLE_DESCRIPTIONS = {
         on: 'Randomly picks a query from the defined queries instead of merging all query results. If Query Picker is enabled, the section will initially show a random query from the defined queries.',
-        off: 'Merge results from all defined queries while respecting the sorting criteria specified below.'
+        off: 'Merge results from all defined queries while respecting the sorting criteria specified in the Advanced Options section below.'
     };
 
     const QUERY_PICKER_TOGGLE_DESCRIPTIONS = {
@@ -654,6 +654,23 @@
 
     function getCustomItemsEditor() {
         return window.KefinHomeScreenCustomItemsEditor;
+    }
+
+    /** User-created / custom-group sections may delete items; default Kefin sections may only hide. */
+    function shouldAllowCustomItemRemove(state) {
+        const id = state?.section?.id || '';
+        if (state?.context?.isCustomSection === true) return true;
+        if (state?.section?.isCustom === true) return true;
+        if (id.startsWith('custom-')) return true;
+        return false;
+    }
+
+    function getAdvancedCustomItemsOptions(state) {
+        const customEditor = getCustomItemsEditor();
+        if (!customEditor?.getCustomItemsOptions) return {};
+        return customEditor.getCustomItemsOptions({
+            allowRemove: shouldAllowCustomItemRemove(state)
+        });
     }
 
     function getCachePresets() {
@@ -1009,6 +1026,7 @@
             endDate: section.endDate || '',
             order: section.order != null ? String(section.order) : '',
             caption: section.caption || '',
+            description: section.description || '',
             renderMode,
             cardFormat: section.cardFormat || 'Poster',
             useRandomQuery: section.useRandomQuery === true,
@@ -1064,6 +1082,8 @@
 
         if (nameEl) state.sectionName = nameEl.value;
         if (captionEl) state.caption = captionEl.value;
+        const descriptionEl = root.querySelector('#section-description');
+        if (descriptionEl) state.description = descriptionEl.value;
         if (groupEl) state.groupSelect = groupEl.value;
         if (groupNewEl) state.groupNew = groupNewEl.value;
         if (visibilityEl) state.sectionVisibility = visibilityEl.value;
@@ -1127,7 +1147,7 @@
 
         const customEditor = getCustomItemsEditor();
         if (customEditor && state.itemSource === 'custom') {
-            customEditor.collectCustomItemsFromForm(root, state, customEditor.getCustomItemsOptions());
+            customEditor.collectCustomItemsFromForm(root, state, getAdvancedCustomItemsOptions(state));
         }
 
         if (state.itemSource === 'external') {
@@ -1880,15 +1900,19 @@
 
     function buildCustomItemsHTML(state) {
         const customEditor = getCustomItemsEditor();
+        const allowRemove = shouldAllowCustomItemRemove(state);
         const html = customEditor
-            ? customEditor.renderCustomItemsHTML(state, customEditor.getCustomItemsOptions())
+            ? customEditor.renderCustomItemsHTML(state, getAdvancedCustomItemsOptions(state))
             : '<div class="listItemBodyText secondary">Custom items editor not available.</div>';
+        const groupDesc = allowRemove
+            ? 'Create cards with custom images and links'
+            : 'Reorder or hide cards. Default section items cannot be deleted.';
 
         return `
-            <section class="hsae-group hsae-custom-items-group" data-hsae-profiles="full">
+            <section class="hsae-group hsae-custom-items-group" data-hsae-profiles="full minimal postProcessing normal dateCutoffs">
                 <div class="hsae-group-header">
                     <div class="listItemBodyText hsae-group-title">Custom Items</div>
-                    <div class="listItemBodyText secondary hsae-group-desc">Create cards with custom images and links</div>
+                    <div class="listItemBodyText secondary hsae-group-desc">${escapeHtml(groupDesc)}</div>
                 </div>
                 <div class="hsae-custom-items-stage">${html}</div>
             </section>
@@ -2359,7 +2383,7 @@
                             )}
                         </div>
                     </div>
-                    <div class="hsae-toggle-card-grid" data-hsae-profiles="full minimal">
+                    <div class="hsae-toggle-card-grid" data-hsae-profiles="full minimal postProcessing normal dateCutoffs">
                         ${buildToggleCard(
                             'hsae-use-parent-card',
                             section.useParentCard === true,
@@ -2367,6 +2391,11 @@
                             ADVANCED_TOGGLE_DESCRIPTIONS['hsae-use-parent-card'][section.useParentCard === true ? 'on' : 'off'],
                             { hintKey: 'hsae-use-parent-card' }
                         )}
+                    </div>
+                    <div class="hsae-field-wrap hsae-section-description" style="margin-top: 1em;">
+                        <label class="listItemBodyText" for="section-description" style="display: block; margin-bottom: 0.25em;">Description</label>
+                        <div class="listItemBodyText secondary" style="margin-bottom: 0.5em; font-size: 0.85em;">Describe the section in more detail, useful when sharing Custom Sections.</div>
+                        <textarea id="section-description" class="fld emby-textarea" rows="3" style="width: 100%; resize: vertical;" placeholder="Optional section description">${escapeHtml(section.description || state.description || '')}</textarea>
                     </div>
                 </div>
             </details>
@@ -2600,6 +2629,9 @@
         const captionVal = dialog.querySelector('#section-caption')?.value?.trim() || '';
         if (captionVal) section.caption = captionVal;
         else section.caption = '';
+        const descriptionVal = dialog.querySelector('#section-description')?.value?.trim() || '';
+        if (descriptionVal) section.description = descriptionVal;
+        else section.description = '';
         section.enabled = userEnabledChecked;
         section.userConfigurable = userConfigChecked;
 
@@ -2652,7 +2684,7 @@
             const liveState = getLiveEditorState(dialog);
             const customItemsGroup = dialog.querySelector('.hsae-custom-items-group');
             if (isProfileFieldActive(root, customItemsGroup) && customEditor && liveState?.customItems) {
-                customEditor.collectCustomItemsFromForm(dialog, liveState, customEditor.getCustomItemsOptions());
+                customEditor.collectCustomItemsFromForm(dialog, liveState, getAdvancedCustomItemsOptions(liveState));
                 section.items = liveState.customItems.map(customEditor.buildStaticItemFromDraft).filter(Boolean);
             } else if (!Array.isArray(section.items)) {
                 section.items = [];
@@ -2680,14 +2712,9 @@
                     section.useMultiQueryPicker = dialog.querySelector('#hsae-use-multi-query-picker')?.checked === true;
 
                     const pickerLabel = dialog.querySelector('#hsae-multi-query-picker-label')?.value?.trim();
-                    if (pickerLabel) section.multiQueryPickerLabel = pickerLabel;
-                    else delete section.multiQueryPickerLabel;
-
-                    if (dialog.querySelector('#hsae-use-query-names-for-section')?.checked === true) {
-                        section.useQueryNamesForSection = true;
-                    } else {
-                        delete section.useQueryNamesForSection;
-                    }
+                    section.multiQueryPickerLabel = pickerLabel || '';
+                    section.useQueryNamesForSection =
+                        dialog.querySelector('#hsae-use-query-names-for-section')?.checked === true;
                 } else {
                     delete section.useRandomQuery;
                     delete section.useMultiQueryPicker;
@@ -3394,7 +3421,7 @@
         if (action?.startsWith('hsae-')) {
             const customEditor = getCustomItemsEditor();
             if (customEditor && state.itemSource === 'custom') {
-                customEditor.handleAction(action, actionEl, root, state, customEditor.getCustomItemsOptions(), () => refreshEditorBody(modalInstance));
+                customEditor.handleAction(action, actionEl, root, state, getAdvancedCustomItemsOptions(state), () => refreshEditorBody(modalInstance));
             }
             return;
         }

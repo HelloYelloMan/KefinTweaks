@@ -110,6 +110,24 @@
         return null;
     }
 
+    /** Prefer lowest IndexNumber >= 1 (Season 1); fall back to seasons[0] (e.g. Specials-only). */
+    function pickDefaultSeason(seasons) {
+        const list = Array.isArray(seasons) ? seasons : [];
+        if (!list.length) return null;
+        let best = null;
+        let bestIdx = Infinity;
+        for (const season of list) {
+            const n = seasonIndex(season);
+            if (n == null || !Number.isFinite(Number(n))) continue;
+            const num = Number(n);
+            if (num >= 1 && num < bestIdx) {
+                bestIdx = num;
+                best = season;
+            }
+        }
+        return best || list[0];
+    }
+
     function buildEpisodesQueryDef(seriesId, seasonIdValue) {
         return {
             path: `/Shows/${seriesId}/Episodes`,
@@ -122,29 +140,6 @@
                 EnableTotalRecordCount: false
             }
         };
-    }
-
-    /* Keep the server's order. Do NOT sort by IndexNumber.
-     *
-     * /Shows/{id}/Episodes returns a season's episodes with its specials placed
-     * where their metadata says they belong -- AirsAfterSeasonNumber puts them
-     * after the finale, AirsBeforeEpisodeNumber slots them inline. IndexNumber
-     * restarts at 1 for season 0, so sorting on it alone interleaves them:
-     * special 1 lands beside episode 1, special 2 beside episode 2.
-     *
-     * Measured on Valkyrie Drive: Mermaid, whose six specials all air after the
-     * season. The server returns S1E1..S1E12 then S0E1..S0E6, identically with
-     * SortBy=IndexNumber and with no SortBy at all. The client sort turned that
-     * into S0E1, S1E1, S0E2, S1E2 ... -- a special every other card.
-     *
-     * Sorting by ParentIndexNumber first would not fix it either: that puts
-     * season 0 ahead of season 1, which is just as wrong for specials that air
-     * afterwards. The airs-before/after placement is the server's to compute
-     * and it already has.
-     */
-    function postProcessEpisodes(data) {
-        if (Array.isArray(data)) return data.slice();
-        return Array.isArray(data?.Items) ? data.Items.slice() : [];
     }
 
     function formatSeasonName(seasonNameValue, seasonNumber) {
@@ -162,9 +157,8 @@
     }
 
     async function buildSeriesEpisodesSection(seriesId, seasons, initialSeason, onMultiQueryChange) {
-        const apiHelper = window.apiHelper;
-        if (!apiHelper?.getQuery || !apiHelper?.buildQueryFromSection) {
-            throw new Error('apiHelper.getQuery / buildQueryFromSection unavailable');
+        if (!window.sectionHelper?.loadSectionForRendering) {
+            throw new Error('sectionHelper.loadSectionForRendering unavailable');
         }
 
         const initialIndex = Math.max(0, seasons.findIndex((season) => seasonId(season) === seasonId(initialSeason)));
@@ -216,50 +210,11 @@
             sectionConfig._onMultiQueryChange = onMultiQueryChange;
         }
 
-        const initialQuery = queries[initialIndex];
-        const userId = ApiClient.getCurrentUserId();
-        const serverUrl = ApiClient.serverAddress();
-        const url = apiHelper.buildQueryFromSection(initialQuery, userId, serverUrl);
-        if (typeof url !== 'string') {
-            throw new Error(`Invalid episodes query URL for season ${seasonId(initialSeasonObj)}`);
+        const loaded = await window.sectionHelper.loadSectionForRendering(sectionConfig);
+        if (!loaded?.config || !loaded?.result) {
+            throw new Error(`Failed to load series-episodes section for ${seriesId}`);
         }
-
-        const queryResult = await apiHelper.getQuery(url, {
-            useCache: true,
-            ttl: EPISODES_CACHE_TTL
-        });
-
-        let mappedDataPromise = null;
-        const ensureData = () => {
-            if (!mappedDataPromise) {
-                const raw = typeof queryResult.ensureData === 'function'
-                    ? queryResult.ensureData()
-                    : queryResult.dataPromise;
-                mappedDataPromise = Promise.resolve(raw)
-                    .then((data) => postProcessEpisodes(data))
-                    .catch((err) => {
-                        WARN('episodes ensureData failed for season', seasonId(initialSeasonObj), err);
-                        return [];
-                    });
-            }
-            return mappedDataPromise;
-        };
-
-        const result = {
-            data: postProcessEpisodes(queryResult.data),
-            isStale: queryResult.isStale === true,
-            isStalePromise: queryResult.isStalePromise,
-            ensureData
-        };
-        Object.defineProperty(result, 'dataPromise', {
-            configurable: true,
-            enumerable: true,
-            get() {
-                return ensureData();
-            }
-        });
-
-        return { config: sectionConfig, result };
+        return loaded;
     }
 
     function getSectionTitleContainer(host) {
@@ -621,7 +576,7 @@
     function performEpisodeScroll(scrollerContainer, targetCard, targetEpisodeNumber) {
         const itemsContainer = scrollerContainer.querySelector('.itemsContainer') || scrollerContainer;
         const cards = Array.from(itemsContainer.querySelectorAll(
-            ':scope > .card:not(.card-layout-dummy):not(.skeleton-card)'
+            ':scope > .card:not(.skeleton-card)'
         ));
         const index = cards.indexOf(targetCard);
         if (index < 0) {
@@ -710,7 +665,7 @@
 
         let targetSeason = findTargetSeason(seasons, targetEpisode);
         if (!targetSeason) {
-            targetSeason = seasons[0];
+            targetSeason = pickDefaultSeason(seasons);
         }
         if (!targetSeason) {
             WARN('No seasons available to render');
@@ -979,16 +934,16 @@
             targetSeason = findTargetSeason(seasons, targetEpisode);
         }
         
-        // Fallback to first season if NextUp not found or season not in list
+        // Fallback to Season 1 (lowest IndexNumber >= 1) if NextUp not found or season not in list
         if (!targetSeason) {
-            targetSeason = seasons[0];
-            // If we have NextUp but season not found, use first episode of first season
+            targetSeason = pickDefaultSeason(seasons);
+            // If we have NextUp but season not found, use first episode of default season
             if (targetEpisodeNumber && !seasons.find(s => s.IndexNumber === targetEpisodeNumber.season)) {
                 targetEpisodeNumber = { season: targetSeason.IndexNumber, episode: 1 };
-                LOG(`NextUp season not in seasons list, defaulting to first episode of first season`);
+                LOG(`NextUp season not in seasons list, defaulting to first episode of season ${targetSeason.IndexNumber}`);
             } else if (!targetEpisodeNumber) {
                 targetEpisodeNumber = { season: targetSeason.IndexNumber, episode: 1 };
-                LOG(`No NextUp found, defaulting to first episode of first season`);
+                LOG(`No NextUp found, defaulting to first episode of season ${targetSeason.IndexNumber}`);
             }
         }
 

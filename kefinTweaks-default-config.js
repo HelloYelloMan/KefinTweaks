@@ -65,5 +65,9 @@ window.KefinTweaksDefaultConfig = {
   "defaultSkin": null,
   "themes": [],
   "customMenuLinks": [],
-  "optionalIncludes": []
+  "optionalIncludes": [],
+  "updateState": {
+    "dismissed": true,
+    "latestVersion": ""
+  }
 };

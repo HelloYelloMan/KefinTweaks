@@ -156,6 +156,11 @@
                 url: `${getKefinTweaksRoot()}skins/optional/global/seasonalAnimationDisable.css`,
                 enabled: false
             },
+            {
+                name: 'Unhide Native User Home Controls on User > Home settings page',
+                url: `${getKefinTweaksRoot()}skins/optional/global/unhideNativeUserHomeControls.css`,
+                enabled: false
+            },
             // ================================================================
             // FORK-ONLY OPTIONS
             // Kept at the end so a merge with upstream shows their additions
@@ -801,6 +806,10 @@
                 url: [
                     {
                         majorServerVersions: [10],
+                        urls: ['https://cdn.jsdelivr.net/gh/MakD/zombie-release@latest/graveyard/zombie-min-git.css']
+                    },
+                    {
+                        majorServerVersions: [12],
                         urls: ['https://cdn.jsdelivr.net/gh/MakD/zombie-release@latest/zombie_revived.css']
                     }
                 ],

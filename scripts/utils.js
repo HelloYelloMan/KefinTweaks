@@ -631,7 +631,7 @@
         if (!root) return;
         const clear = (el) => {
             if (!el || !el.classList) return;
-            el.classList.remove('Mui-selected', 'Mui-focusVisible', 'selected');
+            el.classList.remove('Mui-selected', 'Mui-focusVisible', 'selected', 'Mui-disabled');
             el.removeAttribute('aria-current');
             el.removeAttribute('aria-selected');
         };
@@ -1196,6 +1196,15 @@
         return document.querySelector('.headerTabs.sectionTabs .emby-tabs-slider');
     }
 
+    /** True when home is visible, main top-nav links are registered, but the legacy tabs slider has none. */
+    function legacyMainTopNavNeedsRepopulate() {
+        if (!customMenuLinkRegistry.some((e) => e.topNavigation === 'main')) return false;
+        if (!document.querySelector('.homePage:not(.hide)')) return false;
+        const slider = findLegacyTabsSlider();
+        if (!slider) return false;
+        return !slider.querySelector('[data-kefin-custom-menu-top-link]');
+    }
+
     function removeLegacyTopNavCustomTabLinks() {
         document.querySelectorAll(
             '.headerTabs.sectionTabs [data-kefin-custom-menu-top-link], .emby-tabs-slider > [data-kefin-custom-menu-top-link]'
@@ -1304,13 +1313,15 @@
      * there, because 12's legacy details page renders MUI boxes too.
      */
     function isModernUI() {
+        if (document.documentElement.classList.contains('layout-tv')) {
+            return false;
+        }
         if (getServerMajorVersionSync() >= 12) {
-            if (document.documentElement.classList.contains('layout-tv')) return false;
             let saved = null;
             try { saved = localStorage.getItem('layout'); } catch (e) { /* storage blocked */ }
             return !LEGACY_LAYOUTS_V12.includes(saved);
         }
-        return document.querySelector('.MuiBox-root') !== null;
+        return !!document.querySelector('main.MuiBox-root') || (localStorage.getItem('layout')?.length === 0 && isJellyfinWebAtLeast12());
     }
 
     function injectIntoTopNavMain(entry) {
@@ -1817,12 +1828,15 @@
 
     function disconnectCustomMenuLinkObserver() {
         if (!customMenuLinkObserver) return;
-        customMenuLinkObserver.disconnect();
+        if (typeof customMenuLinkObserver.disconnect === 'function') {
+            customMenuLinkObserver.disconnect();
+        }
+        offBodyMutation('customMenuLinks');
         customMenuLinkObserver = null;
     }
 
     /**
-     * Persistent MO: any custom-menu host remount → idempotent reapplyAll.
+     * Shared body subscriber: any custom-menu host remount → idempotent reapplyAll.
      * No host is assumed stable (drawer, prefs, #app-user-menu, top-nav).
      */
     function ensureCustomMenuLinkObserver() {
@@ -1830,30 +1844,35 @@
             disconnectCustomMenuLinkObserver();
             return;
         }
-        if (customMenuLinkObserver || typeof MutationObserver === 'undefined' || !document.body) {
+        if (customMenuLinkObserver) {
             return;
         }
 
         let scheduled = false;
-        customMenuLinkObserver = new MutationObserver((mutations) => {
-            if (customMenuLinkReapplyDepth > 0) return;
-            if (!customMenuLinkRegistry.length) {
-                disconnectCustomMenuLinkObserver();
-                return;
-            }
-            if (!mutations.some(mutationShouldTriggerCustomMenuReapply)) return;
+        const scheduleCustomMenuReapply = () => {
             if (scheduled) return;
             scheduled = true;
             requestAnimationFrame(() => {
                 scheduled = false;
                 reapplyAllCustomMenuLinks();
             });
-        });
+        };
+        const onMutations = (mutations) => {
+            if (customMenuLinkReapplyDepth > 0) return;
+            if (!customMenuLinkRegistry.length) {
+                disconnectCustomMenuLinkObserver();
+                return;
+            }
+            // Empty legacy main tabs on home → reapply regardless of which nodes mutated
+            if (legacyMainTopNavNeedsRepopulate()) {
+                scheduleCustomMenuReapply();
+                return;
+            }
+            if (!mutations.some(mutationShouldTriggerCustomMenuReapply)) return;
+            scheduleCustomMenuReapply();
+        };
 
-        customMenuLinkObserver.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
+        customMenuLinkObserver = onBodyMutation('customMenuLinks', onMutations);
     }
 
     /**
@@ -2577,6 +2596,361 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
         }
     }
 
+    const KEFIN_CONFIG_ENTRY_NAME = 'KefinTweaks-Config';
+    const KEFIN_CONFIG_SCRIPT_MARKER = 'window.KefinTweaksConfig = {';
+    const DEFAULT_BACKUP_KEEP_COUNT = 5;
+
+    function isKefinConfigScriptEntry(entry) {
+        return !!(entry?.Script && String(entry.Script).includes(KEFIN_CONFIG_SCRIPT_MARKER));
+    }
+
+    function parseConfigFromScript(script) {
+        if (!script || typeof script !== 'string') return null;
+        const prefix = 'window.KefinTweaksConfig = ';
+        const idx = script.indexOf(prefix);
+        if (idx < 0) return null;
+        let jsonText = script.slice(idx + prefix.length).trim();
+        if (jsonText.endsWith(';')) jsonText = jsonText.slice(0, -1).trim();
+        try {
+            return JSON.parse(jsonText);
+        } catch (e) {
+            WARN('Failed to parse KefinTweaksConfig from script:', e);
+            return null;
+        }
+    }
+
+    function padBackupTimePart(n) {
+        return String(n).padStart(2, '0');
+    }
+
+    /** Local wall-clock stamp for backup filenames (matches toLocaleString calendar day). */
+    function formatBackupTimestampLocal(date = new Date()) {
+        let d = date instanceof Date ? date : new Date(date);
+        if (Number.isNaN(d.getTime())) d = new Date();
+        return [
+            d.getFullYear(),
+            padBackupTimePart(d.getMonth() + 1),
+            padBackupTimePart(d.getDate())
+        ].join('-')
+            + 'T'
+            + [
+                padBackupTimePart(d.getHours()),
+                padBackupTimePart(d.getMinutes()),
+                padBackupTimePart(d.getSeconds())
+            ].join('-');
+    }
+
+    function parseBackupTimestamp(name, script) {
+        const createdMatch = String(script || '').match(/Created:\s*(\d{4}-\d{2}-\d{2}T[^\s\n]+)/i);
+        if (createdMatch) {
+            const d = new Date(createdMatch[1]);
+            if (!Number.isNaN(d.getTime())) return d;
+        }
+        const nameMatch = String(name || '').match(/(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})/);
+        if (nameMatch) {
+            // Filenames use local wall-clock; do not append Z (that caused UTC→local day skew).
+            const localIso = nameMatch[1].replace(/T(\d{2})-(\d{2})-(\d{2})/, 'T$1:$2:$3');
+            const d = new Date(localIso);
+            if (!Number.isNaN(d.getTime())) return d;
+        }
+        return null;
+    }
+
+    function buildConfigBackupScript(config, reason) {
+        const reasonLine = reason ? `// Reason: ${reason}\n` : '';
+        return `// KefinTweaks Configuration Backup
+${reasonLine}// Created: ${new Date().toISOString()}
+// Do not edit manually
+
+window.KefinTweaksConfig = ${JSON.stringify(config, null, 2)};`;
+    }
+
+    function sanitizeBackupLabel(label) {
+        let s = String(label || '').trim();
+        if (!s) return '';
+        s = s
+            .replace(/[\\/<>:"|?*\u0000-\u001f;]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        if (s.length > 48) s = s.slice(0, 48).replace(/-+$/g, '');
+        return s;
+    }
+
+    function makeBackupName(kind = 'manual', options = {}) {
+        const timestamp = formatBackupTimestampLocal(new Date());
+        const label = sanitizeBackupLabel(options.label || options.name || '');
+        if (kind === 'scheduled') {
+            return `KefinTweaks-Config-ScheduledBackup-${timestamp}`;
+        }
+        if (label) {
+            return `KefinTweaks-Config-Backup-${label}-${timestamp}`;
+        }
+        return `KefinTweaks-Config-Backup-${timestamp}`;
+    }
+
+    function getBackupKindFromName(name) {
+        const n = String(name || '');
+        if (n.includes('ScheduledBackup')) return 'scheduled';
+        if (n.includes('SkinConflictsRemoved')) return 'skin-conflict';
+        return 'manual';
+    }
+
+    function getBackupKindLabel(kind) {
+        if (kind === 'scheduled') return 'Scheduled';
+        if (kind === 'skin-conflict') return 'Skin conflict';
+        return 'Manual';
+    }
+
+    async function fetchInjectorConfigForBackups() {
+        const pluginId = await resolvePluginId(JS_INJECTOR_ALIASES);
+        if (!pluginId) throw new Error('JavaScript Injector plugin not found');
+        const injectorConfig = await getPluginConfiguration(pluginId);
+        if (!injectorConfig.CustomJavaScripts) injectorConfig.CustomJavaScripts = [];
+        return { pluginId, injectorConfig };
+    }
+
+    async function postInjectorConfig(pluginId, injectorConfig) {
+        const server = ApiClient._serverAddress;
+        const configUrl = `${server}/Plugins/${pluginId}/Configuration`;
+        const saveResponse = await fetch(configUrl, {
+            method: 'POST',
+            headers: {
+                Authorization: getAuthHeader(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(injectorConfig)
+        });
+        if (!saveResponse.ok) {
+            throw new Error(`Failed to save injector config: ${saveResponse.statusText}`);
+        }
+        return true;
+    }
+
+    async function listKefinConfigBackups() {
+        try {
+            const { injectorConfig } = await fetchInjectorConfigForBackups();
+            const backups = (injectorConfig.CustomJavaScripts || [])
+                .filter((entry) => isKefinConfigScriptEntry(entry) && entry.Name !== KEFIN_CONFIG_ENTRY_NAME)
+                .map((entry) => {
+                    const date = parseBackupTimestamp(entry.Name, entry.Script);
+                    const kind = getBackupKindFromName(entry.Name);
+                    return {
+                        name: entry.Name,
+                        date,
+                        dateLabel: date ? date.toLocaleString() : 'Unknown date',
+                        kind,
+                        kindLabel: getBackupKindLabel(kind),
+                        enabled: entry.Enabled === true,
+                        script: entry.Script
+                    };
+                });
+            backups.sort((a, b) => {
+                const at = a.date ? a.date.getTime() : 0;
+                const bt = b.date ? b.date.getTime() : 0;
+                return bt - at;
+            });
+            return backups;
+        } catch (err) {
+            ERR('Error listing config backups:', err);
+            return [];
+        }
+    }
+
+    async function createKefinConfigBackup(config = null, options = {}) {
+        const { reason = 'manual', kind, label, name } = options;
+        try {
+            const configToBackup = config || window.KefinTweaksConfig;
+            if (!configToBackup) throw new Error('No config available to backup');
+
+            const backupKind = kind
+                || (reason === 'scheduled-daily' ? 'scheduled' : 'manual');
+            const { pluginId, injectorConfig } = await fetchInjectorConfigForBackups();
+            const backupName = makeBackupName(backupKind, { label: label || name });
+            injectorConfig.CustomJavaScripts.push({
+                Name: backupName,
+                Script: buildConfigBackupScript(configToBackup, reason),
+                Enabled: false,
+                RequiresAuthentication: false
+            });
+            await postInjectorConfig(pluginId, injectorConfig);
+            LOG(`Created config backup: ${backupName}`);
+            return { ok: true, name: backupName };
+        } catch (err) {
+            ERR('Error creating config backup:', err);
+            return { ok: false, error: err };
+        }
+    }
+
+    async function deleteKefinConfigBackup(name) {
+        return deleteKefinConfigBackups(name ? [name] : []);
+    }
+
+    async function deleteKefinConfigBackups(names) {
+        try {
+            const nameList = (Array.isArray(names) ? names : [])
+                .map((n) => String(n || '').trim())
+                .filter((n) => n && n !== KEFIN_CONFIG_ENTRY_NAME);
+            if (!nameList.length) {
+                throw new Error('No backups selected');
+            }
+            const removeSet = new Set(nameList);
+            const { pluginId, injectorConfig } = await fetchInjectorConfigForBackups();
+            const before = injectorConfig.CustomJavaScripts.length;
+            injectorConfig.CustomJavaScripts = injectorConfig.CustomJavaScripts.filter(
+                (entry) => !removeSet.has(entry.Name)
+            );
+            const removed = before - injectorConfig.CustomJavaScripts.length;
+            if (removed === 0) {
+                throw new Error('No matching backups found to delete');
+            }
+            await postInjectorConfig(pluginId, injectorConfig);
+            LOG(`Deleted ${removed} config backup(s)`);
+            return { ok: true, removed };
+        } catch (err) {
+            ERR('Error deleting config backup(s):', err);
+            return { ok: false, removed: 0, error: err };
+        }
+    }
+
+    async function pruneKefinConfigBackups(keepCount = DEFAULT_BACKUP_KEEP_COUNT) {
+        try {
+            const keep = Math.max(1, Math.floor(Number(keepCount) || DEFAULT_BACKUP_KEEP_COUNT));
+            const { pluginId, injectorConfig } = await fetchInjectorConfigForBackups();
+            // Keep/prune applies only to scheduled backups; manual & skin-conflict are untouched
+            const backups = (injectorConfig.CustomJavaScripts || [])
+                .filter((entry) =>
+                    isKefinConfigScriptEntry(entry)
+                    && entry.Name !== KEFIN_CONFIG_ENTRY_NAME
+                    && getBackupKindFromName(entry.Name) === 'scheduled'
+                )
+                .map((entry) => ({
+                    entry,
+                    date: parseBackupTimestamp(entry.Name, entry.Script)
+                }));
+            backups.sort((a, b) => {
+                const at = a.date ? a.date.getTime() : 0;
+                const bt = b.date ? b.date.getTime() : 0;
+                return bt - at;
+            });
+            if (backups.length <= keep) return { pruned: 0 };
+
+            const toRemove = new Set(backups.slice(keep).map((b) => b.entry.Name));
+            injectorConfig.CustomJavaScripts = injectorConfig.CustomJavaScripts.filter(
+                (entry) => !toRemove.has(entry.Name)
+            );
+            await postInjectorConfig(pluginId, injectorConfig);
+            LOG(`Pruned ${toRemove.size} scheduled config backup(s); kept ${keep}`);
+            return { pruned: toRemove.size };
+        } catch (err) {
+            ERR('Error pruning config backups:', err);
+            return { pruned: 0, error: err };
+        }
+    }
+
+    async function restoreKefinConfigBackup(name, options = {}) {
+        const { backupCurrentFirst = false } = options;
+        try {
+            if (!name || name === KEFIN_CONFIG_ENTRY_NAME) {
+                throw new Error('Invalid backup name');
+            }
+            const { injectorConfig } = await fetchInjectorConfigForBackups();
+            const entry = (injectorConfig.CustomJavaScripts || []).find((e) => e.Name === name);
+            if (!entry || !isKefinConfigScriptEntry(entry)) {
+                throw new Error(`Backup not found: ${name}`);
+            }
+            const restoredConfig = parseConfigFromScript(entry.Script);
+            if (!restoredConfig || typeof restoredConfig !== 'object') {
+                throw new Error('Backup script does not contain a valid KefinTweaksConfig');
+            }
+
+            if (backupCurrentFirst) {
+                const current = window.KefinTweaksConfig || null;
+                if (current) {
+                    const backupResult = await createKefinConfigBackup(current, {
+                        reason: 'before-restore'
+                    });
+                    if (!backupResult.ok) {
+                        throw new Error('Failed to backup current config before restore');
+                    }
+                }
+            }
+
+            window.KefinTweaksConfig = restoredConfig;
+            const ok = await saveConfigToJavaScriptInjector(restoredConfig);
+            if (!ok) throw new Error('Failed to save restored config');
+            LOG(`Restored config from backup: ${name}`);
+            return true;
+        } catch (err) {
+            ERR('Error restoring config backup:', err);
+            return false;
+        }
+    }
+
+    function normalizeBackupsSettings(config) {
+        const raw = config?.backups && typeof config.backups === 'object' ? config.backups : {};
+        return {
+            scheduledEnabled: raw.scheduledEnabled === true,
+            keepCount: Math.max(1, Math.floor(Number(raw.keepCount) || DEFAULT_BACKUP_KEEP_COUNT)),
+            lastScheduledAt: raw.lastScheduledAt || null
+        };
+    }
+
+    function sameCalendarDay(isoA, dateB = new Date()) {
+        if (!isoA) return false;
+        const a = new Date(isoA);
+        if (Number.isNaN(a.getTime())) return false;
+        return (
+            a.getUTCFullYear() === dateB.getUTCFullYear() &&
+            a.getUTCMonth() === dateB.getUTCMonth() &&
+            a.getUTCDate() === dateB.getUTCDate()
+        );
+    }
+
+    async function maybeRunScheduledBackup(config = null) {
+        try {
+            const cfg = config || window.KefinTweaksConfig;
+            if (!cfg) return { ran: false, reason: 'no-config' };
+            const settings = normalizeBackupsSettings(cfg);
+            if (!settings.scheduledEnabled) return { ran: false, reason: 'disabled' };
+            if (sameCalendarDay(settings.lastScheduledAt)) {
+                return { ran: false, reason: 'already-today' };
+            }
+
+            const created = await createKefinConfigBackup(cfg, {
+                reason: 'scheduled-daily',
+                kind: 'scheduled'
+            });
+            if (!created.ok) return { ran: false, reason: 'create-failed' };
+
+            await pruneKefinConfigBackups(settings.keepCount);
+
+            cfg.backups = {
+                ...settings,
+                lastScheduledAt: new Date().toISOString()
+            };
+            window.KefinTweaksConfig = cfg;
+            await saveConfigToJavaScriptInjector(cfg);
+            LOG('Scheduled daily config backup completed');
+            return { ran: true, name: created.name };
+        } catch (err) {
+            ERR('Error running scheduled backup:', err);
+            return { ran: false, reason: 'error', error: err };
+        }
+    }
+
+    // Once per page load: run scheduled backup after login if enabled
+    (async () => {
+        try {
+            const loggedIn = await waitForLogin(20000);
+            if (!loggedIn || !window.KefinTweaksConfig) return;
+            await maybeRunScheduledBackup(window.KefinTweaksConfig);
+        } catch (e) {
+            /* ignore */
+        }
+    })();
+
+
     let _watchlistTabIndex = null;
 
     async function fetchWatchlistTabIndex() {
@@ -2612,7 +2986,7 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
 
         let watchlistUrl = '#/watchlist';
 
-		if (watchlistTabIndex !== null && watchlistTabIndex !== undefined && !isModernUI) {
+		if (watchlistTabIndex !== null && watchlistTabIndex !== undefined) {
 			watchlistUrl = `#/home?tab=${watchlistTabIndex}`;
 		}
 		window.KefinTweaksUtils._watchlistUrl = watchlistUrl;
@@ -2629,8 +3003,8 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
 		}
 
         _watchlistTabIndex = await fetchWatchlistTabIndex();
-            return _watchlistTabIndex;
-        }
+        return _watchlistTabIndex;
+    }
 
     // ----- Custom pages (hash routes → .customPage in skinBody) -----
     const DISALLOWED_CUSTOM_PAGE_SEGMENTS = new Set([
@@ -2691,101 +3065,17 @@ window.KefinTweaksConfig = ${JSON.stringify(configToSave, null, 2)};`;
         return slug || 'page';
     }
 
-    const CUSTOM_PAGE_STYLES_CSS = `
-#reactRoot.kefin-custom-page-active .skinBody #fallbackPage {
-	display: none;
-}
-
-#reactRoot:not(.kefin-custom-page-active) #fallbackPage:not([data-kefin-fallback-ready]) > * {
-	display: none;
-}
-
-#reactRoot:not(.kefin-custom-page-active) #fallbackPage:not([data-kefin-fallback-ready])::after {
-	content: '';
-	display: inline-block;
-	width: 20px;
-	height: 20px;
-	border: 3px solid #f3f3f3;
-	border-top: 3px solid #4ecdc4;
-	border-radius: 50%;
-	animation: spin 1s linear infinite;
-	position: relative;
-	left: 50%;
-	transform: translateX(-50%);
-	top: 1em;
-}
-
-#fallbackPage[data-kefin-fallback-ready]::after {
-	display: none !important;
-	content: none !important;
-}
-
-#reactRoot.kefin-custom-page-active:not(.kefin-custom-page-backdrop) .backdropImage {
-	background: none !important;
-}
-
-/* A custom page that keeps the backdrop shows it as the Home page does, which is
-   also what Jellyfin Enhanced's calendar tab shows: JE's own dim for it targets
-   .backgroundContainer:has(~ .mainAnimatedPages ...), and in Jellyfin 12's layout
-   .mainAnimatedPages is no longer a sibling, so it never applies.
-   Home differs from other pages only in ElegantFin, through .withSectionTabs on
-   <body> (Home has tabs, this page does not): the solid dark layer, the sharp
-   ::after copy of the backdrop hidden so only the blurred copy shows, and on
-   mobile the layer's opacity. Abyss blurs and darkens the backdrop on any
-   library page, and Jellyfin's own theme treats every page alike.
-   Vault Tweaks' custom pages (the Help & Tips page among them) put
-   .vaultTweaksPageActive on #reactRoot, which holds the backdrop, and nothing
-   on <html>. Its pages sit on Jellyfin's fallback route, whose pageshow clears
-   any backdrop left from the page before, so .withBackdrop there means the
-   page asked for one; telling that from the page's own backdropPage class
-   would need a document-wide :has(). */
-html[data-kefin-skin^="ElegantFin"].kefin-custom-page-backdrop .backgroundContainer.withBackdrop,
-html[data-kefin-skin^="ElegantFin"] #reactRoot.vaultTweaksPageActive .backgroundContainer.withBackdrop {
-	background: var(--darkerGradientPoint);
-}
-html[data-kefin-skin^="ElegantFin"].kefin-custom-page-backdrop .backdropImage::after,
-html[data-kefin-skin^="ElegantFin"] #reactRoot.vaultTweaksPageActive .backdropImage::after {
-	opacity: 0;
-}
-html[data-kefin-skin^="ElegantFin"].kefin-custom-page-backdrop.layout-mobile .backgroundContainer.withBackdrop,
-html[data-kefin-skin^="ElegantFin"].layout-mobile #reactRoot.vaultTweaksPageActive .backgroundContainer.withBackdrop {
-	opacity: 0.9;
-}
-
-
-header.MuiPaper-root + main.MuiBox-root .customPage {
-	margin-top: 3rem;
-}
-
-.layout-mobile .kefin-custom-page-active .MuiToolbar-root > .MuiStack-root > :nth-child(n+2),
-.layout-mobile .kefin-custom-page-active .MuiToolbar-root > .MuiStack-root > :first-child .MuiButton-icon img {
-  display: none;
-}
-.layout-mobile .kefin-custom-page-active .MuiToolbar-root > .MuiStack-root > :first-child .MuiButton-icon::after {
-  content: '\\e88a';
-  font-family: 'Material Icons';
-  font-size: 1.2rem;
-}
-.layout-mobile .kefin-custom-page-active .MuiToolbar-root > .MuiStack-root > :first-child {
-  font-size: 0px;
-}
-main.MuiBox-root .customPage.libraryPage:not(.noSecondaryNavPage)[data-kefin-custom-page] {
-  padding-top:  1rem !important;
-}
-.layout-mobile :not(main.MuiBox-root) > .skinBody > .customPage.libraryPage:not(.noSecondaryNavPage)[data-kefin-custom-page] {
-  padding-top:  5rem !important;
-}
-`;
-
-    /** Always refresh textContent so early-inject :has() rules get replaced on JMP. */
+    /** Re-apply plugin SoT custom-page CSS (window.KefinTweaksCustomPageStyles). No local CSS blob. */
     function ensureCustomPageStyles() {
+        const css = window.KefinTweaksCustomPageStyles;
+        if (typeof css !== 'string' || !css) return;
         let style = document.getElementById('kefin-custom-page-styles');
         if (!style) {
             style = document.createElement('style');
             style.id = 'kefin-custom-page-styles';
             (document.head || document.documentElement).appendChild(style);
         }
-        style.textContent = CUSTOM_PAGE_STYLES_CSS;
+        style.textContent = css;
     }
 
     function syncCustomPageActiveClass(active) {
@@ -2799,7 +3089,7 @@ main.MuiBox-root .customPage.libraryPage:not(.noSecondaryNavPage)[data-kefin-cus
     // backdropPage, as the Help & Tips page does. Its onShow runs before this, so
     // the class is already there.
     // The class also goes on <html>, where the layout class (layout-mobile) is,
-    // for the backdrop rules below.
+    // for the backdrop rules in kefinTweaks-plugin.js's custom-page styles.
     function syncCustomPageBackdropClass(entry) {
         const page = entry && (entry.pageEl || document.getElementById(`customPage-${entry.safeTitle}`));
         const on = !!(page && page.classList.contains('backdropPage'));
@@ -2843,22 +3133,15 @@ main.MuiBox-root .customPage.libraryPage:not(.noSecondaryNavPage)[data-kefin-cus
         const hash = String(window.location.hash || '');
         let watchlistUrl = activePageWatchlistUrl || window.KefinTweaksUtils?._watchlistUrl || null;
 
-        if (!watchlistUrl) {
-            getWatchlistUrl().then((url) => {
-                activePageWatchlistUrl = url;
-                updateActivePage();
-            }).catch(() => { /* ignore */ });
-        }
-
         let page = '';
-        const homeTabMatch = hash.match(/[?&]tab=(\d+)/);
-        const homeTab = homeTabMatch ? homeTabMatch[1] : null;
+        const tabMatch = hash.match(/[?&]tab=(\d+)/);
+        const tabIndex = tabMatch ? tabMatch[1] : null;
 
-        if (hash.includes('/home') && homeTab === '1') {
+        if (hash.includes('/home') && tabIndex === '1') {
             page = 'favorites';
         } else if (watchlistUrl && hash.includes(watchlistUrl)) {
             page = 'watchlist';
-        } else if (hash.includes('#/home') || hash === '#/' || hash === '#' || hash === '') {
+        } else if (hash === '#/' || hash === '#' || hash === '' || (hash.includes('#/home') && (tabIndex === '0' || tabIndex === null))) {
             page = 'home';
         } else if (hash.includes('#/tv')) {
             page = 'tv';
@@ -2937,6 +3220,7 @@ main.MuiBox-root .customPage.libraryPage:not(.noSecondaryNavPage)[data-kefin-cus
             customPageTitleGuardObserver.disconnect();
             customPageTitleGuardObserver = null;
         }
+        offBodyMutation('customPageTitle-discover');
         activeCustomPageTitle = null;
     }
 
@@ -2973,21 +3257,29 @@ main.MuiBox-root .customPage.libraryPage:not(.noSecondaryNavPage)[data-kefin-cus
             subtree: true
         });
 
-        // childList only: Jellyfin typically replaces pageTitle text via textContent (childList)
-        const root = document.getElementById('reactRoot') || document.body || document.documentElement;
-        if (root) {
-            customPageTitleGuardObserver.observe(root, {
-                childList: true,
-                subtree: true
-            });
-        }
-
-        document.querySelectorAll('h3.pageTitle').forEach((el) => {
+        // Narrow watch: page title nodes only (no body/reactRoot subtree)
+        const observePageTitleEl = (el) => {
+            if (!el || el.dataset?.kefinTitleGuardObserved === 'true') return;
+            if (el.dataset) el.dataset.kefinTitleGuardObserved = 'true';
             customPageTitleGuardObserver.observe(el, {
                 childList: true,
                 characterData: true,
                 subtree: true
             });
+        };
+
+        document.querySelectorAll('h3.pageTitle').forEach(observePageTitleEl);
+
+        // When new h3.pageTitle nodes mount, attach narrow observers via shared body MO
+        onBodyMutation('customPageTitle-discover', (mutations) => {
+            for (const mutation of mutations) {
+                for (const node of mutation.addedNodes) {
+                    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                    if (node.matches?.('h3.pageTitle')) observePageTitleEl(node);
+                    node.querySelectorAll?.('h3.pageTitle').forEach(observePageTitleEl);
+                }
+            }
+            syncIfNeeded();
         });
     }
 
@@ -3211,6 +3503,384 @@ main.MuiBox-root .customPage.libraryPage:not(.noSecondaryNavPage)[data-kefin-cus
         };
 	}
 
+    // ── Shared DOM observation (body MO multiplexer) ─────────────────────────
+    // Inventory / migration waves (body + childList + subtree unless noted):
+    //   Wave A (oneshot / onViewPage+TTL): infiniteScroll, dashboardButtonFix,
+    //     backdropLeakFix wait, homeSectionsReadyObserver, exclusiveElsewhere
+    //   Wave B (shared body — overlays): removeContinue, homeScreenPin×2, playlist card play
+    //   Wave C (shared body — chrome): customMenuLinkObserver, hamburger toolbar, config user-menu
+    //   Wave D (scoped / attributes): watchlist empty (page-scoped attrs), discovery→shared,
+    //     slides wait→waitForElement, homeChromeVisibility (home-rooted + off-home disconnect),
+    //     pageTitleGuard (title + h3.pageTitle only; discover via shared)
+    //   Extra: updoot SPA reinit → onViewPage (was body childList+subtree)
+    // Prefer onViewPage + waitForElement/poll for one-shots; shared body only for ongoing inject.
+    // Measure: KefinTweaksUtils.debugBodyObservers() — expect one shared body MO + listed subscribers.
+
+    const bodySubscribers = new Map();
+    /** @type {MutationObserver|null} */
+    let bodyObserver = null;
+    /** @type {Map<string, { disconnect: Function }>} */
+    const managedObservers = new Map();
+    /** @type {MutationRecord[]} */
+    let pendingBodyMutations = [];
+    let bodyFlushScheduled = false;
+    let bodyFlushGeneration = 0;
+    /** @type {Function[]} */
+    let paintQueue = [];
+    let paintScheduled = false;
+    let waitForElementSeq = 0;
+
+    const PLAYER_NOISE_SELECTOR =
+        '.osdPositionText, .osdDurationText, .startTimeText, .endTimeText, .endsAtText, .videoSubtitlesInner, .videoSecondarySubtitlesInner';
+
+    function runPaintQueue() {
+        paintScheduled = false;
+        const batch = paintQueue;
+        paintQueue = [];
+        for (const fn of batch) {
+            try {
+                fn();
+            } catch (err) {
+                ERR('Error in afterNextPaint callback:', err);
+            }
+        }
+    }
+
+    /**
+     * Run fn after the next paint (shared rAF + timeout fallback for hidden tabs).
+     * @param {Function} fn
+     */
+    function afterNextPaint(fn) {
+        paintQueue.push(fn);
+        if (paintScheduled) return;
+        paintScheduled = true;
+        let done = false;
+        const run = () => {
+            if (done) return;
+            done = true;
+            clearTimeout(fallback);
+            runPaintQueue();
+        };
+        const fallback = setTimeout(run, 250);
+        requestAnimationFrame(() => setTimeout(run, 0));
+    }
+
+    function isStructuralChange(record) {
+        if (record.addedNodes.length === 0 && record.removedNodes.length === 0) return false;
+        const target = record.target;
+        return !(target.nodeType === 1 && /** @type {Element} */ (target).closest(PLAYER_NOISE_SELECTOR));
+    }
+
+    function flushPendingBodyMutations() {
+        bodyFlushScheduled = false;
+        const batch = pendingBodyMutations;
+        pendingBodyMutations = [];
+        if (batch.length === 0) return;
+        for (const [id, sub] of Array.from(bodySubscribers)) {
+            if (bodySubscribers.get(id) !== sub) continue;
+            if (sub.priority > 0) continue;
+            try {
+                sub.callback(batch);
+            } catch (err) {
+                ERR(`Error in body observer subscriber "${id}":`, err);
+            }
+        }
+    }
+
+    function resortBodySubscribers() {
+        const sorted = [...bodySubscribers.entries()].sort((a, b) => b[1].priority - a[1].priority);
+        bodySubscribers.clear();
+        for (const [id, sub] of sorted) {
+            bodySubscribers.set(id, sub);
+        }
+    }
+
+    function ensureBodyObserver() {
+        if (bodyObserver || typeof MutationObserver === 'undefined' || !document.body) return;
+        bodyObserver = new MutationObserver((mutations) => {
+            let hasStructuralChange = false;
+            for (let i = 0; i < mutations.length; i++) {
+                if (isStructuralChange(mutations[i])) {
+                    hasStructuralChange = true;
+                    break;
+                }
+            }
+            if (!hasStructuralChange) return;
+
+            for (const [id, sub] of Array.from(bodySubscribers)) {
+                if (bodySubscribers.get(id) !== sub) continue;
+                if (sub.priority <= 0) break;
+                try {
+                    sub.callback(mutations);
+                } catch (err) {
+                    ERR(`Error in body observer subscriber "${id}":`, err);
+                }
+            }
+
+            for (let i = 0; i < mutations.length; i++) pendingBodyMutations.push(mutations[i]);
+            if (!bodyFlushScheduled) {
+                bodyFlushScheduled = true;
+                const generation = bodyFlushGeneration;
+                afterNextPaint(() => {
+                    if (generation === bodyFlushGeneration) flushPendingBodyMutations();
+                });
+            }
+        });
+        bodyObserver.observe(document.body, { childList: true, subtree: true });
+        LOG('Shared body observer started');
+    }
+
+    function stopBodyObserverIfEmpty() {
+        if (bodyObserver && bodySubscribers.size === 0) {
+            bodyObserver.disconnect();
+            bodyObserver = null;
+            bodyFlushGeneration++;
+            bodyFlushScheduled = false;
+            pendingBodyMutations = [];
+            LOG('Shared body observer stopped (no subscribers)');
+        }
+    }
+
+    /**
+     * Register a callback on the shared document.body MutationObserver.
+     * @param {string} id
+     * @param {Function} callback - (mutations: MutationRecord[]) => void
+     * @param {{ priority?: number }} [options]
+     * @returns {{ unsubscribe: Function, disconnect: Function }}
+     */
+    function onBodyMutation(id, callback, options = {}) {
+        if (typeof callback !== 'function') {
+            ERR('onBodyMutation callback must be a function');
+            return { unsubscribe() {}, disconnect() {} };
+        }
+        const priority = typeof options.priority === 'number' ? options.priority : 0;
+        if (bodySubscribers.has(id)) {
+            WARN(`Replacing body observer subscriber: ${id}`);
+        }
+        const subscription = { callback, priority };
+        bodySubscribers.set(id, subscription);
+        resortBodySubscribers();
+        ensureBodyObserver();
+        const cleanup = () => {
+            if (bodySubscribers.get(id) !== subscription) return;
+            bodySubscribers.delete(id);
+            stopBodyObserverIfEmpty();
+        };
+        return { unsubscribe: cleanup, disconnect: cleanup };
+    }
+
+    function offBodyMutation(id) {
+        const removed = bodySubscribers.delete(id);
+        if (removed) stopBodyObserverIfEmpty();
+        return removed;
+    }
+
+    /**
+     * Create a managed observer. Body + childList+subtree (no attributes/characterData)
+     * is routed to the shared multiplexer.
+     * @param {string} id
+     * @param {MutationCallback} callback
+     * @param {Node} target
+     * @param {MutationObserverInit} config
+     * @returns {{ disconnect: Function, unsubscribe: Function, observe: Function, takeRecords: Function }}
+     */
+    function createManagedObserver(id, callback, target, config) {
+        if (managedObservers.has(id)) {
+            managedObservers.get(id).disconnect();
+            managedObservers.delete(id);
+        }
+
+        const isBodyTarget =
+            target === document.body || target === document.documentElement || target === document;
+        const isSubtreeWatch = !!(config && config.childList && config.subtree);
+        const isSimpleChildList =
+            isSubtreeWatch && !config.attributes && !config.attributeFilter && !config.characterData;
+
+        if (isBodyTarget && isSimpleChildList) {
+            const handle = onBodyMutation(id, callback);
+            const cleanup = () => {
+                handle.disconnect();
+                managedObservers.delete(id);
+            };
+            const proxy = {
+                disconnect: cleanup,
+                unsubscribe: cleanup,
+                observe() {},
+                takeRecords() {
+                    return [];
+                }
+            };
+            managedObservers.set(id, proxy);
+            return proxy;
+        }
+
+        if (typeof MutationObserver === 'undefined' || !target) {
+            const noop = { disconnect() {}, unsubscribe() {}, observe() {}, takeRecords() { return []; } };
+            managedObservers.set(id, noop);
+            return noop;
+        }
+
+        const observer = new MutationObserver(callback);
+        observer.observe(target, config);
+        const wrap = {
+            disconnect() {
+                observer.disconnect();
+                managedObservers.delete(id);
+            },
+            unsubscribe() {
+                wrap.disconnect();
+            },
+            observe(t, c) {
+                observer.observe(t, c);
+            },
+            takeRecords() {
+                return observer.takeRecords();
+            }
+        };
+        managedObservers.set(id, wrap);
+        return wrap;
+    }
+
+    function disconnectManagedObserver(id) {
+        if (bodySubscribers.has(id)) {
+            offBodyMutation(id);
+            managedObservers.delete(id);
+            return true;
+        }
+        if (managedObservers.has(id)) {
+            managedObservers.get(id).disconnect();
+            managedObservers.delete(id);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Wait for an element (uses shared body observer for re-checks).
+     * @param {string} selector
+     * @param {number|{ timeout?: number, root?: ParentNode, predicate?: (el: Element) => boolean, quiet?: boolean }} [options]
+     * @returns {Promise<Element|null>}
+     */
+    function waitForElement(selector, options = {}) {
+        const opts = typeof options === 'number' ? { timeout: options } : options || {};
+        const timeout = opts.timeout ?? 10000;
+        const root = opts.root || document;
+        const predicate = typeof opts.predicate === 'function' ? opts.predicate : null;
+
+        const find = () => {
+            if (!predicate) return root.querySelector(selector);
+            for (const el of Array.from(root.querySelectorAll(selector))) {
+                try {
+                    if (predicate(el)) return el;
+                } catch (_) {
+                    /* treat throw as non-match */
+                }
+            }
+            return null;
+        };
+
+        return new Promise((resolve) => {
+            const existing = find();
+            if (existing) {
+                resolve(existing);
+                return;
+            }
+
+            const observerId = `wait-${selector}-${++waitForElementSeq}`;
+            let timeoutId = null;
+            const handle = onBodyMutation(observerId, () => {
+                const element = find();
+                if (element) {
+                    if (timeoutId) clearTimeout(timeoutId);
+                    handle.unsubscribe();
+                    resolve(element);
+                }
+            });
+
+            timeoutId = setTimeout(() => {
+                handle.unsubscribe();
+                if (!opts.quiet) {
+                    WARN(`Timeout waiting for element: ${selector}`);
+                }
+                resolve(null);
+            }, timeout);
+        });
+    }
+
+    /**
+     * Poll until fn returns truthy or timeout. Useful when onViewPage fires before DOM settles.
+     * @param {() => *} fn
+     * @param {{ intervalMs?: number, timeoutMs?: number }} [options]
+     * @returns {Promise<*>}
+     */
+    function pollUntil(fn, options = {}) {
+        const intervalMs = options.intervalMs ?? 100;
+        const timeoutMs = options.timeoutMs ?? 10000;
+        return new Promise((resolve) => {
+            const start = Date.now();
+            const tick = () => {
+                try {
+                    const value = fn();
+                    if (value) {
+                        resolve(value);
+                        return;
+                    }
+                } catch (err) {
+                    ERR('pollUntil callback error:', err);
+                }
+                if (Date.now() - start >= timeoutMs) {
+                    resolve(null);
+                    return;
+                }
+                setTimeout(tick, intervalMs);
+            };
+            tick();
+        });
+    }
+
+    function getBodySubscriberCount() {
+        return bodySubscribers.size;
+    }
+
+    function listBodySubscriberIds() {
+        return Array.from(bodySubscribers.keys());
+    }
+
+    function getManagedObserverCount() {
+        return managedObservers.size;
+    }
+
+    /**
+     * Debug: log shared-body subscriber ids + managed dedicated observer count.
+     * Steady-state (utils loaded, overlays/chrome subscribed) should show one live
+     * body childList+subtree MutationObserver with these typical ids:
+     *   customMenuLinks, removeContinue-overlays, homeScreenPin-actionSheet,
+     *   homeScreenPin-pinnedCards, playlist-cardPlay, config-appUserMenu,
+     *   watchlist-overlay-discovery, (+ customPageTitle-discover when a custom page is active)
+     */
+    function debugBodyObservers() {
+        const ids = listBodySubscriberIds();
+        LOG('Shared body MO active:', !!bodyObserver, '| subscribers:', ids.length, ids);
+        LOG('Managed dedicated observers:', getManagedObserverCount());
+        return { bodyObserverActive: !!bodyObserver, subscribers: ids, managed: getManagedObserverCount() };
+    }
+
+    window.addEventListener('beforeunload', () => {
+        managedObservers.forEach((obs) => {
+            try {
+                obs.disconnect();
+            } catch (_) {}
+        });
+        managedObservers.clear();
+        bodySubscribers.clear();
+        if (bodyObserver) {
+            bodyObserver.disconnect();
+            bodyObserver = null;
+        }
+        bodyFlushGeneration++;
+        pendingBodyMutations = [];
+    });
+
     // Expose utilities to global scope
     window.KefinTweaksUtils = {
         isModernUI,
@@ -3227,11 +3897,32 @@ main.MuiBox-root .customPage.libraryPage:not(.noSecondaryNavPage)[data-kefin-cus
         resolvePluginId,
         getPluginConfiguration,
         clearPluginIdCache,
+        listKefinConfigBackups,
+        createKefinConfigBackup,
+        deleteKefinConfigBackup,
+        deleteKefinConfigBackups,
+        restoreKefinConfigBackup,
+        pruneKefinConfigBackups,
+        maybeRunScheduledBackup,
+        normalizeBackupsSettings,
+        KEFIN_CONFIG_ENTRY_NAME,
+        KEFIN_CONFIG_SCRIPT_MARKER,
         getWatchlistTabIndex,
         waitForApiClient,
         waitForLogin,
         isModernUI,
-        getWatchlistUrl
+        getWatchlistUrl,
+        onBodyMutation,
+        offBodyMutation,
+        createManagedObserver,
+        disconnectManagedObserver,
+        waitForElement,
+        pollUntil,
+        afterNextPaint,
+        getBodySubscriberCount,
+        listBodySubscriberIds,
+        getManagedObserverCount,
+        debugBodyObservers
     };
     
     ensureNavigationChromeHandler();

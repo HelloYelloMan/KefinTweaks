@@ -1,26 +1,48 @@
 (function() {
     'use strict';
-    
+
     const LOG = (...args) => console.log('[KefinTweaks WebSocketHelper]', ...args);
     const WARN = (...args) => console.warn('[KefinTweaks WebSocketHelper]', ...args);
     const ERR = (...args) => console.error('[KefinTweaks WebSocketHelper]', ...args);
-    
+
     // Registry of event listeners: MessageType -> array of callbacks
     const listeners = {};
-    
-    // Track initialization state
-    let isInitialized = false;
+    // messageType -> unsubscribe from ApiClient.subscribe
+    const subscribeUnsubs = {};
+    // messageType -> whether we already attached a subscribe fan-out
+    const subscribeAttached = {};
+    // Subscriptions belong to one ApiClient: on Jellyfin 12 a sign-out or server
+    // switch replaces window.ApiClient and drops them, so the fan-outs above are
+    // only good for the client they were made on.
+    let subscribedClient = null;
+
+    let hookedSocket = null;
+    let hookedOriginalOnMessage = null;
     let pollingIntervalId = null;
-    
+    let deliveryMode = null; // 'subscribe' | 'onmessage' | null
+
     const POLL_INTERVAL_MS = 1500;
-    
-    /**
-     * Fire every callback registered for a parsed { MessageType, Data } message.
-     */
-    function dispatch(data) {
-        const messageType = data && data.MessageType;
+
+    function getApiClient() {
+        return window.ApiClient || null;
+    }
+
+    function getSocket() {
+        const api = getApiClient();
+        if (!api) return null;
+        return api.webSocket || api._webSocket || null;
+    }
+
+    function canSubscribe() {
+        const api = getApiClient();
+        return !!(api && typeof api.subscribe === 'function');
+    }
+
+    function dispatchMessage(data) {
+        if (!data || typeof data !== 'object') return;
+        const messageType = data.MessageType;
         if (!messageType || !listeners[messageType]) return;
-        listeners[messageType].forEach(callback => {
+        listeners[messageType].forEach((callback) => {
             try {
                 callback(data);
             } catch (err) {
@@ -29,158 +51,200 @@
         });
     }
 
-    // Jellyfin 12 never opens the apiclient's own socket: jellyfin-web moved every
-    // server message onto the SDK and exposes it as ApiClient.subscribe(types, cb),
-    // which returns an unsubscribe function and passes { MessageType, Data }.
-    // Subscriptions belong to one ApiClient, so they are redone if it is replaced
-    // (sign-out, server switch).
-    let subscribedClient = null;
-    const subscribedTypes = new Set();
-
-    function canSubscribe() {
-        return !!(window.ApiClient && typeof window.ApiClient.subscribe === 'function');
+    function forgetSubscriptionsIfClientChanged() {
+        const api = getApiClient();
+        if (!subscribedClient || subscribedClient === api) return;
+        // The old client's unsubscribe functions are moot; drop them with it.
+        Object.keys(subscribeAttached).forEach((type) => delete subscribeAttached[type]);
+        Object.keys(subscribeUnsubs).forEach((type) => delete subscribeUnsubs[type]);
+        subscribedClient = null;
     }
 
-    function subscribeType(messageType) {
-        if (subscribedTypes.has(messageType)) return;
-        try {
-            window.ApiClient.subscribe([messageType], dispatch);
-            subscribedTypes.add(messageType);
-        } catch (err) {
-            ERR(`Error subscribing to ${messageType}:`, err);
-        }
-    }
-
-    function syncSubscriptions() {
+    function ensureSubscribeForType(messageType) {
+        forgetSubscriptionsIfClientChanged();
+        if (subscribeAttached[messageType]) return true;
         if (!canSubscribe()) return false;
-        if (subscribedClient !== window.ApiClient) {
-            subscribedClient = window.ApiClient;
-            subscribedTypes.clear();
-        }
-        Object.keys(listeners).forEach(subscribeType);
-        return true;
-    }
 
-    /**
-     * Returns the ApiClient WebSocket if available (e.g. after user has logged in).
-     */
-    function getSocket() {
-        if (!window.ApiClient) return null;
-        return window.ApiClient.webSocket || window.ApiClient._webSocket || null;
-    }
-    
-    /**
-     * Initialize WebSocket monitoring by hooking into ApiClient's WebSocket.
-     * Attempts once; returns true if hooked, false if socket not yet available.
-     */
-    function initialize() {
-        if (isInitialized) return true;
-
-        if (syncSubscriptions()) {
-            isInitialized = true;
-            LOG('Subscribed through ApiClient.subscribe');
-            return true;
-        }
-        
         try {
-            const socket = getSocket();
-            if (!socket) return false;
-            
-            // Store original handler if it exists
-            const originalHandler = socket.onmessage;
-            
-            // Hook into onmessage
-            socket.onmessage = function(event) {
-                try {
-                    // Pass it through so Jellyfin still works normally
-                    if (originalHandler) {
-                        originalHandler.call(this, event);
-                    }
-                    
-                    // Parse the message data
-                    const messageData = event.Data || event.data;
-                    const data = typeof messageData === 'string' ? JSON.parse(messageData) : messageData;
-                    
-                    dispatch(data);
-                } catch (err) {
-                    // Log parse errors but don't break the original handler
-                    WARN('WebSocket message parse error:', err);
-                }
-            };
-            
-            isInitialized = true;
-            LOG('WebSocket monitoring initialized');
+            const api = getApiClient();
+            const unsub = api.subscribe([messageType], (msg) => {
+                // SDK/subscribe may pass the outbound message object directly
+                const data = msg?.MessageType ? msg : { MessageType: messageType, Data: msg?.Data ?? msg };
+                if (!data.MessageType) data.MessageType = messageType;
+                dispatchMessage(data);
+            });
+            subscribeAttached[messageType] = true;
+            subscribedClient = api;
+            subscribeUnsubs[messageType] = typeof unsub === 'function' ? unsub : null;
+            deliveryMode = 'subscribe';
+            // Drop any legacy onmessage hook immediately — do not wait for the poll tick
+            unhookSocket();
+            LOG(`Subscribed via ApiClient.subscribe for ${messageType}`);
             return true;
         } catch (err) {
-            ERR('Error initializing WebSocket monitoring:', err);
+            ERR(`ApiClient.subscribe failed for ${messageType}:`, err);
             return false;
         }
     }
-    
-    /**
-     * Poll until ApiClient WebSocket is available, then initialize once and stop.
-     * Safe to call multiple times; only one polling loop runs.
-     */
-    function startPolling() {
-        if (isInitialized) {
-            syncSubscriptions();
-            return;
+
+    function ensureSubscribeForAllRegisteredTypes() {
+        if (!canSubscribe()) return false;
+        let any = false;
+        Object.keys(listeners).forEach((messageType) => {
+            if (listeners[messageType]?.length) {
+                if (ensureSubscribeForType(messageType)) any = true;
+            }
+        });
+        return any;
+    }
+
+    function unhookSocket() {
+        if (hookedSocket && hookedOriginalOnMessage !== undefined) {
+            try {
+                hookedSocket.onmessage = hookedOriginalOnMessage;
+            } catch (e) {
+                // ignore
+            }
         }
-        if (pollingIntervalId != null) return; // already polling
-        if (initialize()) return;
-        
+        hookedSocket = null;
+        hookedOriginalOnMessage = null;
+    }
+
+    /**
+     * Legacy path: wrap socket.onmessage, re-bind when the socket instance changes.
+     * Only used when ApiClient.subscribe is unavailable.
+     */
+    function hookSocketIfNeeded() {
+        if (canSubscribe()) return false;
+
+        const socket = getSocket();
+        if (!socket) return false;
+
+        if (hookedSocket === socket) return true;
+
+        unhookSocket();
+
+        try {
+            const originalHandler = socket.onmessage;
+            hookedOriginalOnMessage = originalHandler;
+            hookedSocket = socket;
+
+            socket.onmessage = function(event) {
+                // Keep JF handler isolated so its throws do not look like parse failures
+                // and do not block KefinTweaks listener delivery.
+                if (originalHandler) {
+                    try {
+                        originalHandler.call(this, event);
+                    } catch (err) {
+                        WARN('Original WebSocket onmessage handler error:', err);
+                    }
+                }
+
+                try {
+                    const messageData = event.Data || event.data;
+                    const data = typeof messageData === 'string' ? JSON.parse(messageData) : messageData;
+                    dispatchMessage(data);
+                } catch (err) {
+                    WARN('WebSocket message parse error:', err);
+                }
+            };
+
+            deliveryMode = 'onmessage';
+            LOG('WebSocket onmessage hook attached (legacy fallback)', {
+                readyState: socket.readyState,
+            });
+            return true;
+        } catch (err) {
+            ERR('Error hooking WebSocket onmessage:', err);
+            hookedSocket = null;
+            hookedOriginalOnMessage = null;
+            return false;
+        }
+    }
+
+    function tryInitializeDelivery() {
+        // Prefer JF-web style subscribe (reconnect-safe). Never wrap onmessage when subscribe exists.
+        if (canSubscribe()) {
+            return ensureSubscribeForAllRegisteredTypes();
+        }
+
+        // Fallback: raw socket onmessage with rebind support
+        return hookSocketIfNeeded();
+    }
+
+    function stopPolling() {
+        if (pollingIntervalId == null) return;
+        clearInterval(pollingIntervalId);
+        pollingIntervalId = null;
+    }
+
+    function startPolling() {
+        if (pollingIntervalId != null) return;
+        if (tryInitializeDelivery()) {
+            // Still poll in legacy mode so we rebind if socket is replaced
+            if (deliveryMode === 'subscribe') return;
+        }
+
         pollingIntervalId = setInterval(() => {
-            if (isInitialized) {
-                clearInterval(pollingIntervalId);
-                pollingIntervalId = null;
+            if (canSubscribe()) {
+                if (ensureSubscribeForAllRegisteredTypes() && deliveryMode === 'subscribe') {
+                    unhookSocket();
+                    stopPolling();
+                    LOG('Delivery mode: ApiClient.subscribe');
+                    return;
+                }
+                // subscribe exists but types not attached yet — keep polling, never hook onmessage
                 return;
             }
-            if (initialize()) {
-                clearInterval(pollingIntervalId);
-                pollingIntervalId = null;
+
+            const socket = getSocket();
+            if (!socket) return;
+
+            if (hookedSocket !== socket) {
+                hookSocketIfNeeded();
             }
         }, POLL_INTERVAL_MS);
     }
-    
+
     /**
      * Register a callback to listen for a specific WebSocket message type
-     * @param {string} messageType - The MessageType to listen for (e.g., 'UserDataChanged', 'PlaybackStopped')
-     * @param {Function} callback - Function to call when the message type is received. Receives the parsed message data.
+     * @param {string} messageType - e.g. 'UserDataChanged', 'LibraryChanged'
+     * @param {Function} callback - Receives the parsed message object
      */
     function listen(messageType, callback) {
         if (typeof messageType !== 'string' || !messageType) {
             ERR('listen() requires a non-empty string messageType');
             return;
         }
-        
+
         if (typeof callback !== 'function') {
             ERR('listen() requires a callback function');
             return;
         }
-        
-        // Initialize listeners array for this message type if it doesn't exist
+
         if (!listeners[messageType]) {
             listeners[messageType] = [];
         }
 
-        // Avoid duplicate registrations of the same callback
         if (listeners[messageType].includes(callback)) {
             LOG(`Listener already registered for message type: ${messageType}`);
-            if (!isInitialized) {
-                startPolling();
-            }
+            startPolling();
             return;
         }
-        
-        // Add the callback
+
         listeners[messageType].push(callback);
-        LOG(`Registered listener for message type: ${messageType} (${listeners[messageType].length} total listeners)`);
-        
-        // Ensure we're polling for WebSocket if not yet initialized. Once
-        // subscribed, a new message type needs its own subscription.
+        LOG(`Registered listener for message type: ${messageType} (${listeners[messageType].length} total)`, {
+            deliveryMode: deliveryMode || 'pending',
+            canSubscribe: canSubscribe(),
+        });
+
+        if (canSubscribe()) {
+            ensureSubscribeForType(messageType);
+        }
+
         startPolling();
     }
-    
+
     /**
      * Remove a callback registered with listen().
      * @param {string} messageType
@@ -190,23 +254,35 @@
         if (!listeners[messageType]) return;
         listeners[messageType] = listeners[messageType].filter((cb) => cb !== callback);
         LOG(`Unregistered listener for message type: ${messageType} (${listeners[messageType].length} remaining)`);
-    }
-    
-    // Expose the API globally
-    window.websocketHelper = {
-        listen: listen,
-        unlisten: unlisten
-    };
-    
-    // Start polling until ApiClient WebSocket is available (e.g. after user logs in)
-    startPolling();
 
-    // On Jellyfin 12 a sign-in or server switch replaces window.ApiClient and
-    // drops our subscriptions with it; re-check occasionally.
+        if (!listeners[messageType].length && subscribeUnsubs[messageType]) {
+            try {
+                subscribeUnsubs[messageType]();
+            } catch (e) {
+                WARN(`Failed to unsubscribe ${messageType}:`, e);
+            }
+            delete subscribeUnsubs[messageType];
+            delete subscribeAttached[messageType];
+        }
+    }
+
+    window.websocketHelper = {
+        listen,
+        unlisten,
+        /** @returns {'subscribe'|'onmessage'|null} */
+        getDeliveryMode() {
+            return deliveryMode;
+        },
+    };
+
+    // Do not startPolling() here — wait until the first listen() so we never
+    // wrap JF's socket before any consumer needs delivery.
+
+    // Upstream stops polling once subscribed, so nothing would notice the
+    // ApiClient being replaced; a cheap reference check re-subscribes on the new one.
     setInterval(() => {
-        if (subscribedClient && subscribedClient !== window.ApiClient) {
-            syncSubscriptions();
+        if (subscribedClient && subscribedClient !== getApiClient() && canSubscribe()) {
+            ensureSubscribeForAllRegisteredTypes();
         }
     }, 5000);
 })();
-

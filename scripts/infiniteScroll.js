@@ -820,65 +820,52 @@
     }
     
     // Scroll state loading removed - not needed
-    
-    // Navigation-gated activation (replaces the permanent document.body observer).
-    // The old observer ran shouldInitialize() on every DOM mutation in the app for
-    // the whole session — and because reset() clears hasInitialized, it re-ran the
-    // full initialize/reset/scroll-watcher path continuously while browsing a
-    // library. Only navigation (view show, hash change, tab switch) can change the
-    // answer, so activate there instead, with a short bounded poll to wait out the
-    // library page's async mount.
-    const ACTIVATION_POLL_MS = 250;
-    const ACTIVATION_TIMEOUT_MS = 10000;
-    let activationPollTimer = null;
 
-    function activateForCurrentView() {
-        if (activationPollTimer) {
-            clearTimeout(activationPollTimer);
-            activationPollTimer = null;
+    function tryInitializeFromView() {
+        if (shouldInitialize()) {
+            initialize().catch(err => ERR('Initialization failed:', err));
+            return true;
         }
-
-        if (!getCurrentPage()) {
-            // Not a supported library page: drop the scroll listener and stand down.
-            window.removeEventListener("scroll", handleScroll);
-            return;
-        }
-
-        hasInitialized = false; // new navigation context — allow one fresh init
-        const startedAt = Date.now();
-
-        const poll = () => {
-            activationPollTimer = null;
-            if (!getCurrentPage()) return; // navigated away mid-poll
-            if (shouldInitialize()) {
-                initialize().catch(err => ERR('Initialization failed:', err));
-                return;
-            }
-            if (Date.now() - startedAt >= ACTIVATION_TIMEOUT_MS) {
-                LOG('Activation timed out waiting for library page to mount');
-                return;
-            }
-            activationPollTimer = setTimeout(poll, ACTIVATION_POLL_MS);
-        };
-        poll();
+        return false;
     }
 
-    // Hook navigation: utils view engine when available (with the usual retry
-    // wait), plus hashchange for tab switches that don't remount the view.
-    function hookNavigation(attempt = 0) {
-        if (window.KefinTweaksUtils?.onViewPage) {
-            window.KefinTweaksUtils.onViewPage(() => activateForCurrentView(), { pages: [] });
-            LOG('Registered activation with KefinTweaksUtils view engine');
-        } else if (attempt < 40) {
-            setTimeout(() => hookNavigation(attempt + 1), 250);
+    function armLibraryPageInit() {
+        if (tryInitializeFromView()) return;
+        const utils = window.KefinTweaksUtils;
+        if (utils?.pollUntil) {
+            utils.pollUntil(() => (tryInitializeFromView() ? true : null), {
+                intervalMs: 200,
+                timeoutMs: 15000
+            });
             return;
-        } else {
-            WARN('KefinTweaksUtils unavailable; relying on hashchange only');
         }
-        activateForCurrentView();
+        // Fallback brief poll
+        let tries = 0;
+        const timer = setInterval(() => {
+            tries += 1;
+            if (tryInitializeFromView() || tries >= 75) clearInterval(timer);
+        }, 200);
     }
-    window.addEventListener('hashchange', activateForCurrentView);
-    hookNavigation();
+
+    function startInfiniteScrollHook() {
+        const utils = window.KefinTweaksUtils;
+        if (!utils?.onViewPage) {
+            setTimeout(startInfiniteScrollHook, 500);
+            return;
+        }
+        utils.onViewPage(() => {
+            // A new navigation context gets one fresh init. Nothing else clears
+            // hasInitialized once an init has run on an unchanged page and tab
+            // (reset() clears it only on a change), and shouldInitialize()
+            // refuses while it is set: the next library visited would keep the
+            // previous one's hasMore and totals and never initialise.
+            hasInitialized = false;
+            armLibraryPageInit();
+        }, { pages: SUPPORTED_PAGES });
+        armLibraryPageInit();
+    }
+
+    startInfiniteScrollHook();
     
     // Cleanup function
     function cleanup() {

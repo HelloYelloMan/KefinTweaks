@@ -277,56 +277,47 @@
         });
     }
 
-    // Register with the shared card-overlay watcher (see watchlist.js for the
-    // same pattern): one document.body observer walks each mutation batch for
-    // .cardOverlayContainer once and fans the containers out to every registered
-    // processor, instead of watchlist and removeContinue each duplicating the
-    // walk. Whichever enabled feature loads first creates the watcher; the rest
-    // reuse it. Feature toggling is preserved: a disabled script never loads, so
-    // it never registers a processor.
+    // Shared body observer: inject when card overlays appear
     function setupRemoveContinueButtonObserver() {
-        if (!window.KefinTweaksCardOverlayWatcher) {
-            const processors = [];
-            const observer = new MutationObserver((mutations) => {
-                for (const mutation of mutations) {
-                    if (mutation.type !== 'childList') continue;
-                    for (const node of mutation.addedNodes) {
-                        if (node.nodeType !== Node.ELEMENT_NODE) continue;
-                        if (node.classList && node.classList.contains('cardOverlayContainer')) {
-                            for (const process of processors) {
-                                try { process(node); } catch (e) { console.error('[KefinTweaks OverlayWatcher]', e); }
-                            }
-                        }
-                        if (!node.querySelectorAll) continue;
-                        const overlayContainers = node.querySelectorAll('.cardOverlayContainer');
-                        for (const overlayContainer of overlayContainers) {
-                            for (const process of processors) {
-                                try { process(overlayContainer); } catch (e) { console.error('[KefinTweaks OverlayWatcher]', e); }
-                            }
-                        }
-                    }
+        const processNode = (node) => {
+            if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
+            if (node.classList?.contains('cardOverlayContainer')) {
+                if (node.querySelector('.cardOverlayButton-br')) addRemoveContinueButton(node);
+            }
+            node.querySelectorAll?.('.cardOverlayContainer').forEach((overlayContainer) => {
+                if (overlayContainer.querySelector('.cardOverlayButton-br')) {
+                    addRemoveContinueButton(overlayContainer);
                 }
             });
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
-            window.KefinTweaksCardOverlayWatcher = { processors, observer };
+        };
+
+        const onMutations = (mutations) => {
+            for (const mutation of mutations) {
+                if (mutation.type !== 'childList') continue;
+                mutation.addedNodes.forEach(processNode);
+            }
+        };
+
+        const utils = window.KefinTweaksUtils;
+        if (utils?.onBodyMutation) {
+            utils.onBodyMutation('removeContinue-overlays', onMutations);
+        } else if (typeof MutationObserver !== 'undefined' && document.body) {
+            const observer = new MutationObserver(onMutations);
+            observer.observe(document.body, { childList: true, subtree: true });
         }
 
-        window.KefinTweaksCardOverlayWatcher.processors.push((overlayContainer) => {
-            const buttonContainer = overlayContainer.querySelector('.cardOverlayButton-br');
-            if (buttonContainer) {
-                addRemoveContinueButton(overlayContainer);
-            }
-        });
-
-        // Process any existing overlay containers
         processExistingOverlayContainers();
     }
 
-    // Initialize the observer
-    setupRemoveContinueButtonObserver();
+    function startRemoveContinue() {
+        if (!window.KefinTweaksUtils?.onBodyMutation && !document.body) {
+            setTimeout(startRemoveContinue, 500);
+            return;
+        }
+        setupRemoveContinueButtonObserver();
+    }
+
+    startRemoveContinue();
 
     // Debug function for troubleshooting (available in console)
     window.debugRemoveContinueButtons = function() {
