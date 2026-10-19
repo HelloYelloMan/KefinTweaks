@@ -289,31 +289,49 @@
         LOG('Scrolled to beginning of season (not NextUp season)');
     }
 
+    // The Next Up badge's words, kept for the chip updateNextUpItem draws.
+    let nextUpChipText = 'Next Up';
+
+    // Fork: the badge wears the skin's unwatched-count bubble (.countIndicator),
+    // the badge every card on the page shows -- the primary colour by default,
+    // ElegantFin's, Abyss's light pill -- where it was a fixed black box drawn
+    // by a ::after no skin could reach. Only its place and width are set here:
+    // top left, and wide enough for words. Vault Tweaks' play-order row on a
+    // collection draws its Next up the same way.
     function ensureNextUpEpisodeStyle(nextUpHeaderText) {
+        nextUpChipText = nextUpHeaderText || 'Next Up';
         if (document.getElementById('kefinTweaks-nextUpEpisode-style')) {
             return;
         }
         const style = document.createElement('style');
         style.id = 'kefinTweaks-nextUpEpisode-style';
-        const escapedHeaderText = (nextUpHeaderText || 'Next Up').replace(/'/g, "\\'").replace(/"/g, '\\"');
         style.textContent = `
-            .nextUpEpisode:not(.nextUpEpisode ~ .nextUpEpisode) .cardScalable::after {
-                content: '${escapedHeaderText}';
+            .countIndicator.kefinNextUpChip {
                 position: absolute;
-                transform: translateY(0);
-                top: 0.5em;
-                left: 0.5em;
-                padding: 0.25em 0.5em;
-                text-align: center;
-                background: rgb(0 0 0 / 85%);
-                font-size: 1.1em;
-                border: 1px solid rgb(255 255 255 / 40%);
-                border-radius: 5px;
+                top: 0.4em;
+                left: 0.4em;
+                right: auto;
+                width: auto;
+                min-width: 2em;
+                padding: 0 0.65em;
+                white-space: nowrap;
                 pointer-events: none;
+                z-index: 3;
             }
         `;
         document.head.appendChild(style);
         LOG('Added nextUpEpisode CSS with header text:', nextUpHeaderText);
+    }
+
+    function addNextUpChip(card) {
+        const box = card.querySelector('.cardScalable') || card;
+        const chip = document.createElement('div');
+        chip.className = 'countIndicator indicator kefinNextUpChip';
+        chip.textContent = nextUpChipText;
+        box.appendChild(chip);
+        // The default bubble is a circle (50%); a word in it wants a pill.
+        const radius = window.getComputedStyle(chip).borderRadius;
+        if (radius === '50%' || parseFloat(radius) > 100) chip.style.borderRadius = '1em';
     }
 
     function insertEpisodesHost(activePage) {
@@ -759,11 +777,13 @@
         for (const existingNextUpEpisode of existingNextUpEpisodes) {
             existingNextUpEpisode.classList.remove('nextUpEpisode');
         }
+        scrollerContainer.querySelectorAll('.kefinNextUpChip').forEach((chip) => chip.remove());
 
         if (targetEpisodeNumber.season !== 1 || targetEpisodeNumber.episode !== 1) {
             const targetCard = findTargetEpisodeCard(scrollerContainer, targetEpisodeNumber);
             if (targetCard) {
                 targetCard.classList.add('nextUpEpisode');
+                addNextUpChip(targetCard);
                 LOG(`Added nextUpEpisode class to card S${targetEpisodeNumber.season}:E${targetEpisodeNumber.episode}`);
             }
         }
