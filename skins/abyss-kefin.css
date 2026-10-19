@@ -1,5 +1,11 @@
-.dashboardDocument .mainAnimatedPage:not(.metadataEditorPage) {
-	left: 300px !important;
+/* Fork: only where the dashboard's drawer is docked. jellyfin-web sets its own
+   left: 240px for that at (min-width: 900px); below it the drawer slides over
+   the page, and an unconditional 300px pushed the whole dashboard off the right
+   edge of a phone (the Android app on Abyss, 2026-10-19). */
+@media (min-width: 900px) {
+	.dashboardDocument .mainAnimatedPage:not(.metadataEditorPage) {
+		left: 300px !important;
+	}
 }
 .MuiDrawer-root > .MuiDrawer-paper {
 	width: auto !important;
