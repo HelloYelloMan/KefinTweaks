@@ -8486,51 +8486,50 @@
             return getCardContentOffsetX(scroller, card) - pad.left + cardPad.left;
         }
 
-        /**
-         * Cards fully inside the frame content-box clip.
-         * Frame is fixed; slidee translate moves cards — use live rects vs content-box edges.
-         */
-        function getFullyVisibleCardIndices(cards) {
-            const fullyVisible = [];
-            const epsilon = 1;
-            const pad = readScrollerPadding(scroller);
+        /* Page by WIDTH, not by card count.
+         *
+         * Both buttons used to count the cards wholly in view and move that
+         * many, which assumes every card is as wide as the ones on screen. In
+         * a row of narrow posters and wide stills (the Primary format) Next
+         * counted seven posters, decided the end was within one page, and
+         * jumped there past the stills; Previous, counting two stills at the
+         * end, took three presses to get back. Each press now carries the first
+         * card cut off at one edge of the frame to the other edge, whatever the
+         * cards' widths, and by position rather than DOM order, so a rows-2
+         * row (cards alternating top and bottom) pages the same way. */
+        function getCardEdges() {
             const cardPad = readSampleCardPadding(scroller);
-            const scrollerRect = scroller.getBoundingClientRect();
-            const contentWidth = getScrollerViewportWidth(scroller, pad);
-            const visibleLeft = scrollerRect.left + pad.left;
-            const visibleRight = visibleLeft + contentWidth;
-            cards.forEach((card, index) => {
-                const cardRect = card.getBoundingClientRect();
-                if (cardRect.width <= 0) return;
-                // Use content box (inside card padding) for visibility
-                const cardContentLeft = cardRect.left + cardPad.left;
-                const cardContentRight = cardRect.right - cardPad.right;
-                if (cardContentLeft >= visibleLeft - epsilon && cardContentRight <= visibleRight + epsilon) {
-                    fullyVisible.push(index);
-                }
-            });
-            return fullyVisible;
+            return getScrollCards().map((card) => {
+                const left = getCardScrollLeft(card);
+                const width = card.getBoundingClientRect().width - cardPad.left - cardPad.right;
+                return { left, right: left + width };
+            }).filter((edge) => edge.right > edge.left);
         }
 
-        function snapScrollToCardIndex(cards, targetIndex) {
-            if (!cards.length) return;
-            const clampedIndex = Math.max(0, Math.min(targetIndex, cards.length - 1));
-            // Last card: flush to frame content-box end (getMaxPositionFresh)
-            if (clampedIndex === cards.length - 1) {
-                setPosition(getMaxPositionFresh(), { animate: true, freshMax: true });
-                return;
+        function getPageTarget(direction) {
+            const edges = getCardEdges();
+            if (!edges.length) return null;
+            const position = getCurrentPosition();
+            const width = getScrollerViewportWidth(scroller, readScrollerPadding(scroller));
+            const epsilon = 1;
+            if (direction > 0) {
+                // The leftmost card cut off on the right becomes the first.
+                const cut = edges.filter((edge) => edge.right > position + width + epsilon);
+                if (!cut.length) return getMaxPositionFresh();
+                const target = Math.min(...cut.map((edge) => edge.left));
+                return target > position + epsilon ? target : position + width;
             }
-            const targetLeft = getCardScrollLeft(cards[clampedIndex]);
-            setPosition(targetLeft, { animate: true, freshMax: true });
+            // The page that ends where this one starts: the leftmost card that
+            // starts within one frame before here leads it.
+            const before = edges.filter((edge) => edge.left < position - epsilon && edge.left >= position - width - epsilon);
+            if (!before.length) return Math.max(0, position - width);
+            return Math.min(...before.map((edge) => edge.left));
         }
 
         leftButton.addEventListener('click', () => {
-            const cards = getScrollCards();
-            if (!cards.length) return;
-            const fullyVisible = getFullyVisibleCardIndices(cards);
-            const firstVisible = fullyVisible.length ? fullyVisible[0] : 0;
-            const step = Math.max(1, fullyVisible.length);
-            snapScrollToCardIndex(cards, firstVisible - step);
+            const target = getPageTarget(-1);
+            if (target === null) return;
+            setPosition(target, { animate: true, freshMax: true });
         });
 
         scrollButtons.appendChild(leftButton);
@@ -8547,17 +8546,9 @@
         rightButton.appendChild(rightSpan);
 
         rightButton.addEventListener('click', () => {
-            const cards = getScrollCards();
-            if (!cards.length) return;
-            const fullyVisible = getFullyVisibleCardIndices(cards);
-            const lastVisible = fullyVisible.length ? fullyVisible[fullyVisible.length - 1] : -1;
-            const nextIndex = lastVisible + 1;
-            const lastWillBeVisible = nextIndex + fullyVisible.length >= cards.length;
-            if (nextIndex >= cards.length || lastWillBeVisible) {
-                setPosition(getMaxPositionFresh(), { animate: true, freshMax: true });
-                return;
-            }
-            snapScrollToCardIndex(cards, nextIndex);
+            const target = getPageTarget(1);
+            if (target === null) return;
+            setPosition(target, { animate: true, freshMax: true });
         });
 
         scrollButtons.appendChild(rightButton);
