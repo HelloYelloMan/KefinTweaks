@@ -4612,11 +4612,15 @@
         }
 
         if (cardImageParams) {
-            // The doubled size is a fixed 2:3 box for portrait; a Primary card
-            // doubles its own picture's shape instead.
+            /* The big first card of a rows-2 row asks for twice the size. Not
+             * getDoubledAspectRatioImageParams' fixed boxes: Vault Tweaks
+             * draws that card at its picture's own shape, and a 2:3 or 16:9 box
+             * came back cropped to it -- a 0.70 poster cut to 0.67, a 4:3
+             * still to 16:9. Twice this card's own box instead; a backdrop
+             * card's height still follows its still's ratio below. */
             imageParams = cardFormat === 'primary'
                 ? primaryImageParams(useParentCard ? null : item, 2)
-                : cardImageParams;
+                : imageParams.replace(/fill(Height|Width)=(\d+)/g, (m, axis, n) => `fill${axis}=${Number(n) * 2}`);
         }
 
         const cardLinkId = useParentCard && (item.SeriesId || item.ParentId) ? item.SeriesId || item.ParentId : itemId;
@@ -4987,8 +4991,8 @@
                  * request a fixed 474x267 crop, so a 4:3 episode still came back
                  * cut to 16:9 and was then cropped again by the 4:3 box above. */
                 if (ownPrimary && padderClass === 'cardPadder-backdrop') {
-                    imageUrl = imageUrl.replace('fillHeight=267&fillWidth=474',
-                        `fillHeight=${Math.round(474 / ratio)}&fillWidth=474`);
+                    imageUrl = imageUrl.replace(/fillHeight=\d+&fillWidth=(474|948)\b/,
+                        (m, width) => `fillHeight=${Math.round(Number(width) / ratio)}&fillWidth=${width}`);
                 }
             }
 
