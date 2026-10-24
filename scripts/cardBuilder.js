@@ -1057,7 +1057,7 @@
             if (!it || it.IsJellyseerr) continue;
             if (it.Type === 'Series' && it.PrimaryImageAspectRatio > 0) parentPosterRatio.set(it.Id, it.PrimaryImageAspectRatio);
             const showsSeries = it.SeriesId && it.SeriesPrimaryImageTag
-                && ((it.Type === 'Episode' && !(primaryFormat && it.ImageTags?.Primary))
+                && ((it.Type === 'Episode' && !(primaryFormat && it.ImageTags?.Primary && !sectionConfig?.useParentCard))
                     || (it.Type === 'Season' && !it.ImageTags?.Primary));
             if (showsSeries && !parentPosterRatio.has(it.SeriesId)) need.add(it.SeriesId);
         }
@@ -1645,9 +1645,12 @@
         let finalResult;
         if (results.length > 1) {
             finalResult = ApiHelper.mergeMultiQueryResults(results, sectionConfig);
-            // Extract items from merged result
+            // Extract items from merged result. The section's own processing --
+            // its limit above all -- applies to the merged row here as on the
+            // first render; without it a refreshed two-library Latest row came
+            // back with both libraries' cards, 32 where it had shown 16.
             const items = finalResult.result?.data?.Items || finalResult.result?.data || [];
-            return items;
+            return postProcessItems(sectionConfig, items);
         } else if (results.length === 1) {
             // Single query result
             const data = results[0].data || results[0];
@@ -4938,7 +4941,10 @@
             cardImageContainer.appendChild(iconSpan);
         }
 
-        const blurhashStr = !item.imageUrl ? getBlurhashForCard(item, cardFormat) : null;
+        // A Primary card with useParentCard shows the series poster, whose
+        // blurhash the item does not carry.
+        const blurhashStr = !item.imageUrl && !(cardFormat === 'primary' && useParentCard)
+            ? getBlurhashForCard(item, cardFormat) : null;
         let includeKefinBlurhashCanvas = true;
         if (!blurhashStr || cardFormat === 'logo' || cardFormat === 'clear art' || cardFormat === 'disc') {
             blurhashCanvas.classList.add('lazy-hidden');
@@ -8523,9 +8529,13 @@
                 const target = Math.min(...cut.map((edge) => edge.left));
                 return target > position + epsilon ? target : position + width;
             }
-            // The page that ends where this one starts: the leftmost card that
-            // starts within one frame before here leads it.
-            const before = edges.filter((edge) => edge.left < position - epsilon && edge.left >= position - width - epsilon);
+            // The page that ends where this one starts: the card cut off by the
+            // left edge, if any, ends it whole -- from the row's end or after a
+            // drag the position is not on a card -- and the leftmost card that
+            // still fits in the frame before that point leads it.
+            const cut = edges.filter((edge) => edge.left < position - epsilon && edge.right > position + epsilon);
+            const end = cut.length ? Math.max(...cut.map((edge) => edge.right)) : position;
+            const before = edges.filter((edge) => edge.left < position - epsilon && edge.left >= end - width - epsilon);
             if (!before.length) return Math.max(0, position - width);
             return Math.min(...before.map((edge) => edge.left));
         }

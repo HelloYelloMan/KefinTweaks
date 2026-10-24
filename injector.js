@@ -54,7 +54,9 @@
         if (remoteVersion > localVersion && remoteVersion > 0) {
             console.log('[KefinTweaks] Global reset detected. Clearing user configuration.');
             Object.keys(localStorage)
-                .filter(key => key.startsWith('kefinTweaks'))
+                // Not the console opt-in: it is this device's own choice, and
+                // clearing it would shut KefinTweaks out of that console.
+                .filter(key => key.startsWith('kefinTweaks') && key !== 'kefinTweaks.allowConsole')
                 .forEach(key => localStorage.removeItem(key));
             localStorage.setItem('kefinTweaks_lastResetVersion', remoteVersion.toString());
         }
