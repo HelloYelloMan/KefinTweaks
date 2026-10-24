@@ -296,7 +296,45 @@
             ? ApiClient.accessToken()
             : '');
     }
-    
+
+    /* A Latest answer's Season card has no arrival date of its own: its
+     * DateCreated is the season folder's, and Jellyfin leaves its
+     * DateLastMediaAdded at 0001-01-01. Its series' DateLastMediaAdded is the
+     * date of the newest episode -- measured equal on every season and series
+     * card of the Anime library's Latest -- so each Season card takes that, as
+     * KefinLatestArrival, in one request for all of them. Done here, before the
+     * answer is cached, so a row painted from cache has it too: a row of several
+     * Latest queries is ordered by it (cardBuilder's mergeLatestByArrival).
+     * A failed lookup leaves the cards as Jellyfin sent them. */
+    async function attachLatestSeasonArrival(url, data) {
+        if (!Array.isArray(data)) return;
+        try {
+            if (!new URL(url, location.href).pathname.endsWith('/Items/Latest')) return;
+            const seriesIds = [...new Set(data
+                .filter((item) => item?.Type === 'Season' && item.SeriesId)
+                .map((item) => item.SeriesId))];
+            if (!seriesIds.length) return;
+            const params = new URLSearchParams({
+                UserId: ApiClient.getCurrentUserId(),
+                Ids: seriesIds.join(','),
+                Fields: 'DateLastMediaAdded',
+                EnableImages: 'false',
+                EnableUserData: 'false',
+                EnableTotalRecordCount: 'false'
+            });
+            const response = await fetch(`${ApiClient.serverAddress()}/Items?${params}`, {
+                headers: { 'Authorization': getAuthHeader(), 'Accept': 'application/json' }
+            });
+            if (!response.ok) return;
+            const arrival = new Map(((await response.json())?.Items || [])
+                .map((series) => [series.Id, series.DateLastMediaAdded]));
+            data.forEach((item) => {
+                const date = item?.Type === 'Season' && arrival.get(item.SeriesId);
+                if (date) item.KefinLatestArrival = date;
+            });
+        } catch (e) { /* ordered by the cards' own dates instead */ }
+    }
+
     /**
      * Query cache for API responses
      * Key: stringified options object
@@ -493,7 +531,8 @@
                     }
                     
                     const data = await response.json();
-                    
+                    await attachLatestSeasonArrival(url, data);
+
                     // Always cache successful responses
                     if (data) {
                         setCachedQuery(cacheKey, data);
@@ -1215,6 +1254,12 @@
 
             applyQueryOptionsToParams(params, queryOptions, { skipFields: true });
 
+            if (path === '/Items/Latest') {
+                // A row of several Latest queries is ordered by these
+                // (cardBuilder's mergeLatestByArrival).
+                params.set('Fields', mergeFields(params.get('Fields'), 'DateCreated,DateLastMediaAdded'));
+            }
+
             if (path === '/Shows/NextUp') {
                 // If NextUpDateCutoff is not set, set it to the current date
                 if (!params.has('NextUpDateCutoff') && queryOptions.NextUpDateCutoff === undefined) {
@@ -1338,11 +1383,14 @@
             // Combine all items from all queries
             const allItems = [];
             const itemsByQuery = [];
-            
+            // /Items/Latest answers with a bare array, not { Items }.
+            const itemsOf = (data) => (Array.isArray(data) ? data : data?.Items);
+
             results.forEach(result => {
-                if (result.data?.Items) {
-                    allItems.push(...result.data.Items);
-                    itemsByQuery.push(result.data.Items);
+                const items = itemsOf(result.data);
+                if (items) {
+                    allItems.push(...items);
+                    itemsByQuery.push(items);
                 }
             });
             
@@ -1373,8 +1421,9 @@
                     ))).then((allData) => {
                         const itemsByFreshQuery = [];
                         allData.forEach((data) => {
-                            if (data?.Items) {
-                                itemsByFreshQuery.push(data.Items);
+                            const items = itemsOf(data);
+                            if (items) {
+                                itemsByFreshQuery.push(items);
                             }
                         });
                         return window.cardBuilder.postProcessItemsByQuery(sectionConfig, itemsByFreshQuery);

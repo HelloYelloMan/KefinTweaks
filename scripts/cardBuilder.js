@@ -974,14 +974,57 @@
         return sortedContinueWatching;
     }
 
+    /* A row of several /Items/Latest queries (one per library) is the union of
+     * those rows, newest first: each list keeps Jellyfin's order, and the lists
+     * are interleaved by when each card's content arrived. That is an episode's
+     * or movie's DateCreated, a series' DateLastMediaAdded, and for a season its
+     * series' DateLastMediaAdded (KefinLatestArrival, which apiHelper attaches
+     * when it fetches a Latest answer). A season's own DateCreated is the
+     * folder's -- Oreimo's is 2025-12-10 for episodes that arrived on
+     * 2026-10-24 -- so sorting the cards on it sinks every show that was
+     * already in the library.
+     *
+     * Walking a list from its oldest end, an item's key is the later of its own
+     * dates and the key below it, so no key contradicts the server's order even
+     * when a season's lookup failed, and a stable sort on the keys interleaves
+     * the lists. The section's limit then applies to the merged row: its newest
+     * cards across every library. */
+    function isLatestOnlyRow(sectionConfig) {
+        const queries = sectionConfig?.queries || [];
+        return queries.length > 1 && queries.every((q) => q?.path === '/Items/Latest');
+    }
+
+    function mergeLatestByArrival(lists) {
+        const keyed = [];
+        lists.forEach((items) => {
+            let floor = -Infinity;
+            const keys = [];
+            for (let i = items.length - 1; i >= 0; i--) {
+                const own = Math.max(
+                    Date.parse(items[i]?.DateCreated || '') || -Infinity,
+                    Date.parse(items[i]?.DateLastMediaAdded || '') || -Infinity,
+                    Date.parse(items[i]?.KefinLatestArrival || '') || -Infinity
+                );
+                floor = Math.max(floor, own);
+                keys[i] = floor;
+            }
+            items.forEach((item, i) => keyed.push({ item, key: keys[i] }));
+        });
+        return keyed.sort((a, b) => b.key - a.key).map((k) => k.item);
+    }
+
     function postProcessItemsByQuery(sectionConfig, queryResults) {
         let processed = [];
+        const lists = [];
         for (let i = 0; i < queryResults.length; i++) {
             const queryConfig = sectionConfig.queries[i];
             const queryResult = queryResults[i];
             const items = queryResult?.Items || queryResult || [];
-            processed.push(...postProcessItems(queryConfig, items));
+            lists.push(postProcessItems(queryConfig, items));
         }
+        processed = isLatestOnlyRow(sectionConfig) && lists.length > 1
+            ? mergeLatestByArrival(lists)
+            : lists.flat();
 
         if (sectionConfig.id === 'continueWatchingAndNextUp') {
             // Get the movies from the items, and the rest as the episodes, then use mergeNextUpAndContinueWatching to merge them
