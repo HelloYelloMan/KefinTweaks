@@ -2898,12 +2898,13 @@ In the Custom Tabs plugin, add a new tab with the following HTML content:
 			const rankClass = rank <= 3 ? ` rank-${rank}` : '';
 			const episodesText = show.episodesWatched === 1 ? 'episode' : 'episodes';
 			const timeLabel = formatWatchedRuntimeLabel(show.watchedRuntimeTicks);
+			const progressLabel = window.innerWidth >= 900 ? `${timeLabel} · ${show.episodesWatched} of ${show.totalEpisodes} ${episodesText} (${show.percentage}%)` : `${timeLabel}`;
 			
 			return `
 				<div class="top-show-item${rankClass}">
 					<div class="show-rank">${rank}</div>
 					<div class="top-show-name" title="${escapeHtmlWatchlist(show.name)}">${escapeHtmlWatchlist(show.name)}</div>
-					<div class="top-show-episodes">${timeLabel} · ${show.episodesWatched} of ${show.totalEpisodes} ${episodesText} (${show.percentage}%)</div>
+					<div class="top-show-episodes">${progressLabel}</div>
 				</div>
 			`;
 		}).join('');
@@ -3297,6 +3298,37 @@ In the Custom Tabs plugin, add a new tab with the following HTML content:
 		});
 	}
 
+	/**
+	 * Keep paint-snapshot membership + header counts in sync on like/unlike without re-rendering sections.
+	 * Ghost cards may remain in the DOM; counts reflect liked membership.
+	 */
+	function patchWatchlistItemsByTypeMembership(itemId, itemType, isAdded) {
+		if (!itemId) return;
+
+		const removeFromType = (type) => {
+			const list = watchlistItemsByType[type];
+			if (!Array.isArray(list) || !list.length) return false;
+			const next = list.filter((item) => item?.Id !== itemId);
+			if (next.length === list.length) return false;
+			watchlistItemsByType[type] = next;
+			return true;
+		};
+
+		if (isAdded) {
+			const type = itemType && isWatchlistSupportedType(itemType) ? itemType : null;
+			if (!type) return;
+			const list = watchlistItemsByType[type] || (watchlistItemsByType[type] = []);
+			if (list.some((item) => item?.Id === itemId)) return;
+			list.push({ Id: itemId });
+		} else if (itemType && isWatchlistSupportedType(itemType)) {
+			removeFromType(itemType);
+		} else {
+			WATCHLIST_SECTION_TYPES.forEach(({ type }) => removeFromType(type));
+		}
+
+		updateWatchlistHeaderStats();
+	}
+
 	function getWatchlistProgressiveHost() {
 		const watchlistSection = getWatchlistSection();
 		if (!watchlistSection) return null;
@@ -3330,9 +3362,11 @@ In the Custom Tabs plugin, add a new tab with the following HTML content:
 			throw new Error('apiHelper.getWatchlistQuery unavailable');
 		}
 
+		// Same Fields as apiHelper.buildWatchlistQueryDef so invalidate hits this fetch URL
 		const queryOptions = {
 			IncludeItemTypes: itemType,
-			Fields: 'PrimaryImageAspectRatio,DateCreated,ProductionYear,PremiereDate,ProviderIds,UserData'
+			Fields: apiHelper.WATCHLIST_PROGRESSIVE_FIELDS
+				|| 'PrimaryImageAspectRatio,DateCreated,ProductionYear,PremiereDate,ProviderIds,UserData'
 		};
 		const queryResult = await apiHelper.getWatchlistQuery(queryOptions, {
 			ttl: WATCHLIST_CACHE_TTL,
@@ -4974,31 +5008,52 @@ In the Custom Tabs plugin, add a new tab with the following HTML content:
 		alert(`Watchlist cleared: ${cleared} item(s) removed.`);
 	}
 
-	// Invalidate progressive watchlist cache and re-render when membership changes
+	/**
+	 * Membership changed: update liked-Id cache + invalidate Likes query URL.
+	 * Do not full-rebuild the Watchlist tab (avoids scroll jump / stale re-paint races).
+	 * Cards stay as ghosts until next visit; cardBuilder owns overlay button UI via UserDataChanged.
+	 */
 	async function updateWatchlistCacheOnToggle(itemId, itemType, isAdded) {
 		try {
-			LOG(`Watchlist membership changed for ${itemType} ${itemId} (added=${isAdded}); refreshing progressive sections`);
+			LOG(`Watchlist membership changed for ${itemType || 'unknown'} ${itemId} (added=${isAdded}); invalidating query cache`);
 			setLikedIdInCache(itemId, isAdded === true);
-			syncOverlayWatchlistButtons();
+			patchWatchlistItemsByTypeMembership(itemId, itemType, isAdded === true);
 
-			if (itemType) {
+			if (itemType && isWatchlistSupportedType(itemType)) {
 				await window.apiHelper?.invalidateWatchlistQueries?.({ IncludeItemTypes: itemType });
 			} else {
 				await invalidateAllWatchlistQueries();
 			}
 
-			const watchlistSection = getWatchlistSection();
-			const watchlistVisible = !!watchlistSection
-				&& !watchlistSection.closest('.libraryPage.hide')
-				&& !!watchlistSection.querySelector('div[data-tab="watchlist"]:not([style*="display: none"])');
-
-			if (watchlistVisible || tabStates.watchlist.isDataFetched) {
-				await initWatchlistTab(true);
-			} else {
-				tabStates.watchlist.isDataFetched = false;
-			}
+			tabStates.watchlist.isDataFetched = false;
 		} catch (err) {
-			ERR('Error refreshing watchlist after toggle:', err);
+			ERR('Error refreshing watchlist cache after toggle:', err);
+		}
+	}
+
+	/**
+	 * Sync liked-Id cache + invalidate progressive Likes queries from UserData.Likes.
+	 * Idempotent for the Set when cardBuilder already applied Likes; always invalidate
+	 * so a remote/Library like is visible on the next Watchlist visit.
+	 */
+	async function handleItemWatchlistChange(itemId, isLiked, itemType) {
+		if (!itemId || typeof isLiked !== 'boolean') return;
+
+		if (isItemInLikedIdCache(itemId) !== isLiked) {
+			setLikedIdInCache(itemId, isLiked);
+		}
+		// Keep header counts aligned even if liked-Id Set was already updated by cardBuilder
+		patchWatchlistItemsByTypeMembership(itemId, itemType, isLiked);
+
+		try {
+			if (itemType && isWatchlistSupportedType(itemType)) {
+				await window.apiHelper?.invalidateWatchlistQueries?.({ IncludeItemTypes: itemType });
+			} else {
+				await invalidateAllWatchlistQueries();
+			}
+			tabStates.watchlist.isDataFetched = false;
+		} catch (err) {
+			ERR('Error invalidating watchlist after Likes change:', err);
 		}
 	}
 
@@ -5022,8 +5077,11 @@ In the Custom Tabs plugin, add a new tab with the following HTML content:
 
 					for (const userData of entries) {
 						if (!userData?.ItemId) continue;
-						LOG(`Detected UserDataChanged for item: ${userData.ItemId}, Played: ${userData.Played}`);
-						handleItemWatchedStatusChange(userData.ItemId, userData.Played, userData.Likes).catch(err => {
+						LOG(`Detected UserDataChanged for item: ${userData.ItemId}, Played: ${userData.Played}, Likes: ${userData.Likes}`);
+						(async () => {
+							await handleItemWatchlistChange(userData.ItemId, userData.Likes);
+							await handleItemWatchedStatusChange(userData.ItemId, userData.Played, userData.Likes);
+						})().catch(err => {
 							ERR('Error handling UserDataChanged event:', err);
 						});
 					}
@@ -7686,7 +7744,7 @@ In the Custom Tabs plugin, add a new tab with the following HTML content:
 		const isCustomTabUrl = watchlistUrl.includes('/home?tab=');
 
 		const options = {
-			sideMenu: watchlistCfg.sideMenu !== false,
+			sideMenu: isCustomTabUrl ? false : watchlistCfg.sideMenu !== false,
 			userMenu: watchlistCfg.userMenu === true,
 			topNavigation: isCustomTabUrl ? 'none' : watchlistCfg.topNavigation,
 			order: watchlistCfg.order

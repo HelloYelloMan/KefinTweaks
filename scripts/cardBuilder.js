@@ -1686,9 +1686,15 @@
         }, 1500);
     }
 
+    /** After an empty section is removed, let discovery infinite-scroll refill lead margin. */
+    function notifyDiscoveryLeadFillAfterSectionRemove() {
+        window.homeScreen3?.scheduleMaybeFillDiscoveryViewport?.();
+    }
+
     async function replaceSectionContent(sectionConfig, sectionElement, freshItems) {
         if (freshItems.length === 0) {
             sectionElement.remove();
+            notifyDiscoveryLeadFillAfterSectionRemove();
             return null;
         }
 
@@ -2122,6 +2128,7 @@
                 freshItems = await refreshSectionQueries(sectionConfig);
                 if (freshItems.length === 0) {
                     sectionElement.remove();
+                    notifyDiscoveryLeadFillAfterSectionRemove();
                     return null;
                 }
             }
@@ -2294,15 +2301,183 @@
         return userId === primaryId;
     }
 
+    const RESUME_OR_NEXTUP_SECTION_IDS = new Set([
+        'continueWatching',
+        'nextUp',
+        'continueWatchingAndNextUp',
+    ]);
+    const NEXTUP_REFRESH_SECTION_IDS = ['nextUp', 'continueWatchingAndNextUp'];
+    const NEXTUP_PROGRESSIVE_REFRESH_DEBOUNCE_MS = 400;
+    let nextUpProgressiveRefreshTimer = null;
+
+    function getCardHomeSectionId(card) {
+        const sectionEl = card?.closest?.('[data-section-id]');
+        return sectionEl?.getAttribute('data-section-id') || sectionEl?.dataset?.sectionId || null;
+    }
+
+    function findMountedHomeSectionElement(sectionId) {
+        if (!sectionId) return null;
+        const escaped = escapeCssIdentForCardSync(sectionId);
+        return document.querySelector(`.homePage:not(.hide) #homeTab .sections [data-section-id="${escaped}"]`)
+            || document.querySelector(`[data-section-id="${escaped}"]`);
+    }
+
+    function maybeDismissEmptyResumeSection(sectionElement) {
+        if (!sectionElement?.isConnected) return;
+        const itemsContainer = sectionElement.querySelector('.itemsContainer');
+        const remaining = itemsContainer
+            ? getRealLayoutCards(itemsContainer).filter((card) => {
+                return card.getAttribute('data-id')
+                    && !card.classList.contains('skeleton-card')
+                    && !card.classList.contains('cardbuilder-card-collapse');
+            })
+            : [];
+        if (remaining.length) return;
+
+        const holdMs = getDismissEmptySectionTimerMs();
+        if (holdMs > 0) {
+            dismissEmptyProgressiveSection(sectionElement, { holdMs });
+        } else {
+            sectionElement.remove();
+            notifyDiscoveryLeadFillAfterSectionRemove();
+        }
+    }
+
+    /**
+     * Collapse cards with the same animation as reconcileRowItems outgoing cards, then remove.
+     * @param {HTMLElement[]} cards
+     * @param {Function} [onComplete]
+     */
+    function collapseAndRemoveCards(cards, onComplete) {
+        const uniqueCards = [];
+        const seen = new Set();
+        (cards || []).forEach((card) => {
+            if (!card?.isConnected || seen.has(card)) return;
+            seen.add(card);
+            uniqueCards.push(card);
+        });
+        if (!uniqueCards.length) {
+            if (typeof onComplete === 'function') onComplete();
+            return;
+        }
+
+        const bySection = new Map();
+        uniqueCards.forEach((card) => {
+            const sectionEl = card.closest?.('[data-section-id]');
+            if (!sectionEl) {
+                card.remove();
+                return;
+            }
+            if (!bySection.has(sectionEl)) bySection.set(sectionEl, []);
+            bySection.get(sectionEl).push(card);
+        });
+
+        let pending = bySection.size;
+        if (!pending) {
+            if (typeof onComplete === 'function') onComplete();
+            return;
+        }
+
+        const finishOne = () => {
+            pending -= 1;
+            if (pending <= 0 && typeof onComplete === 'function') onComplete();
+        };
+
+        bySection.forEach((sectionCards, sectionElement) => {
+            const itemsContainer = sectionElement.querySelector('.itemsContainer');
+            if (!itemsContainer) {
+                sectionCards.forEach((card) => card.remove());
+                maybeDismissEmptyResumeSection(sectionElement);
+                finishOne();
+                return;
+            }
+
+            const layouts = sectionCards.map(captureCardLayout);
+            layouts.forEach((layout) => {
+                layout.card.classList.add('cardbuilder-card-collapse');
+                applyCardExpandedSize(layout);
+            });
+            // Force layout before collapsing (same as reconcileRowItems)
+            itemsContainer.offsetHeight;
+            itemsContainer.classList.add('cardbuilder-row-animating');
+
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    layouts.forEach(({ card }) => applyCardCollapsedSize(card));
+                    const animTarget = sectionCards[0] || itemsContainer;
+                    runAfterTransition(animTarget, 450, () => {
+                        sectionCards.forEach((card) => {
+                            if (card.isConnected) card.remove();
+                        });
+                        itemsContainer.classList.remove('cardbuilder-row-animating');
+                        reindexSectionCards(itemsContainer);
+                        maybeDismissEmptyResumeSection(sectionElement);
+                        finishOne();
+                    });
+                });
+            });
+        });
+    }
+
+    /**
+     * Invalidate-free progressive refresh for currently mounted home sections.
+     * @param {string[]} sectionIds
+     */
+    async function refreshMountedSectionsProgressive(sectionIds) {
+        const ids = Array.isArray(sectionIds) ? sectionIds.filter(Boolean) : [];
+        for (const sectionId of ids) {
+            const sectionElement = findMountedHomeSectionElement(sectionId);
+            if (!sectionElement?.isConnected) continue;
+
+            const runtime = window.KefinHomeScreenSectionRuntime?.get?.(sectionId);
+            const cfg = runtime?.effectiveConfig || null;
+            if (!cfg) continue;
+
+            let items = [];
+            try {
+                items = await refreshSectionQueries(cfg);
+            } catch (e) {
+                console.warn('[KefinTweaks CardBuilder] Progressive refresh failed for', sectionId, e);
+                continue;
+            }
+            if (!Array.isArray(items)) items = [];
+
+            if (runtime) {
+                runtime.cachedItems = items;
+                runtime.element = sectionElement;
+            }
+
+            applyProgressiveEnhancement(
+                sectionElement,
+                { config: cfg, result: { data: { Items: items } } },
+                items,
+                { updateScrollButtons: true },
+            );
+            await yieldToMainThread();
+        }
+    }
+
+    function scheduleNextUpSectionsProgressiveRefresh() {
+        if (nextUpProgressiveRefreshTimer) clearTimeout(nextUpProgressiveRefreshTimer);
+        nextUpProgressiveRefreshTimer = setTimeout(() => {
+            nextUpProgressiveRefreshTimer = null;
+            void refreshMountedSectionsProgressive(NEXTUP_REFRESH_SECTION_IDS);
+        }, NEXTUP_PROGRESSIVE_REFRESH_DEBOUNCE_MS);
+    }
+
     /**
      * Keep data-positionticks on visible cards aligned with primary-user playstate.
      * Driven by UserDataChanged (same event Jellyfin uses for progress bars) — not DOM observation.
+     * @param {string} itemId
+     * @param {Object} userData
+     * @param {HTMLElement[]} [cardsHint] optional pre-found cards (avoids a second DOM scan)
+     * @returns {HTMLElement[]}
      */
-    function updateCardResumeAttributes(itemId, userData) {
-        if (!itemId || !userData) return;
+    function updateCardResumeAttributes(itemId, userData, cardsHint) {
+        if (!itemId || !userData) return [];
 
-        const cards = findVisibleCardsForItemId(itemId);
-        if (!cards.length) return;
+        const cards = Array.isArray(cardsHint) ? cardsHint : findVisibleCardsForItemId(itemId);
+        if (!cards.length) return cards;
 
         const ticks = userData.PlaybackPositionTicks;
 
@@ -2317,6 +2492,7 @@
                 card.removeAttribute('data-positionticks');
             }
         });
+        return cards;
     }
 
     function updateCardWatchlistButtons(itemId, userData) {
@@ -2338,13 +2514,48 @@
         });
     }
 
+    function updateCardFavoriteButtons(itemId, userData) {
+        if (!itemId || !userData || !('IsFavorite' in userData)) return;
+
+        const isFavorite = userData.IsFavorite === true;
+        itemIdDomVariants(itemId).forEach((variant) => {
+            const escapedId = escapeCssIdentForCardSync(variant);
+            document.querySelectorAll(
+                `[is="emby-ratingbutton"][data-id="${escapedId}"], button[data-isfavorite][data-id="${escapedId}"]`
+            ).forEach((button) => {
+                button.setAttribute('data-isfavorite', isFavorite ? 'true' : 'false');
+                button.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
+            });
+        });
+    }
+
     function applyUserDataEntriesToCards(entries, userId) {
         if (!isPrimaryUserDataChange(userId)) return;
+
+        const cardsToCollapse = [];
         entries.forEach((entry) => {
-            if (entry?.ItemId) {
-                updateCardResumeAttributes(entry.ItemId, entry);
-                updateCardWatchlistButtons(entry.ItemId, entry);
+            if (!entry?.ItemId) return;
+
+            const cards = findVisibleCardsForItemId(entry.ItemId);
+            updateCardResumeAttributes(entry.ItemId, entry, cards);
+            updateCardWatchlistButtons(entry.ItemId, entry);
+            updateCardFavoriteButtons(entry.ItemId, entry);
+
+            if (entry.Played === true) {
+                cards.forEach((card) => {
+                    const sectionId = getCardHomeSectionId(card);
+                    if (sectionId && RESUME_OR_NEXTUP_SECTION_IDS.has(sectionId)) {
+                        cardsToCollapse.push(card);
+                    }
+                });
             }
+        });
+
+        if (!cardsToCollapse.length) return;
+
+        // Refresh after collapse so progressive enhance does not race outgoing animation
+        collapseAndRemoveCards(cardsToCollapse, () => {
+            scheduleNextUpSectionsProgressiveRefresh();
         });
     }
 
@@ -2912,6 +3123,7 @@
         getSectionTitleForMultiQuery: getSectionTitleForMultiQuery,
         getActiveViewMoreUrl: getActiveViewMoreUrl,
         refreshSectionQueries: refreshSectionQueries,
+        refreshMountedSectionsProgressive: refreshMountedSectionsProgressive,
         loadActiveSectionQueryItems: loadActiveSectionQueryItems,
         createSectionScrollableContainer: createSectionScrollableContainer,
         applySectionPresentationAttrs: applySectionPresentationAttrs,
@@ -4148,6 +4360,49 @@
     }
 
     /**
+     * Hi-res image request for a card format: ~2× the classic fillHeight/fillWidth
+     * sizes (backdrop 267×474, square 297, banner 100×540, portrait 446×297).
+     * @param {string|null} cardFormat
+     * @returns {string} query params (no leading ?)
+     */
+    function getDoubledAspectRatioImageParams(cardFormat) {
+        const format = (cardFormat || '').toLowerCase();
+        let width;
+        let height;
+        switch (format) {
+            case 'backdrop':
+            case 'thumb':
+            case 'series thumb':
+            case 'logo':
+            case 'clear art':
+                // fillHeight=267&fillWidth=474 → ×2
+                width = 948;
+                height = 534;
+                break;
+            case 'square':
+            case 'disc':
+                // fillHeight=297&fillWidth=297 → ×2
+                width = 594;
+                height = 594;
+                break;
+            case 'banner':
+                // fillHeight=100&fillWidth=540 → ×2
+                width = 1080;
+                height = 200;
+                break;
+            case 'portrait':
+            case 'poster':
+            case 'series poster':
+            default:
+                // fillHeight=446&fillWidth=297 → ×2
+                width = 594;
+                height = 892;
+                break;
+        }
+        return `fillHeight=${height}&fillWidth=${width}`;
+    }
+
+    /**
      * Creates a Jellyfin card element from an item
      * @param {Object} item - The Jellyfin item object
      * @param {boolean} overflowCard - Use overflow card classes instead of normal card classes
@@ -4212,6 +4467,7 @@
         customFooterText = null,
         useParentCard = false,
         borderStyle = null,
+        cardImageParams = null
     ) {
         cardFormat = cardFormat?.toLowerCase() || null;
         if (cardFormat === 'button') {
@@ -4280,6 +4536,10 @@
                 padderClass = 'cardPadder-portrait';
                 imageParams = portraitImageParams(useParentCard ? null : item);
             }
+        }
+
+        if (cardImageParams) {
+            imageParams = cardImageParams;
         }
 
         const cardLinkId = useParentCard && (item.SeriesId || item.ParentId) ? item.SeriesId || item.ParentId : itemId;
@@ -5240,11 +5500,20 @@
         customFooterText = null,
         useParentCard = false,
         borderStyle = null,
+        cardImageParams = null,
     ) {
         if (isTvLayout()) {
             return buildTvCardElement(item, overflowCard, cardFormat, customFooterText, useParentCard, borderStyle);
         }
-        return createJellyfinCardElement(item, overflowCard, cardFormat, customFooterText, useParentCard, borderStyle);
+        return createJellyfinCardElement(
+            item,
+            overflowCard,
+            cardFormat,
+            customFooterText,
+            useParentCard,
+            borderStyle,
+            cardImageParams,
+        );
     }
 
     /**
@@ -5457,6 +5726,8 @@
         // Create main container
         const container = document.createElement('div');
         container.className = 'spotlight-section padded-left';
+        // Live toggle target for section configure (setSpotlightAnimation); read via isPanAnimationEnabled()
+        container.dataset.panAnimation = panAnimation !== false ? 'true' : 'false';
 
         // Create banner container
         const bannerContainer = document.createElement('div');
@@ -6135,7 +6406,7 @@
             const infoIcon = document.createElement('span');
             infoIcon.className = 'material-icons';
             infoIcon.textContent = 'info';
-            infoIcon.title = 'Go To Item';
+            infoIcon.title = 'View Details';
             infoButton.appendChild(infoIcon);
 
             // Overview tooltip (hover only) — skip on TV
@@ -6611,8 +6882,13 @@
                 breathe: 'scale3d(1, 1, 1)',
                 heatHaze: 'scale3d(1.05, 1.05, 1) skewX(0deg)',
             };
+            /** Prefer live dataset (section configure toggle) over create-time option. */
+            function isPanAnimationEnabled() {
+                return container.dataset.panAnimation !== 'false';
+            }
+
             function applyPanAnimationToSlide(slideElement) {
-                if (!slideElement || !panAnimation) return;
+                if (!slideElement || !isPanAnimationEnabled()) return;
                 const imgs = slideElement.querySelectorAll('.spotlight-background-layer img, .spotlight-background-single img');
                 if (!imgs.length) return;
                 currentSlideAnimationComplete = false;
@@ -6644,7 +6920,7 @@
             }
 
             function setSlideAnimationPlayState(slideElement, playState) {
-                if (!slideElement || !panAnimation) return;
+                if (!slideElement || !isPanAnimationEnabled()) return;
                 slideElement
                     .querySelectorAll('.spotlight-background-layer img, .spotlight-background-single img')
                     .forEach((img) => {
@@ -6890,7 +7166,7 @@
                         }
 
                         const needsInitialPan =
-                            panAnimation &&
+                            isPanAnimationEnabled() &&
                             currentSlide &&
                             !initialPanScheduled &&
                             !currentSlide.querySelector(
@@ -6900,7 +7176,7 @@
                         if (needsInitialPan) {
                             initialPanScheduled = true;
                             requestAnimationFrame(() => {
-                                if (!container.isConnected || !panAnimation || !isVisible) return;
+                                if (!container.isConnected || !isPanAnimationEnabled() || !isVisible) return;
                                 const slide = getCurrentSpotlightSlide();
                                 if (!slide) return;
                                 if (
@@ -8593,8 +8869,22 @@
         // Add items to container (TV → button cards via createCardElement)
         const useParentCard = !!sectionConfig?.useParentCard;
         const borderStyle = sectionConfig?.borderStyle || null;
-        items.forEach((item, index) => {
-            const card = createCardElement(item, overflowCard, cardFormat, item.cardFooter, useParentCard, borderStyle);
+
+        items.forEach((item, index) => {            
+            let imageParams = null;
+            if (sectionConfig?.sectionCssClass && sectionConfig?.sectionCssClass.includes('rows-2') && index === 0) {
+                imageParams = getDoubledAspectRatioImageParams(cardFormat);
+            }
+
+            const card = createCardElement(
+                item,
+                overflowCard,
+                cardFormat,
+                item.cardFooter,
+                useParentCard,
+                borderStyle,
+                imageParams,
+            );
             card.setAttribute('data-index', index);
             itemsContainer.appendChild(card);
         });
@@ -9986,25 +10276,6 @@
         });
     }
 
-    function appendCardsForItems(
-        itemsContainer,
-        items,
-        overflowCard,
-        cardFormat,
-        startIndex = 0,
-        useParentCard = false,
-        borderStyle = null,
-    ) {
-        const cards = [];
-        items.forEach((item, offset) => {
-            const card = createCardElement(item, overflowCard, cardFormat, item.cardFooter, useParentCard, borderStyle);
-            card.setAttribute('data-index', String(startIndex + offset));
-            itemsContainer.appendChild(card);
-            cards.push(card);
-        });
-        return cards;
-    }
-
     function clearCardReconcileStyles(card) {
         card.classList.remove('cardbuilder-card-insert', 'cardbuilder-card-collapse', 'is-in');
         card.style.width = '';
@@ -10078,7 +10349,7 @@
         let nextNode = paintedCards[0] || null;
         let seenKept = false;
 
-        items.forEach((item) => {
+        items.forEach((item, index) => {
             if (!item?.Id) return;
             const existing = cardById.get(item.Id);
             if (existing) {
@@ -10090,6 +10361,11 @@
                 return;
             }
 
+            let imageParams = null;
+            if (sectionConfig?.sectionCssClass && sectionConfig?.sectionCssClass.includes('rows-2') && index === 0) {
+                imageParams = getDoubledAspectRatioImageParams(cardFormat);
+            }
+
             const card = createCardElement(
                 item,
                 overflowCard,
@@ -10097,6 +10373,7 @@
                 item.cardFooter,
                 !!sectionConfig?.useParentCard,
                 sectionConfig?.borderStyle || null,
+                imageParams,
             );
             if (nextNode) itemsContainer.insertBefore(card, nextNode);
             else itemsContainer.appendChild(card);
@@ -10208,8 +10485,22 @@
         } else {
             const useParentCard = !!sectionConfig?.useParentCard;
             const borderStyle = sectionConfig?.borderStyle || null;
+            
             items.forEach((item, index) => {
-                const card = createCardElement(item, overflowCard, cardFormat, item.cardFooter, useParentCard, borderStyle);
+                let imageParams = null;
+                if (sectionConfig?.sectionCssClass && sectionConfig?.sectionCssClass.includes('rows-2') && index === 0) {
+                    imageParams = getDoubledAspectRatioImageParams(cardFormat);
+                }
+
+                const card = createCardElement(
+                    item,
+                    overflowCard,
+                    cardFormat,
+                    item.cardFooter,
+                    useParentCard,
+                    borderStyle,
+                    imageParams,
+                );
                 card.setAttribute('data-index', String(index));
                 fragment.appendChild(card);
             });
@@ -10423,6 +10714,7 @@
             sectionElement.classList.add('is-hidden');
             runAfterTransition(sectionElement, 320, () => {
                 sectionElement.remove();
+                notifyDiscoveryLeadFillAfterSectionRemove();
             });
         }, hold);
     }
@@ -10469,6 +10761,7 @@
                 dismissEmptyProgressiveSection(sectionElement, { holdMs });
             } else {
                 sectionElement.remove();
+                notifyDiscoveryLeadFillAfterSectionRemove();
             }
             return;
         }

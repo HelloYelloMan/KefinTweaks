@@ -416,8 +416,16 @@
     }
 
     /**
+     * Fields used by progressive Watchlist sections. Must match getWatchlistQuery /
+     * invalidateWatchlistQueries so cache clear hits the same URL as fetch.
+     */
+    const WATCHLIST_PROGRESSIVE_FIELDS =
+        'PrimaryImageAspectRatio,DateCreated,ProductionYear,PremiereDate,ProviderIds,UserData';
+
+    /**
      * Build a single top-level Likes query def (shared by getWatchlistItems / getWatchlistQuery).
      * Callers pass IncludeItemTypes (and other options) to narrow results.
+     * Default Fields match progressive sections so invalidate clears the fetched URL.
      * @param {Object} options
      * @returns {{ queryOptions: Object }}
      */
@@ -427,6 +435,7 @@
                 Recursive: true,
                 ImageTypeLimit: 1,
                 EnableImageTypes: 'Primary,Backdrop,Thumb',
+                Fields: WATCHLIST_PROGRESSIVE_FIELDS,
                 ...options,
                 Filters: 'Likes'
             }
@@ -1571,6 +1580,9 @@
 
         return genreSyncScheduledPromise;
     }
+
+    // Shared with watchlist progressive sections / invalidate (same Fields → same cache URL)
+    apiHelper.WATCHLIST_PROGRESSIVE_FIELDS = WATCHLIST_PROGRESSIVE_FIELDS;
 
     // Expose apiHelper to global window object
     window.apiHelper = apiHelper;

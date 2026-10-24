@@ -25,6 +25,7 @@
 			sections: [
 				{
 					id: "my-media",
+					type: "home",
 					name: "My Media",
 					jellyfinId: "smalllibrarytiles",
 					enabled: false,
@@ -45,7 +46,9 @@
 				},
 				{
 					id: "my-media-small",
-					name: "My Media (Small)",
+					type: "home",
+					name: "My Media",
+					description: "Small Buttons",
 					jellyfinId: "librarybuttons",
 					enabled: false,
 					order: 6,
@@ -72,6 +75,7 @@
 			sections: [
 				{
 					id: "continueWatching",
+					type: "home",
 					name: "Continue Watching",
 					jellyfinId: "resume",
 					enabled: false,
@@ -94,6 +98,7 @@
 				},
 				{
 					id: "nextUp",
+					type: "home",
 					name: "Next Up",
 					jellyfinId: "nextup",
 					enabled: false,
@@ -116,7 +121,9 @@
 				},
 				{
 					id: "continueWatchingAndNextUp",
-					name: "Continue Watching and Next Up",
+					type: "home",
+					name: "Continue Watching",
+					description: "Resumable and Next Up items combined into one section",
 					jellyfinId: "resume",
 					jellyfinId2: "nextup",
 					enabled: false,
@@ -126,8 +133,10 @@
 					sortBy: "DatePlayed", // Used to sort merged results from both queries
 					sortOrder: "Descending", // Most recent first
 					userConfigurable: true,
+					itemLimit: 24,
 					queries: [
 						{
+							name: "Resume",
 							path: "/UserItems/Resume",
 							queryOptions: {
 								MediaTypes: "Video",
@@ -139,6 +148,7 @@
 							},
 						},
 						{
+							name: "Next Up",
 							path: "/Shows/NextUp",
 							queryOptions: {
 								Fields: "PrimaryImageAspectRatio,DateCreated,Path,MediaSourceCount",
@@ -152,6 +162,7 @@
 				},
 				{
 					id: "continueListening",
+					type: "home",
 					name: "Continue Listening",
 					jellyfinId: "resumeaudio",
 					enabled: false,
@@ -174,6 +185,7 @@
 				},
 				{
 					id: "continueReading",
+					type: "home",
 					name: "Continue Reading",
 					jellyfinId: "resumebook",
 					enabled: false,
@@ -203,6 +215,7 @@
 			sections: [
 				{
 					id: "upcoming",
+					type: "home",
 					name: "Coming Soon",
 					enabled: true,
 					order: 60,
@@ -229,6 +242,7 @@
 			sections: [
 				{
 					id: "recentlyReleased.movies",
+					type: "home",
 					name: "Recently Released Movies",
 					enabled: true,
 					order: 40,
@@ -251,6 +265,7 @@
 				},
 				{
 					id: "recentlyReleased.episodes",
+					type: "home",
 					name: "Recently Aired Episodes",
 					enabled: true,
 					order: 41,
@@ -287,6 +302,7 @@
 			sections: [
 				{
 					id: "liveTv-recordings",
+					type: "home",
 					name: "Recordings",
 					jellyfinId: "activerecordings",
 					enabled: false,
@@ -309,6 +325,7 @@
 				},
 				{
 					id: "liveTv-timers",
+					type: "home",
 					name: "Scheduled Recordings",
 					enabled: false,
 					order: 17,
@@ -328,6 +345,7 @@
 				},
 				{
 					id: "liveTv-browse",
+					type: "home",
 					name: "Live TV",
 					jellyfinId: "livetv",
 					enabled: false,
@@ -363,6 +381,7 @@
 				},
 				{
 					id: "liveTv-on-now",
+					type: "home",
 					name: "On Now",
 					jellyfinId: "livetv",
 					enabled: false,
@@ -385,6 +404,7 @@
 				},
 				{
 					id: "liveTv-programs",
+					type: "home",
 					name: "Programs",
 					enabled: false,
 					order: 18,
@@ -404,6 +424,7 @@
 				},
 				{
 					id: "liveTv-channels",
+					type: "home",
 					name: "Channels",
 					enabled: false,
 					order: 19,
@@ -423,6 +444,7 @@
 				},
 				{
 					id: "liveTv-series-on-now",
+					type: "home",
 					name: "Shows From Live TV",
 					enabled: false,
 					order: 20,
@@ -447,6 +469,7 @@
 				},
 				{
 					id: "liveTv-movies-on-now",
+					type: "home",
 					name: "Movies From Live TV",
 					enabled: false,
 					order: 20,
@@ -467,6 +490,7 @@
 				},
 				{
 					id: "liveTv-sports-on-now",
+					type: "home",
 					name: "Sports From Live TV",
 					enabled: false,
 					order: 20,
@@ -487,6 +511,7 @@
 				},
 				{
 					id: "liveTv-news-on-now",
+					type: "home",
 					name: "News From Live TV",
 					enabled: false,
 					order: 20,
@@ -507,6 +532,7 @@
 				},
 				{
 					id: "liveTv-kids-on-now",
+					type: "home",
 					name: "Kids From Live TV",
 					enabled: false,
 					order: 20,
@@ -534,6 +560,7 @@
 			sections: [
 				{
 					id: "imdbTop250",
+					type: "home",
 					name: "IMDb Top 250",
 					enabled: true,
 					order: 70,
@@ -560,6 +587,7 @@
 			sections: [
 				{
 					id: "popularTVStudios",
+					type: "home",
 					name: "Popular TV Studios",
 					enabled: true,
 					order: 72,
@@ -584,6 +612,7 @@
 				},
 				{
 					id: "popularMovieStudios",
+					type: "home",
 					name: "Popular Movie Studios",
 					enabled: true,
 					order: 72,
@@ -608,6 +637,7 @@
 				},
 				{
 					id: "popularStudios",
+					type: "home",
 					name: "Popular Studios",
 					enabled: false,
 					order: 72,
@@ -645,6 +675,7 @@
 			sections: [
 				{
 					id: "watchAgain",
+					type: "home",
 					name: "Watch Again",
 					enabled: true,
 					order: 73,
@@ -671,6 +702,7 @@
 			sections: [
 				{
 					id: "watchlist",
+					type: "home",
 					name: "Watchlist",
 					enabled: true,
 					order: 71,
@@ -697,6 +729,7 @@
 			sections: [
 				{
 					id: "resumePlaylists",
+					type: "home",
 					name: "Continue Watching Your Playlists",
 					enabled: false,
 					order: 74,
@@ -717,6 +750,7 @@
 				},
 				{
 					id: "completeCollections",
+					type: "home",
 					name: "Finish Watching Your Collections",
 					enabled: false,
 					order: 75,
@@ -736,6 +770,7 @@
 				},
 				{
 					id: "playlists",
+					type: "home",
 					name: "Browse by Playlist",
 					enabled: false,
 					order: 76,
@@ -754,6 +789,7 @@
 				},
 				{
 					id: "collections",
+					type: "home",
 					name: "Browse by Collection",
 					enabled: false,
 					order: 77,
@@ -779,6 +815,7 @@
 			sections: [
 				{
 					id: "thematic-story-origins",
+					type: "home",
 					name: "Story Origins",
 					enabled: false,
 					userConfigurable: true,
@@ -836,6 +873,7 @@
 				},
 				{
 					id: "thematic-core-concepts",
+					type: "home",
 					name: "Core Concepts",
 					enabled: false,
 					userConfigurable: true,
@@ -958,6 +996,7 @@
 				},
 				{
 					id: "thematic-crime-stories",
+					type: "home",
 					name: "Crime Stories",
 					enabled: false,
 					userConfigurable: true,
@@ -1039,6 +1078,7 @@
 				},
 				{
 					id: "thematic-character-perspective",
+					type: "home",
 					name: "Character Perspective",
 					enabled: false,
 					userConfigurable: true,
@@ -1105,6 +1145,7 @@
 				},
 				{
 					id: "thematic-settings",
+					type: "home",
 					name: "Settings",
 					enabled: false,
 					userConfigurable: true,
@@ -1176,6 +1217,7 @@
 				},
 				{
 					id: "thematic-tone-style",
+					type: "home",
 					name: "Tone & Style",
 					enabled: false,
 					userConfigurable: true,
@@ -1232,6 +1274,7 @@
 				},
 				{
 					id: "thematic-themes-topics",
+					type: "home",
 					name: "Themes & Topics",
 					enabled: false,
 					userConfigurable: true,
@@ -1368,6 +1411,7 @@
 			sections: [
 				{
 					id: "seasonal.halloween.halloween-tag",
+					type: "seasonal",
 					name: "Halloween Movies",
 					enabled: true,
 					userConfigurable: true,
@@ -1388,6 +1432,7 @@
 				},
 				{
 					id: "seasonal.halloween.halloween-horror",
+					type: "seasonal",
 					name: "Horror Movies",
 					enabled: true,
 					userConfigurable: true,
@@ -1408,6 +1453,7 @@
 				},
 				{
 					id: "seasonal.halloween.halloween-thriller",
+					type: "seasonal",
 					name: "Thriller Movies",
 					enabled: true,
 					userConfigurable: true,
@@ -1428,6 +1474,7 @@
 				},
 				{
 					id: "seasonal.halloween.halloween-episodes",
+					type: "seasonal",
 					name: "Halloween Episodes",
 					enabled: true,
 					userConfigurable: true,
@@ -1551,6 +1598,7 @@
 			sections: [
 				{
 					id: "seasonal.christmas.christmas-movies",
+					type: "seasonal",
 					name: "Christmas Movies",
 					enabled: true,
 					userConfigurable: true,
@@ -1572,6 +1620,7 @@
 				},
 				{
 					id: "seasonal.christmas.christmas-episodes",
+					type: "seasonal",
 					name: "Christmas Episodes",
 					enabled: true,
 					userConfigurable: true,
@@ -1599,6 +1648,7 @@
 			sections: [
 				{
 					id: "seasonal.new-years.new-years-movies",
+					type: "seasonal",
 					name: "New Year's Movies",
 					enabled: true,
 					userConfigurable: true,
@@ -1619,6 +1669,7 @@
 				},
 				{
 					id: "seasonal.new-years.new-years-episodes",
+					type: "seasonal",
 					name: "New Year's Episodes",
 					enabled: true,
 					userConfigurable: true,
@@ -1646,6 +1697,7 @@
 			sections: [
 				{
 					id: "seasonal.valentines.valentines-movies",
+					type: "seasonal",
 					name: "Valentine's Movies",
 					enabled: true,
 					userConfigurable: true,
@@ -1666,6 +1718,7 @@
 				},
 				{
 					id: "seasonal.valentines.valentines-episodes",
+					type: "seasonal",
 					name: "Valentine's Episodes",
 					enabled: true,
 					userConfigurable: true,
@@ -1693,6 +1746,7 @@
 			sections: [
 				{
 					id: "seasonal.thanksgiving.thanksgiving-movies",
+					type: "seasonal",
 					name: "Thanksgiving Movies",
 					enabled: true,
 					userConfigurable: true,
@@ -1713,6 +1767,7 @@
 				},
 				{
 					id: "seasonal.thanksgiving.thanksgiving-episodes",
+					type: "seasonal",
 					name: "Thanksgiving Episodes",
 					enabled: true,
 					userConfigurable: true,
@@ -1755,6 +1810,7 @@
 						queryOptions: { IncludeItemTypes: ["Movie"], Limit: 0 },
 					},
 					name: "{Genre} Movies",
+					description: "Movies by genre",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -1783,6 +1839,7 @@
 						queryOptions: { IncludeItemTypes: ["Movie"], Limit: 0 },
 					},
 					name: "Top Rated {Genre}",
+					description: "Top rated movies by genre",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -1822,6 +1879,7 @@
 						queryOptions: { Limit: 100 },
 					},
 					name: "Directed by {Person}",
+					description: "Movies directed by popular directors",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -1852,6 +1910,7 @@
 						queryOptions: { Limit: 100 },
 					},
 					name: "Written by {Person}",
+					description: "Movies written by popular writers",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -1882,6 +1941,7 @@
 						queryOptions: { Limit: 100 },
 					},
 					name: "Starring {Person}",
+					description: "Movies starring popular actors",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -1926,6 +1986,7 @@
 						},
 					},
 					name: "Starring {Person}",
+					description: "Movies starring actors from your recently watched movies",
 					caption: "Because you recently watched {Title}",
 					enabled: true,
 					userConfigurable: true,
@@ -1964,6 +2025,7 @@
 						},
 					},
 					name: "Directed by {Person}",
+					description: "Movies by directors from your recently watched movies",
 					caption: "Because you recently watched {Title}",
 					enabled: true,
 					userConfigurable: true,
@@ -2002,6 +2064,7 @@
 						},
 					},
 					name: "Written by {Person}",
+					description: "Movies by writers from your recently watched movies",
 					caption: "Because you recently watched {Title}",
 					enabled: true,
 					userConfigurable: true,
@@ -2045,6 +2108,7 @@
 						},
 					},
 					name: "Because you watched {Title}",
+					description: "Movies similar to the ones you've watched",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -2078,6 +2142,7 @@
 						},
 					},
 					name: "Because you recently watched {Title}",
+					description: "Movies similar to the ones you've recently watched",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -2111,6 +2176,7 @@
 						},
 					},
 					name: "Because you liked {Title}",
+					description: "Movies similar to the ones you've liked",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -2144,6 +2210,7 @@
 						},
 					},
 					name: "Because {Title} is on your Watchlist",
+					description: "Movies similar to the ones on your Watchlist",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -2182,6 +2249,7 @@
 						},
 					},
 					name: "Shows from {Studio}",
+					description: "Shows from popular studios",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -2215,6 +2283,7 @@
 						},
 					},
 					name: "Top Rated from {Studio}",
+					description: "Top rated shows from popular studios",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -2259,6 +2328,7 @@
 						},
 					},
 					name: "{Collection}",
+					description: "Movies from franchise or curated collections",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -2281,7 +2351,7 @@
 		// Genre Series Group
 		{
 			id: "discovery-genre-series",
-			name: "Genre Series",
+			name: "Genre Shows",
 			sections: [
 				{
 					id: "genreSeries",
@@ -2292,7 +2362,8 @@
 						path: "/Genres",
 						queryOptions: { IncludeItemTypes: ["Series"], Limit: 0 },
 					},
-					name: "{Genre} Series",
+					name: "{Genre} Shows",
+					description: "Shows by genre",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -2320,7 +2391,8 @@
 						path: "/Genres",
 						queryOptions: { IncludeItemTypes: ["Series"], Limit: 0 },
 					},
-					name: "Top Rated {Genre} Series",
+					name: "Top Rated {Genre} Shows",
+					description: "Top rated shows by genre",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -2365,6 +2437,7 @@
 						},
 					},
 					name: "Because you watched {Title}",
+					description: "Shows similar to the ones you've watched",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -2388,16 +2461,16 @@
 					discoverySourceQuery: {
 						path: "/Items",
 						queryOptions: {
-							IncludeItemTypes: ["Episode"],
+							IncludeItemTypes: ["Series"],
 							Recursive: true,
-							Filters: "IsPlayed",
 							Fields: "PrimaryImageAspectRatio,UserData,People",
-							SortBy: "DatePlayed",
+							SortBy: "SeriesDatePlayed",
 							SortOrder: "Descending",
-							Limit: 15,
+							Limit: 10,
 						},
 					},
 					name: "Because you recently watched {Title}",
+					description: "Shows similar to the ones you've recently watched",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -2431,6 +2504,7 @@
 						},
 					},
 					name: "Because you liked {Title}",
+					description: "Shows similar to the ones you've liked",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -2464,6 +2538,7 @@
 						},
 					},
 					name: "Because {Title} is on your Watchlist",
+					description: "Shows similar to the ones on your Watchlist",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -2490,6 +2565,7 @@
 						queryOptions: { Limit: 25, SortBy: "Random" },
 					},
 					name: "Because you finished {Title}",
+					description: "Shows similar to the ones you've finished",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -2525,6 +2601,7 @@
 						queryOptions: { Limit: 100 },
 					},
 					name: "Directed by {Person}",
+					description: "Episodes directed by popular directors",
 					enabled: false,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -2556,6 +2633,7 @@
 						queryOptions: { Limit: 100 },
 					},
 					name: "Written by {Person}",
+					description: "Episodes written by popular writers",
 					enabled: false,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -2587,6 +2665,7 @@
 						queryOptions: { Limit: 100 },
 					},
 					name: "Starring {Person}",
+					description: "Shows starring popular actors",
 					enabled: true,
 					userConfigurable: true,
 					itemLimit: 20,
@@ -2621,16 +2700,16 @@
 					discoverySourceQuery: {
 						path: "/Items",
 						queryOptions: {
-							IncludeItemTypes: ["Episode"],
+							IncludeItemTypes: ["Series"],
 							Recursive: true,
-							Filters: "IsPlayed",
 							Fields: "PrimaryImageAspectRatio,UserData,People",
-							SortBy: "DatePlayed",
+							SortBy: "SeriesDatePlayed",
 							SortOrder: "Descending",
-							Limit: 15,
+							Limit: 10,
 						},
 					},
 					name: "Starring {Person}",
+					description: "Shows starring actors from shows you've recently watched",
 					caption: "Because you recently watched {Title}",
 					enabled: true,
 					userConfigurable: true,
@@ -2669,6 +2748,7 @@
 						},
 					},
 					name: "Directed by {Person}",
+					description: "Episodes by directors of your recently watched episodes",
 					caption: "Because you recently watched {Title}",
 					enabled: true,
 					userConfigurable: true,
@@ -2708,6 +2788,7 @@
 						},
 					},
 					name: "Written by {Person}",
+					description: "Episodes by writers of your recently watched episodes",
 					caption: "Because you recently watched {Title}",
 					enabled: true,
 					userConfigurable: true,
@@ -2754,6 +2835,7 @@
 						},
 					},
 					name: "Guest starring {Person}",
+					description: "Episodes guest starring popular actors",
 					caption: "Because you recently watched {Title}",
 					enabled: true,
 					userConfigurable: true,

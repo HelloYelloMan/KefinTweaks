@@ -180,6 +180,14 @@
         return window.KefinUserHomeScreenConfig;
     }
 
+    /** Persist homeScreen and rewrite Jellyfin homesectionN when the syncing API is available. */
+    async function saveHomeScreenPreferNativeSync(api, homeScreen) {
+        if (typeof api?.saveKefinTweaksHomeScreenAndSyncNative === 'function') {
+            return api.saveKefinTweaksHomeScreenAndSyncNative(homeScreen);
+        }
+        return api.saveKefinTweaksHomeScreen(homeScreen);
+    }
+
     function getCachePresetOptions() {
         const presets = window.KefinHomeScreenAdvancedEditor?.getCachePresets?.()
             || buildFallbackCachePresets();
@@ -624,7 +632,7 @@
         );
         homeScreen = api.upsertSectionPref(homeScreen, prefStr);
         pendingHomeScreen = homeScreen;
-        await api.saveKefinTweaksHomeScreen(homeScreen);
+        await saveHomeScreenPreferNativeSync(api, homeScreen);
         pendingHomeScreen = null;
 
         applyPresentationToElement(entry);
@@ -651,7 +659,7 @@
                     homeScreen = api.upsertSectionPref(homeScreen, prefStr);
                 });
                 pendingHomeScreen = homeScreen;
-                await api.saveKefinTweaksHomeScreen(homeScreen);
+                await saveHomeScreenPreferNativeSync(api, homeScreen);
                 pendingHomeScreen = null;
             } catch (e) {
                 WARN('Failed to save section preferences:', e);
@@ -688,7 +696,7 @@
 
     function getCardFormats() {
         return getEditorConstants().CARD_FORMATS
-            || ['Poster', 'Thumb', 'Series Thumb', 'Series Poster', 'Backdrop', 'Square', 'Random', 'Button', 'Banner', 'Logo', 'Clear Art', 'Disc'];
+            || ['Poster', 'Thumb', 'Series Poster', 'Series Thumb', 'Backdrop', 'Square', 'Random', 'Button', 'Banner', 'Logo', 'Clear Art', 'Disc'];
     }
 
     function getCardTitleHorizontalAlignOptions() {
@@ -2469,7 +2477,7 @@
                     <button type="button" is="paper-icon-button-light" class="paper-icon-button-light emby-button kefin-section-unpin-button" title="Unpin" aria-label="Unpin from Home Screen">
                         <span class="material-icons" aria-hidden="true">push_pin</span>
                     </button>` : ''}
-                    <button type="button" is="paper-icon-button-light" class="paper-icon-button-light emby-button kefin-section-publish-btn" title="Apply to all users" aria-label="Apply to all users" hidden>
+                    <button type="button" is="paper-icon-button-light" class="paper-icon-button-light emby-button kefin-section-publish-btn" title="Update server default for this section" aria-label="Update server default for this section" hidden>
                         <span class="material-icons" aria-hidden="true">publish</span>
                     </button>
                     <button type="button" is="paper-icon-button-light" class="paper-icon-button-light emby-button kefin-section-open-editor-btn" title="Open Editor" aria-label="Open Editor" hidden>

@@ -3377,6 +3377,7 @@
             body.scrollTop = scrollTop;
         });
         updateSectionNameBadge(modalInstance);
+        syncHeaderActions(modalInstance);
     }
 
     function handleHsaeRootClick(e, modalInstance) {
@@ -3667,6 +3668,1106 @@
         }
     }
 
+    const HSAE_KEFIN_DEFAULT_GROUP_KEYS = [
+        'HOME_SECTION_GROUPS',
+        'SEASONAL_SECTION_GROUPS',
+        'DISCOVERY_SECTION_GROUPS'
+    ];
+    const HSAE_SECTION_EXPORT_MODAL_ID = 'hsae-section-export';
+    const HSAE_SECTION_IMPORT_MODAL_ID = 'hsae-section-import-paste';
+    const HSAE_RESTORE_DEFAULTS_MODAL_ID = 'hsae-section-restore-defaults';
+    const HSAE_TROUBLESHOOT_MODAL_ID = 'hsae-section-troubleshoot';
+    const HSAE_SECTION_DIFF_KEYS = [
+        'name', 'caption', 'description', 'enabled', 'order', 'cardFormat', 'renderMode', 'ttl',
+        'queries', 'items', 'externalListUrls', 'spotlightConfig', 'hideName', 'userConfigurable',
+        'useRandomQuery', 'useMultiQueryPicker', 'multiQueryPickerLabel', 'useQueryNamesForSection',
+        'sortBy', 'sortOrder', 'sortOrderDirection', 'itemLimit', 'minimumItems', 'flattenSeries',
+        'limitBeforeSort', 'sectionCssClass', 'borderStyle', 'borderColor', 'cardTitleColor',
+        'itemsLayout', 'useGaplessCards', 'cardTitleVisibility', 'useParentCard', 'cardTitlePosition',
+        'cardTitleCapitalization', 'cardTitleFontFamily', 'cardTitleFontSize', 'startDate', 'endDate',
+        'hidden', 'discoveryEnabled', 'type', 'category', 'livePreviewUpdates'
+    ];
+
+    function showHsaeToast(message, duration = '3') {
+        if (window.KefinTweaksToaster?.toast) {
+            window.KefinTweaksToaster.toast(message, duration);
+        }
+    }
+
+    function deepCloneJson(value) {
+        return value == null ? value : JSON.parse(JSON.stringify(value));
+    }
+
+    /** collectData writes these even when canonical omits them (runtime defaults). */
+    const HSAE_IMPLICIT_SECTION_DEFAULTS = {
+        renderMode: 'Normal',
+        useGaplessCards: false,
+        useParentCard: false,
+        discoveryEnabled: false,
+        livePreviewUpdates: false,
+        hideName: false,
+        useRandomQuery: false,
+        useMultiQueryPicker: false,
+        useQueryNamesForSection: false,
+        flattenSeries: false,
+        limitBeforeSort: false,
+        hideCardTitles: false,
+        category: 'none'
+    };
+
+    const HSAE_GROUP_KEY_TO_TYPE = {
+        HOME_SECTION_GROUPS: 'home',
+        SEASONAL_SECTION_GROUPS: 'seasonal',
+        DISCOVERY_SECTION_GROUPS: 'discovery'
+    };
+
+    function getDefaultTtlMs() {
+        const preset = getCachePresets().find((p) => p.key === 'DEFAULT');
+        return preset?.ms ?? 3600000;
+    }
+
+    /** Empty / missing editor values are equivalent for restore diffs ("" vs omitted). */
+    function normalizeForDiff(value) {
+        if (value === undefined || value === null) return null;
+        if (typeof value === 'string' && value.trim() === '') return null;
+        if (Array.isArray(value) && value.length === 0) return null;
+        if (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0) {
+            return null;
+        }
+        return value;
+    }
+
+    function omitEmptyDeep(value) {
+        if (value === undefined || value === null || value === '') return undefined;
+        if (Array.isArray(value)) {
+            return value.map(omitEmptyDeep).filter((v) => v !== undefined);
+        }
+        if (typeof value === 'object') {
+            const out = {};
+            Object.keys(value).sort().forEach((key) => {
+                const nested = omitEmptyDeep(value[key]);
+                if (nested === undefined) return;
+                if (typeof nested === 'object' && !Array.isArray(nested) && Object.keys(nested).length === 0) {
+                    return;
+                }
+                out[key] = nested;
+            });
+            return out;
+        }
+        return value;
+    }
+
+    function stableStringify(value) {
+        if (value === undefined) return 'null';
+        if (value === null || typeof value !== 'object') {
+            try {
+                return JSON.stringify(value);
+            } catch (_) {
+                return String(value);
+            }
+        }
+        if (Array.isArray(value)) {
+            return `[${value.map(stableStringify).join(',')}]`;
+        }
+        const keys = Object.keys(value).sort();
+        return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
+    }
+
+    function coerceQueryOptionValue(val) {
+        if (typeof val === 'string' && val.trim() !== '' && /^-?\d+(\.\d+)?$/.test(val.trim())) {
+            const n = Number(val);
+            if (Number.isFinite(n)) return n;
+        }
+        return val;
+    }
+
+    function normalizeQueryForCompare(query) {
+        if (!query || typeof query !== 'object') return null;
+        const clone = deepCloneJson(query) || {};
+        Object.keys(clone).forEach((key) => {
+            if (key.startsWith('_')) delete clone[key];
+        });
+        if (clone.queryOptions && typeof clone.queryOptions === 'object') {
+            Object.keys(clone.queryOptions).forEach((key) => {
+                if (key.startsWith('_')) {
+                    delete clone.queryOptions[key];
+                    return;
+                }
+                clone.queryOptions[key] = coerceQueryOptionValue(clone.queryOptions[key]);
+            });
+        }
+        return omitEmptyDeep(clone) || {};
+    }
+
+    function normalizeQueriesForCompare(queries) {
+        if (!Array.isArray(queries)) return null;
+        return queries.map(normalizeQueryForCompare);
+    }
+
+    function normalizeItemsForCompare(items) {
+        if (!Array.isArray(items)) return null;
+        return items.map((item) => {
+            if (!item || typeof item !== 'object') return item;
+            const clone = deepCloneJson(item) || {};
+            const name = clone.Name || clone.name;
+            if (name != null) {
+                clone.Name = name;
+                delete clone.name;
+            }
+            ['posterUrl', 'thumbUrl', 'backdropUrl', 'squareUrl', 'bannerUrl', 'logoUrl', 'imageUrl', 'cardFooter', 'cardUrl']
+                .forEach((key) => {
+                    if (typeof clone[key] === 'string' && !clone[key].trim()) delete clone[key];
+                });
+            return omitEmptyDeep(clone) || {};
+        });
+    }
+
+    function normalizeDiffFieldValue(key, value, section) {
+        if (key === 'queries') {
+            const normalized = normalizeQueriesForCompare(Array.isArray(value) ? value : null);
+            if (!normalized || normalized.length === 0) return null;
+            return normalized;
+        }
+        if (key === 'items') {
+            const normalized = normalizeItemsForCompare(Array.isArray(value) ? value : null);
+            if (!normalized || normalized.length === 0) return null;
+            return normalized;
+        }
+
+        let normalized = normalizeForDiff(value);
+        if (Object.prototype.hasOwnProperty.call(HSAE_IMPLICIT_SECTION_DEFAULTS, key)) {
+            const implicit = HSAE_IMPLICIT_SECTION_DEFAULTS[key];
+            if (normalized === null || valuesRawEqual(normalized, implicit)) {
+                return null;
+            }
+        }
+        if (key === 'ttl') {
+            const defaultTtl = getDefaultTtlMs();
+            if (normalized === null || valuesRawEqual(Number(normalized), defaultTtl)) {
+                return null;
+            }
+        }
+        if (key === 'type') {
+            const derived = deriveSectionSurfaceType(section);
+            if (normalized === null || valuesRawEqual(normalized, derived)) {
+                return derived;
+            }
+        }
+        if (key === 'hideName' && (normalized === false || normalized === null)) return null;
+        return normalized;
+    }
+
+    function valuesRawEqual(a, b) {
+        try {
+            return stableStringify(a) === stableStringify(b);
+        } catch (_) {
+            return a === b;
+        }
+    }
+
+    function deriveSectionSurfaceType(section) {
+        if (!section) return 'home';
+        const existing = String(section.type || '').toLowerCase();
+        if (existing === 'home' || existing === 'seasonal' || existing === 'discovery') return existing;
+        if (section.discoveryEnabled === true || section.discoveryType) return 'discovery';
+        if (section.startDate?.trim?.() && section.endDate?.trim?.()) return 'seasonal';
+        if (section.startDate && section.endDate) return 'seasonal';
+        return 'home';
+    }
+
+    function valuesDeepEqual(a, b, key, sectionA, sectionB) {
+        try {
+            const left = key != null
+                ? normalizeDiffFieldValue(key, a, sectionA)
+                : normalizeForDiff(a);
+            const right = key != null
+                ? normalizeDiffFieldValue(key, b, sectionB)
+                : normalizeForDiff(b);
+            return stableStringify(left) === stableStringify(right);
+        } catch (_) {
+            return normalizeForDiff(a) === normalizeForDiff(b);
+        }
+    }
+
+    function getCanonicalDefaultSection(sectionId) {
+        if (!sectionId) return null;
+        const defaults = window.KefinHomeConfig2;
+        if (!defaults) return null;
+        for (const groupKey of HSAE_KEFIN_DEFAULT_GROUP_KEYS) {
+            const groups = defaults[groupKey];
+            if (!Array.isArray(groups)) continue;
+            for (const group of groups) {
+                const sections = group?.sections;
+                if (!Array.isArray(sections)) continue;
+                const found = sections.find((s) => s?.id === sectionId);
+                if (found) {
+                    const clone = deepCloneJson(found);
+                    const surfaceType = HSAE_GROUP_KEY_TO_TYPE[groupKey];
+                    if (clone && surfaceType && !clone.type) clone.type = surfaceType;
+                    return clone;
+                }
+            }
+        }
+        return null;
+    }
+
+    function isKefinDefaultSection(section, context) {
+        if (context?.isCustomSection === true) return false;
+        const id = section?.id;
+        if (!id) return false;
+        return getCanonicalDefaultSection(id) != null;
+    }
+
+    function parseSectionImportPayload(text) {
+        if (text == null || String(text).trim() === '') return null;
+        let parsed;
+        try {
+            parsed = JSON.parse(String(text));
+        } catch (_) {
+            return null;
+        }
+        if (Array.isArray(parsed)) {
+            if (parsed.length !== 1) return null;
+            parsed = parsed[0];
+        }
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+        const hasShape = ['name', 'queries', 'items', 'renderMode', 'id', 'cardFormat']
+            .some((key) => Object.prototype.hasOwnProperty.call(parsed, key));
+        if (!hasShape) return null;
+        return parsed;
+    }
+
+    function exportCurrentSectionJson(modalInstance) {
+        const dialog = modalInstance?.dialogContainer || modalInstance?.dialogContent;
+        const state = modalInstance?._hsaeState;
+        if (!dialog || !state) return null;
+        const original = state.context?.originalSection || state.section || {};
+        const section = collectData(dialog, original);
+        if (!section) return null;
+        if (state.section?.id) section.id = state.section.id;
+        return JSON.stringify(section, null, 2);
+    }
+
+    function applyImportedSection(modalInstance, importedSection) {
+        const state = modalInstance?._hsaeState;
+        if (!state || !importedSection) return;
+        const current = state.section || {};
+        const context = { ...(state.context || {}) };
+        const merged = deepCloneJson(importedSection) || {};
+        merged.id = current.id || merged.id;
+        if (current.deleted === true) merged.deleted = true;
+        // Keep collect/export/troubleshoot bases in sync with the applied section
+        context.originalSection = deepCloneJson(merged);
+        context.section = merged;
+        const newState = buildEditorStateFromSection(merged, context);
+        modalInstance._hsaeState = newState;
+        const stateHost = modalInstance.dialogContainer || modalInstance.dialogContent;
+        if (stateHost) stateHost._hsaeState = newState;
+        activeEditorState = newState;
+        refreshEditorBody(modalInstance, { skipCollect: true });
+        updateSectionNameBadge(modalInstance);
+    }
+
+    function abbreviateDiffValue(value, { markChanged = false } = {}) {
+        if (value === undefined) return '(none)';
+        if (value === null) return '(none)';
+        if (Array.isArray(value)) {
+            if (value.length === 0) return '[]';
+            const base = `array (${value.length})`;
+            return markChanged ? `${base} · changed` : base;
+        }
+        if (typeof value === 'object') {
+            const keys = Object.keys(value);
+            return keys.length ? `object (${keys.length} keys)` : '{}';
+        }
+        if (typeof value === 'boolean' || typeof value === 'number') return String(value);
+        const s = String(value);
+        if (!s) return '""';
+        return s.length > 48 ? `${s.slice(0, 45)}…` : s;
+    }
+
+    function diffSectionAgainstDefault(current, canonical) {
+        const diffs = [];
+        if (!current || !canonical) return diffs;
+        for (const key of HSAE_SECTION_DIFF_KEYS) {
+            const hasCurrent = Object.prototype.hasOwnProperty.call(current, key);
+            const hasCanonical = Object.prototype.hasOwnProperty.call(canonical, key);
+            if (!hasCurrent && !hasCanonical) continue;
+            const curVal = hasCurrent ? current[key] : undefined;
+            const defVal = hasCanonical ? canonical[key] : undefined;
+            if (valuesDeepEqual(curVal, defVal, key, current, canonical)) continue;
+
+            const normCur = normalizeDiffFieldValue(key, curVal, current);
+            const normDef = normalizeDiffFieldValue(key, defVal, canonical);
+            const bothArraysSameLen = Array.isArray(normCur) && Array.isArray(normDef)
+                && normCur.length === normDef.length
+                && normCur.length > 0;
+            diffs.push({
+                key,
+                current: abbreviateDiffValue(normCur ?? curVal, { markChanged: bothArraysSameLen }),
+                default: abbreviateDiffValue(normDef ?? defVal, { markChanged: bothArraysSameLen })
+            });
+        }
+        return diffs;
+    }
+
+    function isHttpsContextForClipboard() {
+        try {
+            if (typeof ApiClient !== 'undefined' && ApiClient._serverAddress?.startsWith?.('https://')) return true;
+        } catch (_) { /* ignore */ }
+        return typeof location !== 'undefined' && location.protocol === 'https:';
+    }
+
+    function canUseClipboardWrite() {
+        return !!(isHttpsContextForClipboard()
+            && navigator.clipboard
+            && typeof navigator.clipboard.writeText === 'function');
+    }
+
+    function canUseClipboardRead() {
+        return !!(isHttpsContextForClipboard()
+            && navigator.clipboard
+            && typeof navigator.clipboard.readText === 'function');
+    }
+
+    function showSectionExportModal(json) {
+        if (!window.ModalSystem) {
+            showHsaeToast('Unable to open export modal');
+            return;
+        }
+        if (window.ModalSystem.isOpen?.(HSAE_SECTION_EXPORT_MODAL_ID)) {
+            window.ModalSystem.close(HSAE_SECTION_EXPORT_MODAL_ID);
+        }
+        const canCopy = canUseClipboardWrite();
+        window.ModalSystem.create({
+            id: HSAE_SECTION_EXPORT_MODAL_ID,
+            title: 'Export Section',
+            content: `
+                <div class="listItemBodyText" style="margin-bottom: 1em;">
+                    Section JSON is shown below. Select and copy this text to back up or share the section.
+                    ${canCopy ? '' : ' Clipboard access requires an HTTPS connection, so manual copying is required.'}
+                </div>
+                <textarea id="hsae-export-section-textarea" class="fld emby-textarea" rows="16"
+                    readonly
+                    style="width: 100%; font-family: monospace; font-size: 0.9em; line-height: 1.5;"></textarea>
+            `,
+            footer: `
+                ${canCopy ? `
+                <button type="button" class="emby-button raised button-submit" id="hsae-export-copy-btn"
+                    style="padding: 0.75em 2em; font-size: 1em; font-weight: 500; margin-right: 1em;">
+                    <span>Copy</span>
+                </button>` : ''}
+                <button type="button" class="emby-button raised" id="hsae-export-close-btn"
+                    style="padding: 0.75em 2em; font-size: 1em;">
+                    <span>Close</span>
+                </button>
+            `,
+            closeOnBackdrop: true,
+            closeOnEscape: true,
+            onOpen: (modal) => {
+                const textarea = modal.dialogContent?.querySelector('#hsae-export-section-textarea');
+                if (textarea) {
+                    textarea.value = json;
+                    setTimeout(() => {
+                        textarea.focus();
+                        textarea.select();
+                    }, 100);
+                }
+                modal.dialogFooter?.querySelector('#hsae-export-close-btn')?.addEventListener('click', () => {
+                    window.ModalSystem.close(HSAE_SECTION_EXPORT_MODAL_ID);
+                });
+                modal.dialogFooter?.querySelector('#hsae-export-copy-btn')?.addEventListener('click', async () => {
+                    try {
+                        await navigator.clipboard.writeText(json);
+                        showHsaeToast('Section copied to clipboard');
+                    } catch (_) {
+                        showHsaeToast('Error copying to clipboard', '5');
+                    }
+                });
+            }
+        });
+    }
+
+    function showSectionImportPasteModal(onImport) {
+        if (!window.ModalSystem) {
+            showHsaeToast('Unable to open import modal');
+            return;
+        }
+        if (window.ModalSystem.isOpen?.(HSAE_SECTION_IMPORT_MODAL_ID)) {
+            window.ModalSystem.close(HSAE_SECTION_IMPORT_MODAL_ID);
+        }
+        window.ModalSystem.create({
+            id: HSAE_SECTION_IMPORT_MODAL_ID,
+            title: 'Import Section',
+            content: `
+                <div class="listItemBodyText" style="margin-bottom: 1em;">
+                    Paste a single section JSON below, then Import.
+                </div>
+                <textarea id="hsae-import-section-textarea" class="fld emby-textarea" rows="14"
+                    placeholder="{ &quot;name&quot;: &quot;My Section&quot;, ... }"
+                    style="width: 100%; font-family: monospace; font-size: 0.9em; line-height: 1.5;"></textarea>
+            `,
+            footer: `
+                <button type="button" class="emby-button raised" id="hsae-import-cancel-btn"
+                    style="padding: 0.75em 2em; font-size: 1em; margin-right: 1em;">
+                    <span>Cancel</span>
+                </button>
+                <button type="button" class="emby-button raised button-submit" id="hsae-import-confirm-btn"
+                    style="padding: 0.75em 2em; font-size: 1em; font-weight: 500;">
+                    <span>Import</span>
+                </button>
+            `,
+            closeOnBackdrop: true,
+            closeOnEscape: true,
+            onOpen: (modal) => {
+                const textarea = modal.dialogContent?.querySelector('#hsae-import-section-textarea');
+                setTimeout(() => textarea?.focus(), 100);
+                modal.dialogFooter?.querySelector('#hsae-import-cancel-btn')?.addEventListener('click', () => {
+                    window.ModalSystem.close(HSAE_SECTION_IMPORT_MODAL_ID);
+                });
+                modal.dialogFooter?.querySelector('#hsae-import-confirm-btn')?.addEventListener('click', () => {
+                    const text = textarea?.value || '';
+                    let parsed = null;
+                    try {
+                        const raw = JSON.parse(String(text));
+                        if (Array.isArray(raw) && raw.length !== 1) {
+                            showHsaeToast('Not a single section');
+                            return;
+                        }
+                        parsed = parseSectionImportPayload(text);
+                    } catch (_) {
+                        parsed = null;
+                    }
+                    if (!parsed) {
+                        showHsaeToast('Invalid section JSON');
+                        return;
+                    }
+                    window.ModalSystem.close(HSAE_SECTION_IMPORT_MODAL_ID);
+                    if (typeof onImport === 'function') onImport(parsed);
+                });
+            }
+        });
+    }
+
+    function showRestoreDefaultsConfirmModal(modalInstance, diffs, onProceed) {
+        if (!window.ModalSystem) {
+            showHsaeToast('Unable to open restore dialog');
+            return;
+        }
+        if (window.ModalSystem.isOpen?.(HSAE_RESTORE_DEFAULTS_MODAL_ID)) {
+            window.ModalSystem.close(HSAE_RESTORE_DEFAULTS_MODAL_ID);
+        }
+        const matching = !diffs?.length;
+        const rowsHtml = matching
+            ? `<div class="listItemBodyText" style="margin-top: 0.75em;">Already matching defaults</div>`
+            : `
+                <div class="hsae-restore-diff-table" style="margin-top: 0.85em; max-height: 16rem; overflow: auto;">
+                    <div class="hsae-restore-diff-row hsae-restore-diff-head">
+                        <span>Field</span><span>Current</span><span>Default</span>
+                    </div>
+                    ${diffs.map((d) => `
+                        <div class="hsae-restore-diff-row">
+                            <span title="${escapeHtml(d.key)}">${escapeHtml(d.key)}</span>
+                            <span title="${escapeHtml(d.current)}">${escapeHtml(d.current)}</span>
+                            <span title="${escapeHtml(d.default)}">${escapeHtml(d.default)}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        const content = document.createElement('div');
+        content.innerHTML = `
+            <div class="listItemBodyText" style="line-height: 1.5;">
+                Restoring defaults will save the KefinTweaks defaults for this section and reload the editor.
+                Enabled status and order are kept.
+            </div>
+            ${rowsHtml}
+        `;
+        const footer = document.createElement('div');
+        footer.style.display = 'flex';
+        footer.style.gap = '0.5em';
+        footer.style.justifyContent = 'flex-end';
+        footer.innerHTML = `
+            <button type="button" class="emby-button raised" id="hsae-restore-cancel">Cancel</button>
+            <button type="button" class="emby-button raised block button-submit" id="hsae-restore-proceed"
+                ${matching ? 'disabled' : ''}>Restore Defaults</button>
+        `;
+        window.ModalSystem.create({
+            id: HSAE_RESTORE_DEFAULTS_MODAL_ID,
+            title: 'Restore Defaults',
+            content,
+            footer,
+            closeOnBackdrop: true,
+            closeOnEscape: true,
+            showCloseButton: true,
+            fixedSize: false,
+            dialogStyle: {
+                width: 'min(36rem, calc(100vw - 2rem))',
+                maxWidth: '36rem'
+            },
+            onOpen: (modal) => {
+                modal.dialogFooter?.querySelector('#hsae-restore-cancel')?.addEventListener('click', () => {
+                    window.ModalSystem.close(HSAE_RESTORE_DEFAULTS_MODAL_ID);
+                });
+                modal.dialogFooter?.querySelector('#hsae-restore-proceed')?.addEventListener('click', async () => {
+                    if (matching) return;
+                    const proceedBtn = modal.dialogFooter?.querySelector('#hsae-restore-proceed');
+                    const cancelBtn = modal.dialogFooter?.querySelector('#hsae-restore-cancel');
+                    if (proceedBtn) proceedBtn.disabled = true;
+                    if (cancelBtn) cancelBtn.disabled = true;
+                    try {
+                        window.ModalSystem.close(HSAE_RESTORE_DEFAULTS_MODAL_ID);
+                        if (typeof onProceed === 'function') await onProceed();
+                    } catch (e) {
+                        console.warn('[HSAE] Restore defaults failed:', e);
+                        showHsaeToast('Failed to restore defaults');
+                    }
+                });
+            }
+        });
+    }
+
+    function getEligibleTroubleshootQueries(section) {
+        const queries = Array.isArray(section?.queries) ? section.queries : [];
+        return queries
+            .map((query, index) => ({ query, index, sourceType: inferQuerySourceType(query) }))
+            .filter((entry) => entry.sourceType === 'jellyfin' || entry.sourceType === 'static');
+    }
+
+    function formatTroubleshootRequestUrl(method, url) {
+        const methodLabel = method || 'GET';
+        if (!url || typeof url !== 'string') {
+            return `${methodLabel} (no URL)`;
+        }
+        try {
+            const parsed = new URL(url, window.location?.origin || undefined);
+            const lines = [`${methodLabel} ${parsed.origin}${parsed.pathname}`];
+            parsed.searchParams.forEach((value, key) => {
+                let decoded = value;
+                try {
+                    decoded = decodeURIComponent(value);
+                } catch (_) { /* keep raw */ }
+                lines.push(`${key}=${decoded}`);
+            });
+            return lines.join('\n');
+        } catch (_) {
+            const qIndex = url.indexOf('?');
+            if (qIndex < 0) return `${methodLabel} ${url}`;
+            const base = url.slice(0, qIndex);
+            const query = url.slice(qIndex + 1);
+            const lines = [`${methodLabel} ${base}`];
+            query.split('&').forEach((pair) => {
+                if (!pair) return;
+                const eq = pair.indexOf('=');
+                const key = eq >= 0 ? pair.slice(0, eq) : pair;
+                const rawVal = eq >= 0 ? pair.slice(eq + 1) : '';
+                let decodedKey = key;
+                let decodedVal = rawVal;
+                try { decodedKey = decodeURIComponent(key); } catch (_) { /* keep */ }
+                try { decodedVal = decodeURIComponent(rawVal); } catch (_) { /* keep */ }
+                lines.push(`${decodedKey}=${decodedVal}`);
+            });
+            return lines.join('\n');
+        }
+    }
+
+    function troubleshootQueryLabel(entry) {
+        const name = entry?.name != null ? String(entry.name).trim() : '';
+        if (name) return name;
+        return `Query ${entry?.index ?? '?'}`;
+    }
+
+    function formatTroubleshootSectionConfigText(section) {
+        const eligible = getEligibleTroubleshootQueries(section);
+        if (!eligible.length) return '(no eligible queries)';
+        return eligible.map(({ query, index }) => {
+            const label = troubleshootQueryLabel({
+                index,
+                name: query?.name != null ? String(query.name).trim() : ''
+            });
+            const clone = deepCloneJson(query) || {};
+            // Drop ephemeral editor-only keys from the displayed config object
+            Object.keys(clone).forEach((key) => {
+                if (key.startsWith('_') && key !== '_sourceType') delete clone[key];
+            });
+            return `=== ${label} ===\n${JSON.stringify(clone, null, 2)}`;
+        }).join('\n\n');
+    }
+
+    function formatTroubleshootRequestText(payload) {
+        const entries = Array.isArray(payload?.queries) ? payload.queries : [];
+        if (!entries.length) return '(no requests)';
+        return entries.map((entry) => {
+            const header = `=== ${troubleshootQueryLabel(entry)} ===`;
+            const req = entry.request;
+            if (!req) return `${header}\n(no request)`;
+            if (req.error) return `${header}\nERROR: ${req.error}`;
+            if (typeof req.url === 'string') {
+                return `${header}\n${formatTroubleshootRequestUrl(req.method, req.url)}`;
+            }
+            // Non-URL request object (e.g. cache marker)
+            return `${header}\n${JSON.stringify(req, null, 2)}`;
+        }).join('\n\n');
+    }
+
+    function formatTroubleshootResponseText(payload) {
+        const entries = Array.isArray(payload?.queries) ? payload.queries : [];
+        if (!entries.length) return '(no responses)';
+        return entries.map((entry) => {
+            const header = `=== ${troubleshootQueryLabel(entry)} ===`;
+            return `${header}\n${JSON.stringify(entry.response ?? null, null, 2)}`;
+        }).join('\n\n');
+    }
+
+    function countTroubleshootItems(response) {
+        if (!response || typeof response !== 'object') return null;
+        if (response.error || response.skipped) return null;
+        if (Array.isArray(response.Items)) return response.Items.length;
+        if (Array.isArray(response.items)) return response.items.length;
+        if (Array.isArray(response)) return response.length;
+        if (typeof response.TotalRecordCount === 'number') return response.TotalRecordCount;
+        return null;
+    }
+
+    function measureTroubleshootResponseSize(response) {
+        if (response == null) return null;
+        try {
+            const json = typeof response === 'string' ? response : JSON.stringify(response);
+            if (typeof TextEncoder !== 'undefined') {
+                return new TextEncoder().encode(json).length;
+            }
+            return json.length;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function formatTroubleshootDuration(ms) {
+        if (ms == null || !Number.isFinite(ms)) return '—';
+        if (ms < 1000) return `${Math.round(ms)} ms`;
+        return `${(ms / 1000).toFixed(2)} s`;
+    }
+
+    function formatTroubleshootSize(bytes) {
+        if (bytes == null || !Number.isFinite(bytes)) return '—';
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    }
+
+    function buildTroubleshootSummaryHtml(payload) {
+        const entries = Array.isArray(payload?.queries) ? payload.queries : [];
+        if (!entries.length) {
+            return '<div class="listItemBodyText secondary">No query results.</div>';
+        }
+        const rows = entries.map((entry) => {
+            const stats = entry.stats || {};
+            const itemCount = stats.itemCount != null ? String(stats.itemCount) : '—';
+            const duration = formatTroubleshootDuration(stats.durationMs);
+            const size = formatTroubleshootSize(stats.responseBytes);
+            return `
+                <tr>
+                    <td>${escapeHtml(troubleshootQueryLabel(entry))}</td>
+                    <td>${escapeHtml(itemCount)}</td>
+                    <td>${escapeHtml(duration)}</td>
+                    <td>${escapeHtml(size)}</td>
+                </tr>
+            `;
+        }).join('');
+        return `
+            <table class="hsae-troubleshoot-summary">
+                <thead>
+                    <tr>
+                        <th>Query</th>
+                        <th>Item Count</th>
+                        <th>Response Time</th>
+                        <th>Response Size</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        `;
+    }
+
+    function attachTroubleshootStats(entry, response, durationMs) {
+        entry.stats = {
+            itemCount: countTroubleshootItems(response),
+            durationMs: durationMs != null && Number.isFinite(durationMs) ? durationMs : null,
+            responseBytes: measureTroubleshootResponseSize(response)
+        };
+        return entry;
+    }
+
+    async function runSectionTroubleshoot(section) {
+        const apiHelper = window.apiHelper;
+        const userId = window.ApiClient?.getCurrentUserId?.();
+        const serverUrl = window.ApiClient?.serverAddress?.();
+        if (!apiHelper?.buildQueryFromSection || !apiHelper?.getQuery) {
+            return {
+                queries: [attachTroubleshootStats(
+                    { index: -1, request: null, response: { error: 'apiHelper unavailable' } },
+                    { error: 'apiHelper unavailable' },
+                    null
+                )]
+            };
+        }
+        if (!userId || !serverUrl) {
+            return {
+                queries: [attachTroubleshootStats(
+                    { index: -1, request: null, response: { error: 'Unable to get user ID or server URL' } },
+                    { error: 'Unable to get user ID or server URL' },
+                    null
+                )]
+            };
+        }
+
+        const isSpotlight = section?.renderMode === 'Spotlight' || section?.spotlight === true;
+        const sectionType = section?.type || deriveSectionSurfaceType(section);
+        const eligible = getEligibleTroubleshootQueries(section);
+        const results = [];
+
+        for (const { query, index } of eligible) {
+            const queryName = query?.name != null ? String(query.name).trim() : '';
+            let built;
+            try {
+                built = apiHelper.buildQueryFromSection(query, userId, serverUrl, isSpotlight, { sectionType });
+            } catch (err) {
+                const errBody = { error: err?.message || String(err) };
+                results.push(attachTroubleshootStats({
+                    index,
+                    name: queryName || null,
+                    request: { method: 'GET', url: null, error: errBody.error },
+                    response: errBody
+                }, errBody, null));
+                continue;
+            }
+
+            if (typeof built !== 'string') {
+                const skipped = { skipped: true, reason: 'Non-URL request (e.g. cache dataSource)' };
+                results.push(attachTroubleshootStats({
+                    index,
+                    name: queryName || null,
+                    request: built,
+                    response: skipped
+                }, skipped, null));
+                continue;
+            }
+
+            const entry = {
+                index,
+                name: queryName || null,
+                request: { method: 'GET', url: built },
+                response: null
+            };
+            const started = (typeof performance !== 'undefined' && performance.now)
+                ? performance.now()
+                : Date.now();
+            try {
+                entry.response = await apiHelper.getQuery(built, { useCache: false, forceRefresh: true });
+            } catch (err) {
+                entry.response = { error: err?.message || String(err) };
+            }
+            const ended = (typeof performance !== 'undefined' && performance.now)
+                ? performance.now()
+                : Date.now();
+            attachTroubleshootStats(entry, entry.response, ended - started);
+            results.push(entry);
+        }
+
+        return { queries: results };
+    }
+
+    function showSectionTroubleshootModal(modalInstance) {
+        if (!window.ModalSystem) {
+            showHsaeToast('Unable to open troubleshoot modal');
+            return;
+        }
+        if (window.ModalSystem.isOpen?.(HSAE_TROUBLESHOOT_MODAL_ID)) {
+            window.ModalSystem.close(HSAE_TROUBLESHOOT_MODAL_ID);
+        }
+
+        const dialog = modalInstance?.dialogContainer || modalInstance?.dialogContent;
+        const state = modalInstance?._hsaeState;
+        if (!dialog || !state) return;
+
+        const original = state.context?.originalSection || state.section || {};
+        const section = collectData(dialog, original);
+        if (!section) return;
+        if (state.section?.id) section.id = state.section.id;
+
+        // Quiet no-op if source/queries flipped mid-click (button should already be hidden)
+        if (!getEligibleTroubleshootQueries(section).length) return;
+
+        const canCopy = canUseClipboardWrite();
+        const sectionConfigText = formatTroubleshootSectionConfigText(section);
+        window.ModalSystem.create({
+            id: HSAE_TROUBLESHOOT_MODAL_ID,
+            title: 'Troubleshoot',
+            content: `
+                <div id="hsae-troubleshoot-summary" class="hsae-troubleshoot-summary-wrap">
+                    <div class="listItemBodyText secondary">Loading summary…</div>
+                </div>
+                <div class="hsae-troubleshoot-panels">
+                    <div class="hsae-troubleshoot-panel">
+                        <div class="listItemBodyText" style="margin-bottom: 0.35em; font-weight: 500;">Section Config</div>
+                        <textarea id="hsae-troubleshoot-section-config" class="fld emby-textarea hsae-troubleshoot-textarea" rows="10"
+                            readonly></textarea>
+                    </div>
+                    <div class="hsae-troubleshoot-panel">
+                        <div class="listItemBodyText" style="margin-bottom: 0.35em; font-weight: 500;">Request</div>
+                        <textarea id="hsae-troubleshoot-request" class="fld emby-textarea hsae-troubleshoot-textarea" rows="12"
+                            readonly></textarea>
+                    </div>
+                    <div class="hsae-troubleshoot-panel">
+                        <div class="listItemBodyText" style="margin-bottom: 0.35em; font-weight: 500;">Response</div>
+                        <textarea id="hsae-troubleshoot-response" class="fld emby-textarea hsae-troubleshoot-textarea" rows="12"
+                            readonly></textarea>
+                    </div>
+                </div>
+            `,
+            footer: `
+                ${canCopy ? `
+                <button type="button" class="emby-button raised button-submit" id="hsae-troubleshoot-copy-config-btn"
+                    style="padding: 0.75em 1.5em; font-size: 1em; font-weight: 500; margin-right: 0.5em;">
+                    <span>Copy config</span>
+                </button>
+                <button type="button" class="emby-button raised button-submit" id="hsae-troubleshoot-copy-request-btn"
+                    style="padding: 0.75em 1.5em; font-size: 1em; font-weight: 500; margin-right: 0.5em;" disabled>
+                    <span>Copy request</span>
+                </button>
+                <button type="button" class="emby-button raised button-submit" id="hsae-troubleshoot-copy-response-btn"
+                    style="padding: 0.75em 1.5em; font-size: 1em; font-weight: 500; margin-right: 1em;" disabled>
+                    <span>Copy response</span>
+                </button>` : ''}
+                <button type="button" class="emby-button raised" id="hsae-troubleshoot-close-btn"
+                    style="padding: 0.75em 2em; font-size: 1em;">
+                    <span>Close</span>
+                </button>
+            `,
+            closeOnBackdrop: true,
+            closeOnEscape: true,
+            dialogStyle: {
+                width: 'min(48rem, calc(100vw - 2rem))',
+                maxWidth: '48rem'
+            },
+            onOpen: (modal) => {
+                const summaryEl = modal.dialogContent?.querySelector('#hsae-troubleshoot-summary');
+                const configTa = modal.dialogContent?.querySelector('#hsae-troubleshoot-section-config');
+                const requestTa = modal.dialogContent?.querySelector('#hsae-troubleshoot-request');
+                const responseTa = modal.dialogContent?.querySelector('#hsae-troubleshoot-response');
+                const copyConfigBtn = modal.dialogFooter?.querySelector('#hsae-troubleshoot-copy-config-btn');
+                const copyRequestBtn = modal.dialogFooter?.querySelector('#hsae-troubleshoot-copy-request-btn');
+                const copyResponseBtn = modal.dialogFooter?.querySelector('#hsae-troubleshoot-copy-response-btn');
+                if (configTa) configTa.value = sectionConfigText;
+                if (requestTa) requestTa.value = 'Loading…';
+                if (responseTa) responseTa.value = 'Loading…';
+
+                modal.dialogFooter?.querySelector('#hsae-troubleshoot-close-btn')?.addEventListener('click', () => {
+                    window.ModalSystem.close(HSAE_TROUBLESHOOT_MODAL_ID);
+                });
+
+                const copyFrom = async (textarea, label) => {
+                    const text = textarea?.value || '';
+                    if (!text) return;
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        showHsaeToast(`${label} copied to clipboard`);
+                    } catch (_) {
+                        textarea?.focus();
+                        textarea?.select();
+                        showHsaeToast('Select and copy the text manually');
+                    }
+                };
+                copyConfigBtn?.addEventListener('click', () => copyFrom(configTa, 'Section config'));
+                copyRequestBtn?.addEventListener('click', () => copyFrom(requestTa, 'Request'));
+                copyResponseBtn?.addEventListener('click', () => copyFrom(responseTa, 'Response'));
+
+                const applyPayload = (payload) => {
+                    if (summaryEl) summaryEl.innerHTML = buildTroubleshootSummaryHtml(payload);
+                    if (requestTa) requestTa.value = formatTroubleshootRequestText(payload);
+                    if (responseTa) responseTa.value = formatTroubleshootResponseText(payload);
+                    if (copyRequestBtn) copyRequestBtn.disabled = false;
+                    if (copyResponseBtn) copyResponseBtn.disabled = false;
+                };
+
+                runSectionTroubleshoot(section).then(applyPayload).catch((err) => {
+                    const errBody = { error: err?.message || String(err) };
+                    applyPayload({
+                        queries: [attachTroubleshootStats(
+                            { index: -1, request: null, response: errBody },
+                            errBody,
+                            null
+                        )]
+                    });
+                });
+            }
+        });
+    }
+
+    function handleHeaderTroubleshoot(modalInstance) {
+        showSectionTroubleshootModal(modalInstance);
+    }
+
+    async function handleHeaderExport(modalInstance) {
+        const json = exportCurrentSectionJson(modalInstance);
+        if (!json) {
+            showHsaeToast('Unable to export section');
+            return;
+        }
+        try {
+            if (canUseClipboardWrite()) {
+                await navigator.clipboard.writeText(json);
+                showHsaeToast('Section copied to clipboard');
+                return;
+            }
+        } catch (_) { /* fall through to modal */ }
+        showSectionExportModal(json);
+    }
+
+    async function handleHeaderImport(modalInstance) {
+        const apply = (section) => {
+            applyImportedSection(modalInstance, section);
+            showHsaeToast('Section imported');
+        };
+        if (canUseClipboardRead()) {
+            try {
+                const text = await navigator.clipboard.readText();
+                let parsed = null;
+                try {
+                    const raw = JSON.parse(String(text));
+                    if (Array.isArray(raw) && raw.length !== 1) {
+                        showHsaeToast('Not a single section');
+                        return;
+                    }
+                    parsed = parseSectionImportPayload(text);
+                } catch (_) {
+                    parsed = null;
+                }
+                if (parsed) {
+                    apply(parsed);
+                    return;
+                }
+            } catch (_) { /* paste modal */ }
+        }
+        showSectionImportPasteModal(apply);
+    }
+
+    function handleHeaderRestoreDefaults(modalInstance) {
+        const state = modalInstance?._hsaeState;
+        const dialog = modalInstance?.dialogContainer || modalInstance?.dialogContent;
+        if (!state || !dialog) return;
+        const sectionId = state.section?.id;
+        const canonical = getCanonicalDefaultSection(sectionId);
+        if (!canonical) {
+            showHsaeToast('No default found for this section');
+            syncHeaderActions(modalInstance);
+            return;
+        }
+        const original = state.context?.originalSection || state.section || {};
+        const current = collectData(dialog, original) || deepCloneJson(state.section) || {};
+        if (state.section?.id) current.id = state.section.id;
+        const diffs = diffSectionAgainstDefault(current, canonical);
+        showRestoreDefaultsConfirmModal(modalInstance, diffs, async () => {
+            const merged = deepCloneJson(canonical) || {};
+            merged.id = current.id || sectionId;
+            if (Object.prototype.hasOwnProperty.call(current, 'enabled')) merged.enabled = current.enabled;
+            if (Object.prototype.hasOwnProperty.call(current, 'order')) merged.order = current.order;
+            if (current.deleted === true) merged.deleted = true;
+
+            const callbacks = modalInstance._hsaeCallbacks || {};
+            const persist = typeof callbacks.persistSection === 'function'
+                ? callbacks.persistSection
+                : (typeof callbacks.onSave === 'function' ? callbacks.onSave : null);
+
+            if (persist) {
+                await persist(merged, { quiet: true });
+                if (typeof callbacks.remountAfterPersist === 'function') {
+                    callbacks.remountAfterPersist(merged);
+                } else {
+                    applyImportedSection(modalInstance, merged);
+                }
+            } else {
+                // No persist path (e.g. create flow): update editor only
+                applyImportedSection(modalInstance, merged);
+            }
+            showHsaeToast('Defaults restored');
+        });
+    }
+
+    function getEditorItemSource(modalInstance) {
+        const state = modalInstance?._hsaeState;
+        const root = modalInstance?.dialogContent;
+        const fromDom = root?.querySelector?.('.hsae-source-card.hsae-active[data-item-source]')?.dataset?.itemSource;
+        if (fromDom) return fromDom;
+        const hsaeRoot = root?.classList?.contains('hsae-root') ? root : root?.querySelector?.('.hsae-root');
+        if (hsaeRoot?.dataset?.itemSource) return hsaeRoot.dataset.itemSource;
+        return state?.itemSource || inferItemSource(state?.section) || 'jellyfin';
+    }
+
+    function getEditorQueriesForTroubleshoot(modalInstance) {
+        const state = modalInstance?._hsaeState;
+        const root = modalInstance?.dialogContent;
+        const editors = root?.querySelectorAll?.('.query-editor');
+        if (editors?.length) {
+            return Array.from(editors).map((editor) => {
+                const index = parseInt(editor.dataset.queryIndex, 10);
+                const sourceType = editor.querySelector(`#query-${index}-sourceType`)?.value
+                    || inferQuerySourceType(state?.queries?.[index]);
+                if (sourceType === 'static') return { _sourceType: 'static' };
+                if (sourceType === 'cache') return { dataSource: 'cache' };
+                return {};
+            });
+        }
+        return Array.isArray(state?.queries) ? state.queries : [];
+    }
+
+    function sectionHasTroubleshootEligibleQueries(queries) {
+        return (queries || []).some((q) => {
+            const type = inferQuerySourceType(q);
+            return type === 'jellyfin' || type === 'static';
+        });
+    }
+
+    function canShowTroubleshoot(modalInstance) {
+        if (getEditorItemSource(modalInstance) !== 'jellyfin') return false;
+        return sectionHasTroubleshootEligibleQueries(getEditorQueriesForTroubleshoot(modalInstance));
+    }
+
+    function syncHeaderActions(modalInstance) {
+        const actions = modalInstance?.dialogHeader?.querySelector('.hsae-header-actions');
+        if (!actions) return;
+        const state = modalInstance._hsaeState;
+        const section = state?.section || {};
+        const context = state?.context || {};
+        const isDefault = isKefinDefaultSection(section, context);
+        const importBtn = actions.querySelector('[data-hsae-header-action="import"]');
+        const exportBtn = actions.querySelector('[data-hsae-header-action="export"]');
+        const restoreBtn = actions.querySelector('[data-hsae-header-action="restore"]');
+        const troubleshootBtn = actions.querySelector('[data-hsae-header-action="troubleshoot"]');
+        if (importBtn) importBtn.hidden = isDefault;
+        if (exportBtn) exportBtn.hidden = isDefault;
+        if (restoreBtn) {
+            restoreBtn.hidden = !isDefault;
+            if (isDefault && !getCanonicalDefaultSection(section.id)) {
+                restoreBtn.hidden = true;
+            }
+        }
+        if (troubleshootBtn) {
+            troubleshootBtn.hidden = !canShowTroubleshoot(modalInstance);
+        }
+    }
+
+    function createHeaderActionButton(action, title, icon) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('is', 'paper-icon-button-light');
+        btn.className = 'paper-icon-button-light autoSize hsae-header-action-btn';
+        btn.title = title;
+        btn.setAttribute('aria-label', title);
+        btn.dataset.hsaeHeaderAction = action;
+        btn.innerHTML = `<span class="material-icons">${escapeHtml(icon)}</span>`;
+        return btn;
+    }
+
     function setupModalHeader(modalInstance, options = {}) {
         if (!modalInstance?.dialogHeader) return;
         if (modalInstance.dialogHeader.dataset.hsaeHeaderSetup === 'true') {
@@ -3675,6 +4776,7 @@
                 titleEl.textContent = options.title;
             }
             updateSectionNameBadge(modalInstance);
+            syncHeaderActions(modalInstance);
             return;
         }
         modalInstance.dialogHeader.dataset.hsaeHeaderSetup = 'true';
@@ -3701,11 +4803,37 @@
 
         headerMain.appendChild(titleWrap);
 
+        const actions = document.createElement('div');
+        actions.className = 'hsae-header-actions';
+        const importBtn = createHeaderActionButton('import', 'Import', 'content_paste');
+        const exportBtn = createHeaderActionButton('export', 'Export', 'content_copy');
+        const restoreBtn = createHeaderActionButton('restore', 'Restore Defaults', 'settings_backup_restore');
+        const troubleshootBtn = createHeaderActionButton('troubleshoot', 'Troubleshoot', 'troubleshoot');
+        actions.appendChild(importBtn);
+        actions.appendChild(exportBtn);
+        actions.appendChild(restoreBtn);
+        actions.appendChild(troubleshootBtn);
+        headerMain.appendChild(actions);
+
+        actions.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-hsae-header-action]');
+            if (!btn || !actions.contains(btn) || btn.hidden) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const action = btn.dataset.hsaeHeaderAction;
+            if (action === 'export') handleHeaderExport(modalInstance);
+            else if (action === 'import') handleHeaderImport(modalInstance);
+            else if (action === 'restore') handleHeaderRestoreDefaults(modalInstance);
+            else if (action === 'troubleshoot') handleHeaderTroubleshoot(modalInstance);
+        });
+
         if (closeBtn) {
             modalInstance.dialogHeader.insertBefore(headerMain, closeBtn);
         } else {
             modalInstance.dialogHeader.prepend(headerMain);
         }
+
+        syncHeaderActions(modalInstance);
     }
 
     function attachListeners(modalInstance, context, callbacks = {}) {
@@ -3714,7 +4842,12 @@
         modalInstance._hsaePreviewInitialized = false;
 
         const section = context.section || {};
+        // Ensure collect/export/troubleshoot always have a stable original base
+        if (!context.originalSection) {
+            context = { ...context, originalSection: deepCloneJson(section) };
+        }
         modalInstance._hsaeState = buildEditorStateFromSection(section, context);
+        modalInstance._hsaeCallbacks = callbacks || {};
 
         const stateHost = modalInstance.dialogContainer || modalInstance.dialogContent;
         if (stateHost) stateHost._hsaeState = modalInstance._hsaeState;
@@ -3735,10 +4868,11 @@
             saveBtn.dataset.listenerAttached = 'true';
             saveBtn.addEventListener('click', async () => {
                 const dialog = modalInstance.dialogContainer || modalInstance.dialogContent;
-                const originalSection = context.originalSection || section;
+                const liveState = modalInstance._hsaeState;
+                const originalSection = liveState?.context?.originalSection || context.originalSection || section;
                 const sectionData = collectData(dialog, originalSection);
                 if (!sectionData) return;
-                sectionData.id = section.id || originalSection.id;
+                sectionData.id = liveState?.section?.id || section.id || originalSection.id;
                 if (typeof updateSectionInConfig === 'function') {
                     updateSectionInConfig(sectionData);
                 }

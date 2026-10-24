@@ -204,7 +204,7 @@
             name: 'skinManager-configuration',
             script: '../configuration/skinManager-configuration.js',
             css: null,
-            dependencies: ['modal', 'toaster', 'utils'],
+            dependencies: ['modal', 'toaster', 'utils', 'skinConfigLegacyDefaults', 'skinConfig'],
             description: 'Skin manager configuration for KefinTweaks'
         },
         {
@@ -945,7 +945,8 @@
             // g3: Jellyfin 12's URI-encoded app name in version detection.
             // g4: our files carry ?v=<config.assetVersion>.
             // g5: upstream's shared joinAssetUrl and KefinTweaksInjectorAttached.
-            'g5',
+            // g6: upstream's skinConfig dependencies for skinManager-configuration.
+            'g6',
             root,
             String(majorVersion == null ? 'unknown' : majorVersion),
             featuresDisabled ? 'config-only' : 'full',

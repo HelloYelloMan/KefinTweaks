@@ -12,6 +12,14 @@
     const DISCOVERY_SECTIONS_PER_GROUP = 100;
     /** IntersectionObserver rootMargin for discovery section progressive enhance (batches + any discovery enhance). */
     const DISCOVERY_ENHANCE_ROOT_MARGIN = '30% 0px 30% 0px';
+    /** How many viewports of content to keep below the fold before idling infinite discovery. */
+    const DISCOVERY_LEAD_VIEWPORTS = 1.5;
+    /** Max consecutive auto-fill groups in one wave (empty/tiny sections). */
+    const DISCOVERY_LEAD_FILL_MAX_GROUPS = 8;
+    /** Consecutive all-empty discovery groups before marking exhausted. */
+    const DISCOVERY_EMPTY_GROUP_STREAK_MAX = 6;
+    /** Settle delay after paint before counting surviving sections (enhance may remove empties). */
+    const DISCOVERY_EMPTY_GROUP_SETTLE_MS = 400;
 
     // Dependencies
     const ApiHelper = window.apiHelper;
@@ -104,6 +112,10 @@
         discoveryLastInputAt: 0,     // last wheel/touch/key/scrollbar input (performance.now)
         discoveryLoadEndedAt: 0,     // when the last discovery group finished rendering
         discoveryInputHandler: null,
+        /** Consecutive auto-fill loads while lead margin is short (reset when lead OK or user scroll loads). */
+        discoveryLeadFillCount: 0,
+        /** Consecutive discovery groups where every section enhanced to empty / was removed. */
+        discoveryEmptyGroupStreak: 0,
         discoveryMode: null, // 'infinite' | 'chevron'
         infiniteScrollHandler: null,
         discoveryWheelHandler: null,
@@ -233,7 +245,7 @@
             el.classList.remove('show-focus');
             el.classList.remove('discovery-load-more-focusable');
             if (state.discoverySectionsRemain === false || getDiscoveryHomePageEl()?.dataset?.discoveryExhausted === 'true') {
-                el.setAttribute('aria-label', 'No More Content to Discover');
+                el.setAttribute('aria-label', "We've run out of suggestions!");
             } else {
                 el.removeAttribute('aria-label');
             }
@@ -355,9 +367,15 @@
     }
 
     function markDiscoveryExhausted() {
+        if (state.discoverySectionsRemain === false
+            && getDiscoveryHomePageEl()?.dataset?.discoveryExhausted === 'true') {
+            return;
+        }
         state.discoverySectionsRemain = false;
         state.discoveryBuffer = null;
         state.discoveryGroupRemainder = [];
+        state.discoveryEmptyGroupStreak = 0;
+        state.discoveryLeadFillCount = 0;
         removeDiscoveryScrollListeners();
         setDiscoveryPageAttrs({ ready: true, infinite: false, exhausted: true });
         const loadingIndicator = createDiscoveryLoadingIndicator(
@@ -369,7 +387,51 @@
             loadingIndicator.style.display = '';
             syncDiscoveryLoadMoreFocus(loadingIndicator);
         }
-        LOG('Discovery exhausted — No More Content to Discover');
+        LOG("Discovery exhausted — We've run out of suggestions!");
+    }
+
+    /**
+     * After a group paints, wait for enhance/empty dismiss, then update empty-group streak.
+     * @param {Element} container
+     * @param {Array<{ config?: { id?: string } }>} bufferedSections
+     */
+    function scheduleDiscoveryEmptyGroupStreakCheck(container, bufferedSections) {
+        const ids = (bufferedSections || [])
+            .map((s) => s?.config?.id)
+            .filter((id) => id != null)
+            .map((id) => String(id));
+        if (!ids.length || !container) return;
+
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    if (state.discoverySectionsRemain === false) return;
+                    if (!isDiscoveryHomeContext()) return;
+
+                    const survivors = ids.filter((id) => {
+                        const escaped =
+                            typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+                                ? CSS.escape(id)
+                                : id.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                        const el = container.querySelector(`[data-section-id="${escaped}"]`);
+                        return !!(el && el.isConnected);
+                    });
+
+                    if (survivors.length === 0) {
+                        state.discoveryEmptyGroupStreak += 1;
+                        LOG('Discovery group left no surviving sections', {
+                            streak: state.discoveryEmptyGroupStreak,
+                            groupSize: ids.length,
+                        });
+                        if (state.discoveryEmptyGroupStreak >= DISCOVERY_EMPTY_GROUP_STREAK_MAX) {
+                            markDiscoveryExhausted();
+                        }
+                    } else {
+                        state.discoveryEmptyGroupStreak = 0;
+                    }
+                }, DISCOVERY_EMPTY_GROUP_SETTLE_MS);
+            });
+        });
     }
 
     // Legacy helper kept for compatibility – no longer used in the main flow
@@ -662,6 +724,13 @@
         homeScreenConfigPromise = null;
         LOG('Invalidated home screen config', reason || '');
         // keep homeScreenConfigResult until a newer resolve replaces it (stale-ok for chrome/paint)
+    }
+
+    /** After User > Home prefs save/restore: drop cached filtered sections so next home rebuild re-reads prefs. */
+    function notifyUserHomePreferencesChanged(reason) {
+        invalidateHomeScreenConfig(reason || 'userHomePreferencesChanged');
+        sectionCache.renderedSections = [];
+        sectionCache.fragmentCache = null;
     }
 
     function ensureHomeScreenConfig() {
@@ -1317,11 +1386,6 @@
                 enhanceOnVisible: true,
             });
 
-            // If MediaBar plugin is in use, call LayoutSync.update() to update the layout
-            if (typeof LayoutSync !== 'undefined' && LayoutSync && typeof LayoutSync.update === 'function') {
-                LayoutSync.update();
-            }
-
             // Allow deferred library-cache crawls to start (movies/series/people scheduleBootstrap)
             if (!state.homePaintedEventFired) {
                 state.homePaintedEventFired = true;
@@ -1415,7 +1479,7 @@
                 LOG('No more discovery sections available for buffer.');
                 state.discoveryBuffer = [];
                 state.discoveryGroupRemainder = [];
-                state.discoverySectionsRemain = false;
+                markDiscoveryExhausted();
                 return state.discoveryBuffer;
             }
 
@@ -1437,7 +1501,7 @@
             if (!state.discoveryBuffer.length) {
                 // Only exhaust when this chunk failed AND nothing remains to try next
                 if (!state.discoveryGroupRemainder?.length) {
-                    state.discoverySectionsRemain = false;
+                    markDiscoveryExhausted();
                 }
             }
 
@@ -1476,6 +1540,8 @@
         state.discoverySectionsRemain = true;
         state.discoveryNeedsMoreScroll = false;
         state.discoveryGroupRemainder = [];
+        state.discoveryEmptyGroupStreak = 0;
+        state.discoveryLeadFillCount = 0;
 
         if (PRE_FETCH_DISCOVERY_DATA) {
             ensureDiscoveryBuffer();
@@ -1496,6 +1562,57 @@
             setDiscoveryPageAttrs({ ready: true, infinite: false, exhausted: false });
             setupChevronDiscoverMore(container);
         }
+    }
+
+    function getDiscoveryLeadPx() {
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
+        const windowHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
+        return documentHeight - (scrollTop + windowHeight);
+    }
+
+    function discoveryLeadNeedsMore() {
+        return getDiscoveryLeadPx() < window.innerHeight * DISCOVERY_LEAD_VIEWPORTS;
+    }
+
+    /**
+     * Infinite discovery: keep loading groups while content below the fold is
+     * shorter than the same lead margin used by the scroll handler (1.5 viewports).
+     */
+    function maybeFillDiscoveryViewport() {
+        if (state.discoveryMode !== 'infinite') return;
+        if (state.isRenderingDiscovery) return;
+        if (state.discoverySectionsRemain === false) return;
+        if (!isDiscoveryAllowedForActiveCategory()) return;
+        if (!isDiscoveryHomeContext()) return;
+
+        if (!discoveryLeadNeedsMore()) {
+            state.discoveryLeadFillCount = 0;
+            return;
+        }
+
+        if (state.discoveryLeadFillCount >= DISCOVERY_LEAD_FILL_MAX_GROUPS) {
+            LOG('Discovery lead fill capped; waiting for user scroll near bottom');
+            return;
+        }
+
+        state.discoveryLeadFillCount += 1;
+        state.discoveryNeedsMoreScroll = false;
+        LOG('Discovery lead short; loading next group without scroll', {
+            leadPx: Math.round(getDiscoveryLeadPx()),
+            fillCount: state.discoveryLeadFillCount,
+        });
+        renderNextDiscoveryGroup();
+    }
+
+    function scheduleMaybeFillDiscoveryViewport() {
+        if (state.discoveryMode !== 'infinite') return;
+        if (state.discoverySectionsRemain === false) return;
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                maybeFillDiscoveryViewport();
+            });
+        });
     }
 
     async function renderNextDiscoveryGroup() {
@@ -1571,6 +1688,8 @@
                 state.discoveryGroupIndex++;
             }
 
+            scheduleDiscoveryEmptyGroupStreakCheck(container, bufferedSections);
+
             state.discoveryBuffer = null;
             if (PRE_FETCH_DISCOVERY_DATA) {
                 ensureDiscoveryBuffer();
@@ -1604,6 +1723,8 @@
                 container.dataset.loadingDiscovery = 'false';
                 container.classList.remove('loading-discovery');
             }
+            // After layout settles: keep loading groups until lead margin is filled (infinite only)
+            scheduleMaybeFillDiscoveryViewport();
         }
     }
 
@@ -1825,11 +1946,7 @@
                 state.discoveryNeedsMoreScroll = false;
             }
 
-            const windowHeight = window.innerHeight;
-            const documentHeight = document.documentElement.scrollHeight;
-            const threshold = windowHeight * 1.5;
-
-            if (scrollTop + windowHeight < documentHeight - threshold) return;
+            if (!discoveryLeadNeedsMore()) return;
 
             if (state.discoveryScrollDebounceTimer) {
                 clearTimeout(state.discoveryScrollDebounceTimer);
@@ -1838,10 +1955,8 @@
                 state.discoveryScrollDebounceTimer = null;
                 if (state.isRenderingDiscovery || state.discoveryNeedsMoreScroll) return;
                 if (!isDiscoveryHomeContext()) return;
-                const st = window.pageYOffset || document.documentElement.scrollTop;
-                const wh = window.innerHeight;
-                const dh = document.documentElement.scrollHeight;
-                if (st + wh >= dh - wh * 1.5) {
+                if (discoveryLeadNeedsMore()) {
+                    state.discoveryLeadFillCount = 0;
                     renderNextDiscoveryGroup();
                 }
             }, 200);
@@ -3034,6 +3149,8 @@
         init: () => enqueueHomeViewJob({ type: 'home', hash: window.location.hash || '' }),
         refreshHomeSections,
         refreshHomeSectionById,
+        notifyUserHomePreferencesChanged,
+        scheduleMaybeFillDiscoveryViewport,
         resolveDiscoverySection: buildDiscoverySectionInstance,
         sectionHelper: () => window.sectionHelper,
         getActiveHomeCategory: () => homeChromeActiveCategory || 'none',
