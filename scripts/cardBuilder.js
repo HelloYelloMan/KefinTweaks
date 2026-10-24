@@ -1049,12 +1049,16 @@
         const items = Array.isArray(itemsData) ? itemsData : (itemsData?.Items || []);
         const format = String(sectionConfig?.cardFormat || '');
         if (!items.length || /thumb|backdrop|banner|logo|disc|clear|square/i.test(format)) return itemsData;
+        // A Primary card shows an episode's own still; only one without a
+        // picture falls back to the series poster.
+        const primaryFormat = format.toLowerCase() === 'primary';
         const need = new Set();
         for (const it of items) {
             if (!it || it.IsJellyseerr) continue;
             if (it.Type === 'Series' && it.PrimaryImageAspectRatio > 0) parentPosterRatio.set(it.Id, it.PrimaryImageAspectRatio);
             const showsSeries = it.SeriesId && it.SeriesPrimaryImageTag
-                && (it.Type === 'Episode' || (it.Type === 'Season' && !it.ImageTags?.Primary));
+                && ((it.Type === 'Episode' && !(primaryFormat && it.ImageTags?.Primary))
+                    || (it.Type === 'Season' && !it.ImageTags?.Primary));
             if (showsSeries && !parentPosterRatio.has(it.SeriesId)) need.add(it.SeriesId);
         }
         if (!need.size || typeof ApiClient === 'undefined') return itemsData;
@@ -4278,6 +4282,11 @@
             if (item.ImageTags?.Thumb) return hashes.Thumb?.[item.ImageTags.Thumb];
             return undefined;
         }
+        if (cardFormat === 'primary') {
+            if (item.ImageTags?.Primary) return hashes.Primary?.[item.ImageTags.Primary];
+            if (item.PrimaryImageTag) return hashes.Primary?.[item.PrimaryImageTag];
+            return undefined;
+        }
         if (cardFormat === 'series poster') {
             if (item.SeriesPrimaryImageTag) return undefined;
             if (item.ImageTags?.Primary) return hashes.Primary?.[item.ImageTags.Primary];
@@ -4503,6 +4512,25 @@
         return `fillHeight=${height}&fillWidth=${PORTRAIT_FILL_WIDTH}`;
     }
 
+    /* The Primary format: every card shows its item's own Primary -- an
+     * episode's still, a season's or series' poster -- and Poster Aspect makes
+     * each card that picture's shape at the row's height. So the box here is
+     * led by HEIGHT, the height a fanart poster gets above, and its width
+     * follows the picture: width-led like portraitImageParams, a 16:9 still
+     * came back 297x167 for a card 518px wide. A card with no Primary of its
+     * own shows its series poster, at the fanart shape. scale 2 is the big
+     * first card of a rows-2 row. */
+    function primaryImageParams(item, scale = 1) {
+        const ownPicture = !!(item?.ImageTags?.Primary || item?.PrimaryImageTag);
+        const ratio = ownPicture
+            && typeof item?.PrimaryImageAspectRatio === 'number'
+            && item.PrimaryImageAspectRatio > 0
+            ? item.PrimaryImageAspectRatio
+            : FANART_RATIO;
+        const height = Math.round(PORTRAIT_FILL_WIDTH / FANART_RATIO) * scale;
+        return `fillHeight=${height}&fillWidth=${Math.round(height * ratio)}`;
+    }
+
     function createJellyfinCardElement(
         item,
         overflowCard = false,
@@ -4558,10 +4586,12 @@
                 padderClass = 'cardPadder-banner';
                 imageParams = 'fillHeight=100&fillWidth=540';
             } else {
-                // portrait / poster / series poster (default)
+                // portrait / poster / series poster / primary (default)
                 cardClass = overflowCard ? 'overflowPortraitCard' : 'portraitCard';
                 padderClass = 'cardPadder-portrait';
-                imageParams = portraitImageParams(useParentCard ? null : item);
+                imageParams = cardFormat === 'primary'
+                    ? primaryImageParams(useParentCard ? null : item)
+                    : portraitImageParams(useParentCard ? null : item);
             }
         } else {
             // Use item type to determine card type
@@ -4582,7 +4612,11 @@
         }
 
         if (cardImageParams) {
-            imageParams = cardImageParams;
+            // The doubled size is a fixed 2:3 box for portrait; a Primary card
+            // doubles its own picture's shape instead.
+            imageParams = cardFormat === 'primary'
+                ? primaryImageParams(useParentCard ? null : item, 2)
+                : cardImageParams;
         }
 
         const cardLinkId = useParentCard && (item.SeriesId || item.ParentId) ? item.SeriesId || item.ParentId : itemId;
@@ -4746,6 +4780,19 @@
                 imageUrl = `${serverAddress}/Items/${item.SeriesId}/Images/Primary?${imageParams}&quality=96&tag=${item.SeriesPrimaryImageTag}`;
             } else if (item.PrimaryImageTag) {
                 imageUrl = `${serverAddress}/Items/${item.Id}/Images/Primary?${imageParams}&quality=96&tag=${item.PrimaryImageTag}`;
+            }
+        } else if (cardFormat === 'primary') {
+            // The item's own Primary; its series poster only when it has none.
+            if (useParentCard && item.SeriesPrimaryImageTag) {
+                imageUrl = `${serverAddress}/Items/${item.SeriesId}/Images/Primary?${imageParams}&quality=96&tag=${item.SeriesPrimaryImageTag}`;
+            } else if (item.ImageTags?.Primary) {
+                imageUrl = `${serverAddress}/Items/${item.Id}/Images/Primary?${imageParams}&quality=96&tag=${item.ImageTags.Primary}`;
+            } else if (item.PrimaryImageTag) {
+                imageUrl = `${serverAddress}/Items/${item.Id}/Images/Primary?${imageParams}&quality=96&tag=${item.PrimaryImageTag}`;
+            } else if (item.SeriesPrimaryImageTag) {
+                imageUrl = `${serverAddress}/Items/${item.SeriesId}/Images/Primary?${imageParams}&quality=96&tag=${item.SeriesPrimaryImageTag}`;
+            } else if (item.ImageTags?.Thumb) {
+                imageUrl = `${serverAddress}/Items/${item.Id}/Images/Thumb?${imageParams}&quality=96&tag=${item.ImageTags.Thumb}`;
             }
         } else if (cardFormat === 'portrait' || cardFormat === 'poster') {
             if ((useParentCard || item.Type === 'Episode') && item.SeriesPrimaryImageTag) {
@@ -8022,6 +8069,7 @@
             format === 'portrait' ||
             format === 'poster' ||
             format === 'series poster' ||
+            format === 'primary' ||
             format === 'square' ||
             format === 'disc'
         ) {

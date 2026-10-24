@@ -1282,7 +1282,7 @@
 
     const FALLBACK_SORT_ORDERS = ['Default', 'Random', 'SortName', 'DateCreated', 'CommunityRating'];
     const FALLBACK_SORT_ORDER_DIRECTIONS = ['Ascending', 'Descending'];
-    const FALLBACK_CARD_FORMATS = ['Poster', 'Thumb', 'Series Thumb', 'Series Poster', 'Backdrop', 'Square', 'Random', 'Button', 'Banner', 'Logo', 'Clear Art', 'Disc'];
+    const FALLBACK_CARD_FORMATS = ['Poster', 'Thumb', 'Series Thumb', 'Series Poster', 'Backdrop', 'Square', 'Random', 'Button', 'Banner', 'Logo', 'Clear Art', 'Disc', 'Primary'];
     const FALLBACK_SPOTLIGHT_LAYOUT_OPTIONS = [{ value: 'Border', label: 'Border' }, { value: 'Borderless', label: 'Borderless' }];
     const FALLBACK_SPOTLIGHT_SIZE_OPTIONS = [{ value: 'normal', label: 'Normal' }, { value: 'large', label: 'Large' }, { value: 'full', label: 'Full' }];
     const FALLBACK_SPOTLIGHT_TILE_COUNT_OPTIONS = [{ value: '1', label: '1' }, { value: '2', label: '2' }, { value: '3', label: '3' }];
@@ -2344,7 +2344,7 @@
         EnableUserData: { label: 'Enable User Data', type: 'boolean' }
     };
 
-    const CARD_FORMATS = ['Poster', 'Thumb', 'Backdrop', 'Square', 'Random', 'Button', 'Banner', 'Logo', 'Clear Art', 'Disc', 'Series Poster', 'Series Thumb'];
+    const CARD_FORMATS = ['Poster', 'Thumb', 'Backdrop', 'Square', 'Random', 'Button', 'Banner', 'Logo', 'Clear Art', 'Disc', 'Series Poster', 'Series Thumb', 'Primary'];
     const BADGE_FIELD_DESCRIPTIONS = {
         IncludeItemTypes: 'Limit results to these item types.',
         Genres: 'Filter results to items matching these genres.',

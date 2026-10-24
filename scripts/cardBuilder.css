@@ -3012,7 +3012,9 @@ html.sleekfin-main-ui .emby-scroller-container[data-section-id="liveTv-channels"
 	padding-top: calc(var(--rp-marquee-h) + var(--rp-inset));
 }
 [data-card-format="Poster"][data-border="retro-poster"] .card .cardPadder,
-[data-card-format="Poster"][data-border-style="retro-poster"] .card .cardPadder {
+[data-card-format="Poster"][data-border-style="retro-poster"] .card .cardPadder,
+[data-card-format="Primary"][data-border="retro-poster"] .card .cardPadder,
+[data-card-format="Primary"][data-border-style="retro-poster"] .card .cardPadder {
 	padding-top: initial;
 }
 [data-card-format="Banner"][data-border="retro-poster"] .card .cardPadder,
@@ -4679,6 +4681,7 @@ html.layout-tv .spotlight-section .spotlight-tagline {
 
 .rows-2.focus-1.emby-scroller-container[data-card-format="Poster"],
 .rows-2.focus-1.emby-scroller-container[data-card-format="Series Poster"],
+.rows-2.focus-1.emby-scroller-container[data-card-format="Primary"],
 .rows-2.focus-1.emby-scroller-container[data-card-format="Default"] {
 	--r2-small: 6.2vw;
 }
@@ -4701,6 +4704,7 @@ html.layout-tv .spotlight-section .spotlight-tagline {
 
 	.rows-2.focus-1.emby-scroller-container[data-card-format="Poster"],
 	.rows-2.focus-1.emby-scroller-container[data-card-format="Series Poster"],
+	.rows-2.focus-1.emby-scroller-container[data-card-format="Primary"],
 	.rows-2.focus-1.emby-scroller-container[data-card-format="Default"] {
 		--r2-small: 25vw;
 	}
