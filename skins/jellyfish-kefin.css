@@ -88,3 +88,18 @@ div.characterCard.card-hoverable.card:hover,
 .characterSplitPart.card-hoverable:hover {
   translate: 0 -4px;
 }
+
+/* The panel behind a character and their actor stays put. It is the pair's
+ * first card's ::before (Characters plugin, .characterPairStart), so lifting
+ * that card lifted the panel with it -- and lifting the second card did not.
+ * The first card lifts its box instead, which holds the picture, border and
+ * name, and leaves the panel where it is. */
+.itemsContainer > .card.characterPairStart.card-hoverable:hover {
+  translate: none !important;
+}
+.itemsContainer > .card.characterPairStart.card-hoverable > .cardBox {
+  transition: translate .18s ease;
+}
+.itemsContainer > .card.characterPairStart.card-hoverable:hover > .cardBox {
+  translate: 0 -4px;
+}
