@@ -26,3 +26,15 @@
 .layout-desktop .detailSection > #listChildrenCollapsible:has(.card[data-type="Season"]) {
   margin-left: -20.4vw;
 }
+
+/* At the size they had in the column. Jellyfish makes a poster card 15% of
+ * its row (theme.css, "Poster Card Size Reduction"), so the full width alone
+ * made them a third bigger (347px against 265 at 1784px). This is 15% of the
+ * column they came from: the row less the 20.4vw it gained. Only Poster
+ * Aspect's probe: the row's height is measured from it, and each card's width
+ * then follows its own picture. */
+@media (min-width: 50em) and (orientation: landscape) {
+  .layout-desktop .detailSection > #listChildrenCollapsible:has(.card[data-type="Season"]) .itemsContainer > .overflowPortraitCard[data-par-probe] {
+    width: calc(15% - 0.15 * 20.4vw) !important;
+  }
+}
