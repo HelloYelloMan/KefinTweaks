@@ -836,7 +836,18 @@
                 return false;
             }
 
-            row.style.display = 'none';
+            // The seasons' own title and cards, then the section only if that
+            // leaves it empty. Vault Tweaks draws a series' Specials row INSIDE
+            // this section, after the seasons, so the skins place it with them;
+            // hiding the whole section took the Specials row with it on exactly
+            // the series this fires for, one season plus specials.
+            Array.from(row.children)
+                .filter((child) => child.matches('.sectionTitle')
+                    || child.querySelector('.card[data-type="Season"]'))
+                .forEach((child) => { child.style.display = 'none'; });
+            if (!Array.from(row.children).some((child) => getComputedStyle(child).display !== 'none')) {
+                row.style.display = 'none';
+            }
             LOG('Hid season row: one season card visible');
             return true;
         };
