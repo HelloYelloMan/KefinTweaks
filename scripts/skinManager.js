@@ -2731,7 +2731,12 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
         const selectedSkin = SKINS_CONFIG.find(skin => skin.name === selectedSkinName);
         
         if (selectedSkin && selectedSkin.colorSchemes) {
-            const matchingScheme = selectedSkin.colorSchemes.find(scheme => scheme.url === url);
+            // The stored choice first: two schemes can share a file (Jellyfish's
+            // Default is its Liquid Glass), and the first by URL alone put the
+            // other one's name in the dropdown.
+            const storedSchemeName = localStorage.getItem(COLOR_SCHEMES_STORAGE_KEY);
+            const matchingScheme = selectedSkin.colorSchemes.find(scheme => scheme.url === url && scheme.name === storedSchemeName)
+                || selectedSkin.colorSchemes.find(scheme => scheme.url === url);
             if (matchingScheme) {
                 LOG(`Updated cssColorSchemes link to: ${url} for skin: ${selectedSkinName}`);
                 

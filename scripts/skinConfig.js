@@ -737,8 +737,10 @@
                 ],
                 colorSchemes: [
                     {
+                        // Liquid Glass, by choice: the scheme a viewer who
+                        // never picks one gets.
                         name: 'Default',
-                        url: ''
+                        url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/colors/liquidglass.css'
                     },
                     {
                         name: 'Aurora',
