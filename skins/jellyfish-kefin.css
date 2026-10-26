@@ -5,7 +5,7 @@
 /* Native dropdown popups: dark text on dark rows. Jellyfish fills
  * .emby-select-withcolor with its own colour and never declares a scheme, so
  * the browser paints the popup light-schemed -- the Abyss bug, explained in
- * abyss-kefin.css. Every Jellyfish colour scheme is on a black background, so
+ * abyss-kefin.css. Every Jellyfish colour scheme is on a dark background, so
  * no light case is forced dark. */
 :root {
   color-scheme: dark;

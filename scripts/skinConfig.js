@@ -741,6 +741,10 @@
                         url: ''
                     },
                     {
+                        name: 'Aurora',
+                        url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/colors/aurora.css'
+                    },
+                    {
                         name: 'Banana',
                         url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/colors/banana.css'
                     },
@@ -751,6 +755,10 @@
                     {
                         name: 'Coral',
                         url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/colors/coral.css'
+                    },
+                    {
+                        name: 'Forest',
+                        url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/colors/forest.css'
                     },
                     {
                         name: 'Grass',
@@ -765,8 +773,20 @@
                         url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/colors/jellyflix.css'
                     },
                     {
+                        name: 'Jellypurple',
+                        url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/colors/jellypurple.css'
+                    },
+                    {
                         name: 'Lavender',
                         url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/colors/lavender.css'
+                    },
+                    {
+                        name: 'Liquid Glass',
+                        url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/colors/liquidglass.css'
+                    },
+                    {
+                        name: 'Midnight',
+                        url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/colors/midnight.css'
                     },
                     {
                         name: 'Mint',
