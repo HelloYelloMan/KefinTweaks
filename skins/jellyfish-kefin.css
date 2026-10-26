@@ -30,11 +30,16 @@
 /* At the size they had in the column. Jellyfish makes a poster card 15% of
  * its row (theme.css, "Poster Card Size Reduction"), so the full width alone
  * made them a third bigger (347px against 265 at 1784px). This is 15% of the
- * column they came from: the row less the 20.4vw it gained. Only Poster
- * Aspect's probe: the row's height is measured from it, and each card's width
- * then follows its own picture. */
+ * column they came from: the section less the 20.4vw it gained, in container
+ * units, because Vault Tweaks can put the seasons and the Specials row side
+ * by side in columns only as wide as their cards, and 15% of one of those is
+ * nothing like 15% of the row. Only Poster Aspect's probe: the row's height
+ * is measured from it, and each card's width then follows its own picture. */
+.layout-desktop .detailSection > #listChildrenCollapsible:has(.card[data-type="Season"]) {
+  container-type: inline-size;
+}
 @media (min-width: 50em) and (orientation: landscape) {
   .layout-desktop .detailSection > #listChildrenCollapsible:has(.card[data-type="Season"]) .itemsContainer > .overflowPortraitCard[data-par-probe] {
-    width: calc(15% - 0.15 * 20.4vw) !important;
+    width: calc(0.15 * (100cqw - 20.4vw)) !important;
   }
 }
