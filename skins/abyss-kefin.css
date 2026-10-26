@@ -637,3 +637,16 @@ html:is(.layout-desktop, .layout-tablet, .layout-mobile) :is(#castContent, #gues
 	background: none;
 	border-color: transparent !important;
 }
+
+/* Tags under the genres, in the details table. Abyss shows jellyfin-web's own
+ * Tags line above the provider links, apart from the genres; hidden, Vault
+ * Tweaks' Media Tags draws its Tags row after Genres instead (it draws one
+ * wherever the skin hides that line). The row is not held to jellyfin-web's
+ * 44em cap on a details row, which wrapped a long tag list into four lines in
+ * the left half of the panel. */
+.itemTags {
+	display: none !important;
+}
+.detailsGroupItem.kefin-tags-row {
+	max-width: none !important;
+}
