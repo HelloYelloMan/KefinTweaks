@@ -146,3 +146,24 @@
 .cardScalable.vt-sg-frame > .cardOverlayContainer {
 	background: none;
 }
+
+/* A series' seasons run the full width of the page, from the poster's left
+ * edge, below it; the Specials row (Vault Tweaks) is inside the same section
+ * and comes with them. jellyfin-web keeps everything in
+ * .detailPagePrimaryContent right of the poster with padding-left: 32.45vw;
+ * the section takes that back as a negative margin, less the 3.3% side
+ * padding every full-width row below has. clear: left puts it under the
+ * poster, which floats, so it can never start beside it. Only a section
+ * holding season cards: the same section is a season's episode list, a
+ * playlist and an album's tracks.
+ *
+ * .detailSection is overflow: hidden on a series page (KefinTweaks'
+ * seriesEpisodes.css), which would clip it -- and would keep the clear inside
+ * it, where there is no float to clear. */
+.layout-desktop #itemDetailPage .detailSection:has(> #listChildrenCollapsible .card[data-type="Season"]) {
+	overflow: visible;
+}
+.layout-desktop .detailSection > #listChildrenCollapsible:has(.card[data-type="Season"]) {
+	clear: left;
+	margin-left: calc(3.3vw - 32.45vw);
+}

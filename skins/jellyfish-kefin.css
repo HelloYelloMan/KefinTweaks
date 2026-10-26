@@ -10,3 +10,19 @@
 :root {
   color-scheme: dark;
 }
+
+/* A series' seasons run the full width of the page, from the poster's left
+ * edge, below it; the Specials row (Vault Tweaks) is inside the same section
+ * and comes with them. Jellyfish keeps everything in .detailPagePrimaryContent
+ * right of the poster with padding-left: 20.4vw, so the section takes that
+ * back as a negative margin. Only a section holding season cards: the same
+ * section is a season's episode list, a playlist and an album's tracks.
+ *
+ * .detailSection is overflow: hidden on a series page (KefinTweaks'
+ * seriesEpisodes.css), which would clip it. */
+.layout-desktop #itemDetailPage .detailSection:has(> #listChildrenCollapsible .card[data-type="Season"]) {
+  overflow: visible;
+}
+.layout-desktop .detailSection > #listChildrenCollapsible:has(.card[data-type="Season"]) {
+  margin-left: -20.4vw;
+}
