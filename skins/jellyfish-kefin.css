@@ -43,3 +43,48 @@
     width: calc(0.15 * (100cqw - 20.4vw)) !important;
   }
 }
+
+/* Card hover, three fixes to Jellyfish's own (theme.css, "Card Hover
+ * Effects").
+ *
+ * The tint stays through the fade-out. Jellyfish colours the overlay only
+ * under :hover, so the moment the pointer left, the overlay went back to
+ * jellyfin-web's rgba(0,0,0,.5) at nearly full opacity and faded out from
+ * there: a dark dim the hover never showed (measured: black at 0.93 opacity
+ * 20ms after leaving, gone by 150ms). */
+.card-hoverable .cardOverlayContainer {
+  background: var(--secondary-background-transparent);
+}
+
+/* The border and glow ease as the overlay (0.2s) and the lift (0.18s) do,
+ * rather than switching on and off in one frame. */
+.cardBox-bottompadded.cardBox > .cardScalable,
+.characterSplitPart > .cardScalable {
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+/* Character cards (Vault Tweaks' Characters plugin) hover as every other
+ * card does. Jellyfish's border, glow and lift key on card-withuserdata,
+ * which a person's card carries and a character's, having no user data,
+ * does not; so a character card got the tint alone. On a card of several
+ * characters each small card is hovered on its own, as the plugin intends;
+ * it fills its cell, so its border is reserved inside it. */
+.characterSplitPart > .cardScalable {
+  border: 2px solid transparent;
+}
+div.characterCard.card-hoverable.card:hover > .cardBox-bottompadded.cardBox > .cardScalable,
+.characterSplitPart.card-hoverable:hover > .cardScalable {
+  border: 2px solid var(--primary-accent-color) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .35), 0 10px 26px rgba(0, 0, 0, .55), 0 0 22px rgba(var(--primary-r), var(--primary-g), var(--primary-b), .35) !important;
+}
+div.characterCard.card-hoverable.card,
+.characterSplitPart.card-hoverable {
+  transition: translate .18s ease;
+}
+div.characterCard.card-hoverable.card {
+  position: relative;
+}
+div.characterCard.card-hoverable.card:hover,
+.characterSplitPart.card-hoverable:hover {
+  translate: 0 -4px;
+}
