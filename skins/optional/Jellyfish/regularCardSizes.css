@@ -1,0 +1,61 @@
+/* Poster rows at jellyfin-web's own widths, cast and crew excepted.
+ *
+ * Jellyfish (theme.css, "Poster Card Size Reduction") makes every horizontal
+ * poster row's card 15% of the row on any landscape screen 50em or wider. It
+ * started in 2025-05 at 12% as a reduction, but jellyfin-web keeps shrinking
+ * these cards as the window widens and the 15% does not, so from 1400px it is
+ * larger than stock: about 1.5x at 3840px, 6.7 posters a row against 10. It is
+ * also larger than the picture jellyfin-web asks for, which it sizes from its
+ * own table (11.6% of the window from 1700px), not from the card.
+ *
+ * These are jellyfin-web 12.1's widths (src/components/cardbuilder/card.scss)
+ * at every breakpoint the 15% covers. Loaded after the skin, so the same
+ * selector wins on order. Cast and crew are left to Jellyfish: its rules for
+ * #castContent and #guestCastContent are id selectors, which outrank these. */
+@media (min-width: 50em) and (orientation: landscape) {
+  .overflowPortraitCard { width: 18.5vw !important; }
+}
+@media (min-width: 75em) and (orientation: landscape) {
+  .overflowPortraitCard { width: 15.5vw !important; }
+}
+@media (min-width: 87.5em) and (orientation: landscape) {
+  .overflowPortraitCard { width: 13.3vw !important; }
+}
+@media (min-width: 100em) and (orientation: landscape) {
+  .overflowPortraitCard { width: 11.6vw !important; }
+}
+@media (min-width: 120em) and (orientation: landscape) {
+  .overflowPortraitCard { width: 10.41vw !important; }
+}
+@media (min-width: 131.25em) and (orientation: landscape) {
+  .overflowPortraitCard { width: 9.3vw !important; }
+}
+
+/* The TV layout's own width, which the 15% also overrode. */
+@media (min-width: 50em) and (orientation: landscape) {
+  .itemsContainer-tv > .overflowPortraitCard { width: 15.6vw !important; }
+}
+
+/* A series' seasons row. jellyfish-kefin.css sizes its Poster Aspect probe as
+ * 15% of the column the seasons came from, to undo the 15%-of-row growing with
+ * the full-width row. A width in vw does not grow with its row, so the probe
+ * takes the stock width like any other poster card; the rest of the row follows
+ * the probe. Same selector, later in the cascade. */
+@media (min-width: 50em) and (orientation: landscape) {
+  .layout-desktop .detailSection > #listChildrenCollapsible:has(.card[data-type="Season"]) .itemsContainer > .overflowPortraitCard[data-par-probe] { width: 18.5vw !important; }
+}
+@media (min-width: 75em) and (orientation: landscape) {
+  .layout-desktop .detailSection > #listChildrenCollapsible:has(.card[data-type="Season"]) .itemsContainer > .overflowPortraitCard[data-par-probe] { width: 15.5vw !important; }
+}
+@media (min-width: 87.5em) and (orientation: landscape) {
+  .layout-desktop .detailSection > #listChildrenCollapsible:has(.card[data-type="Season"]) .itemsContainer > .overflowPortraitCard[data-par-probe] { width: 13.3vw !important; }
+}
+@media (min-width: 100em) and (orientation: landscape) {
+  .layout-desktop .detailSection > #listChildrenCollapsible:has(.card[data-type="Season"]) .itemsContainer > .overflowPortraitCard[data-par-probe] { width: 11.6vw !important; }
+}
+@media (min-width: 120em) and (orientation: landscape) {
+  .layout-desktop .detailSection > #listChildrenCollapsible:has(.card[data-type="Season"]) .itemsContainer > .overflowPortraitCard[data-par-probe] { width: 10.41vw !important; }
+}
+@media (min-width: 131.25em) and (orientation: landscape) {
+  .layout-desktop .detailSection > #listChildrenCollapsible:has(.card[data-type="Season"]) .itemsContainer > .overflowPortraitCard[data-par-probe] { width: 9.3vw !important; }
+}

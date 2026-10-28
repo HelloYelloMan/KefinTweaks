@@ -733,6 +733,13 @@
                         name: 'Streamberry logo',
                         url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/streamberry_logo.css',
                         enabled: false
+                    },
+                    {
+                        // Jellyfish's 15%-of-the-row poster cards back to
+                        // jellyfin-web's widths; cast and crew keep Jellyfish's.
+                        name: 'Regular card sizes (except cast and crew)',
+                        url: `${getKefinTweaksRoot()}skins/optional/Jellyfish/regularCardSizes.css`,
+                        enabled: true
                     }
                 ],
                 colorSchemes: [
