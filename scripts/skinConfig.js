@@ -787,6 +787,13 @@
                         name: 'Regular card sizes (except cast and crew)',
                         url: `${getKefinTweaksRoot()}skins/optional/Jellyfish/regularCardSizes.css`,
                         enabled: true
+                    },
+                    {
+                        // A series' episodes row takes Next Up's place in
+                        // Jellyfish's column, below the Creator/Studios box.
+                        name: 'Episodes row below the details',
+                        url: `${getKefinTweaksRoot()}skins/optional/Jellyfish/episodesRowBelowDetails.css`,
+                        enabled: true
                     }
                 ],
                 colorSchemes: [

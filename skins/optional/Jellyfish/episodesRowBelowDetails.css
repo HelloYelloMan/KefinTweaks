@@ -1,0 +1,12 @@
+/* A series' episodes row (seriesEpisodes.js) below the Creator/Studios/
+ * Genres/Tags box instead of above it.
+ *
+ * The row, that box and the seasons are all children of .detailSection,
+ * which Jellyfish makes a flex column ordered with `order`: the box is 3,
+ * Next Up 5 and the seasons 6. The row had none, so it took 0 and sat with
+ * the description box at the top. It takes Next Up's 5 here, the place of
+ * the section it replaces and hides; the seasons stay below it, so
+ * jellyfish-kefin.css still runs them full width under the poster. */
+.detailSection > .series-episodes-section {
+  order: 5;
+}
