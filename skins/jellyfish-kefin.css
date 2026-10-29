@@ -136,13 +136,14 @@ html:has(link[href*="n00bcodr/Jellyfish/slideshow"]) #indexPage .homeSectionsCon
   padding-top: max(3em, calc(var(--sl-stack-bottom) - var(--slideshow-content-top) - 3em));
 }
 
-/* The description box is frosted glass like the Creators/Studios/Genres/Tags
- * box below it: the same tint and the same blur(var(--blur)). Jellyfish
- * turns the blur off here (theme.css, "Translucent Cards on Item Detail
- * Page") and puts a 72% dark base under the tint instead, to spare a
- * re-blur of the big panel while scrolling; this takes both back. Not with
- * Lite mode on, which exists to turn blurs like this off. */
-html:not(:has(link[href*="n00bcodr/Jellyfish/lite.css"])):is(.layout-desktop, .layout-mobile) #itemDetailPage .detailSectionContent {
+/* The description box and the Video/Audio/Subtitles box are frosted glass
+ * like the Creators/Studios/Genres/Tags box: the same tint and the same
+ * blur(var(--blur)). Jellyfish turns the blur off on both (theme.css,
+ * "Translucent Cards on Item Detail Page") and puts a 72% dark base under
+ * the tint instead, to spare a re-blur of the big panels while scrolling;
+ * this takes both back. Not with Lite mode on, which exists to turn blurs
+ * like this off. */
+html:not(:has(link[href*="n00bcodr/Jellyfish/lite.css"])):is(.layout-desktop, .layout-mobile) #itemDetailPage :is(.detailSectionContent, .trackSelections) {
   background: var(--secondary-background-transparent) !important;
   backdrop-filter: blur(var(--blur)) !important;
 }
