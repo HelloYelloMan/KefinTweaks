@@ -19,11 +19,17 @@
  * section is a season's episode list, a playlist and an album's tracks.
  *
  * .detailSection is overflow: hidden on a series page (KefinTweaks'
- * seriesEpisodes.css), which would clip it. */
-.layout-desktop #itemDetailPage .detailSection:has(> #listChildrenCollapsible .card[data-type="Season"]) {
+ * seriesEpisodes.css), which would clip it.
+ *
+ * Only below the episodes row (seriesEpisodes.js), which is what takes them
+ * past the poster's bottom edge. Without it they started under the details
+ * box and ran over the poster, so a series with no row keeps its seasons in
+ * the column, where the row would be, at Jellyfish's own size (this rule and
+ * the two below all wait for the row). */
+.layout-desktop #itemDetailPage .detailSection:has(> .series-episodes-section .card):has(> #listChildrenCollapsible .card[data-type="Season"]) {
   overflow: visible;
 }
-.layout-desktop .detailSection > #listChildrenCollapsible:has(.card[data-type="Season"]) {
+.layout-desktop .detailSection:has(> .series-episodes-section .card) > #listChildrenCollapsible:has(.card[data-type="Season"]) {
   margin-left: -20.4vw;
 }
 
@@ -35,11 +41,11 @@
  * by side in columns only as wide as their cards, and 15% of one of those is
  * nothing like 15% of the row. Only Poster Aspect's probe: the row's height
  * is measured from it, and each card's width then follows its own picture. */
-.layout-desktop .detailSection > #listChildrenCollapsible:has(.card[data-type="Season"]) {
+.layout-desktop .detailSection:has(> .series-episodes-section .card) > #listChildrenCollapsible:has(.card[data-type="Season"]) {
   container-type: inline-size;
 }
 @media (min-width: 50em) and (orientation: landscape) {
-  .layout-desktop .detailSection > #listChildrenCollapsible:has(.card[data-type="Season"]) .itemsContainer > .overflowPortraitCard[data-par-probe] {
+  .layout-desktop .detailSection:has(> .series-episodes-section .card) > #listChildrenCollapsible:has(.card[data-type="Season"]) .itemsContainer > .overflowPortraitCard[data-par-probe] {
     width: calc(0.15 * (100cqw - 20.4vw)) !important;
   }
 }

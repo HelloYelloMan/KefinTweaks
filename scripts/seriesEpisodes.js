@@ -916,12 +916,15 @@
             return;
         }
 
-        // Use apiHelper to get seasons
-        const response = await window.apiHelper.getQuery(`${ApiClient.serverAddress()}/Shows/${seriesId}/Seasons`, { useCache: true });
-        if (!response.data) {
-            response.data = await response.dataPromise;
-        }
-        const seasonsData = response.data;
+        // Always the server's seasons, never the cache's. A cached list was used
+        // however old it was (its IndexedDB entry is never evicted, and an
+        // expired one still answers), and a series' seasons are re-created when
+        // it is re-identified: a new series is TheTVDB-first and replaced after
+        // Shoko, and a hand re-import gives new ids too. The row then asked for
+        // a season id that no longer exists, got no episodes, and removed
+        // itself, so the series showed no row at all (Bakemonogatari, a list
+        // three days old with one dead id: 0 cards against 15).
+        const seasonsData = await window.apiHelper.getQuery(`${ApiClient.serverAddress()}/Shows/${seriesId}/Seasons`, { useCache: false });
 
         // Extract seasons from DOM
         const seasons = seasonsData.Items || seasonsData || [];
