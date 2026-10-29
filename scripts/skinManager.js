@@ -1423,7 +1423,11 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
         backdrop.style.height = '100%';
         backdrop.style.zIndex = '9999';
         backdrop.style.backgroundColor = 'transparent';
-        
+        // The backdrop only catches outside clicks. Skins that soften the page
+        // behind a dialog (Jellyfish blurs .dialogBackdropOpened) would haze the
+        // whole page behind a small popover.
+        backdrop.style.backdropFilter = 'none';
+
         // Create dialog container
         const dialogContainer = document.createElement('div');
         dialogContainer.className = 'dialogContainer';
