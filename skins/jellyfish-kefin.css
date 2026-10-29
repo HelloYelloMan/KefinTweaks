@@ -161,3 +161,29 @@ html:not(:has(link[href*="n00bcodr/Jellyfish/lite.css"])) {
 html:not(:has(link[href*="n00bcodr/Jellyfish/lite.css"])) .characterPairStart::before {
   backdrop-filter: blur(var(--blur));
 }
+
+/* The item page's frosted panels (description, Video/Audio/Subtitles,
+ * Creators/Studios/Genres/Tags) are blurred while they fade in. Jellyfish
+ * fades the whole .detailPagePrimaryContainer (theme.css, fadeSlideIn), and
+ * an ancestor below opacity 1 is the backdrop root of every backdrop-filter
+ * inside it: the panels could blur only what was inside the container, so
+ * they faded in sharp and the blur snapped on when the fade ended (measured
+ * at 1350ms of the 1.5s: art sharp behind the box at 98% opacity). The
+ * container keeps the slide; the fade moves down to its pieces, the panels
+ * included, so no panel has a fading ancestor -- a panel's own opacity
+ * applies after its blur. Same timing and curve. Not with Lite mode on,
+ * which turns these entrance animations off. */
+html:not(:has(link[href*="n00bcodr/Jellyfish/lite.css"])) .detailPagePrimaryContainer {
+  animation-name: jfkSlideIn;
+}
+html:not(:has(link[href*="n00bcodr/Jellyfish/lite.css"])) :is(.detailPagePrimaryContainer > :not(.detailPagePrimaryContent), .detailPagePrimaryContainer > .detailPagePrimaryContent > :not(.detailSection), .detailPagePrimaryContainer > .detailPagePrimaryContent > .detailSection > *) {
+  animation: jfkFadeIn 1.5s ease-in-out;
+}
+@keyframes jfkSlideIn {
+  0% { transform: translateY(10px); }
+  100% { transform: translateY(0); }
+}
+@keyframes jfkFadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
