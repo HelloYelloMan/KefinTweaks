@@ -112,3 +112,11 @@ div.characterCard.card-hoverable.card:hover,
 html:has(link[href*="n00bcodr/Jellyfish/jellyfin-enhanced.css"]) .MuiToolbar-root > .kefinTweaks-breadcrumbs-wrapper {
   top: auto;
 }
+
+/* The breadcrumbs line up with the button above them. breadcrumbNav.css pulls
+ * the row 0.5em left, which put the first breadcrumb's button 7.4px left of
+ * the logo button's (measured at 1600px: 15.6 against 23). Without it both
+ * start at the toolbar's padding, in the strip or below the bar. */
+.MuiToolbar-root > .kefinTweaks-breadcrumbs-wrapper {
+  margin-left: 0;
+}
