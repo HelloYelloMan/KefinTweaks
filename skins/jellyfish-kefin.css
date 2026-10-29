@@ -187,3 +187,17 @@ html:not(:has(link[href*="n00bcodr/Jellyfish/lite.css"])) :is(.detailPagePrimary
   0% { opacity: 0; }
   100% { opacity: 1; }
 }
+
+/* On a phone the logo sits on the bottom of the backdrop at the top of an
+ * item page, 1rem above its edge. Jellyfish puts it near the top (theme.css,
+ * "Mobile Logo Positioning": top 15% of the page, pulled up 8vh). The item
+ * page is the logo's containing block and starts where the backdrop does, and
+ * the backdrop is 50vh tall ("Mobile Poster/Backdrop Styling"), so the logo's
+ * 15vh box ends 1rem short of 50vh. The picture keeps to the bottom of its
+ * box, so a wide, short logo lands on that line too instead of centred
+ * above it. */
+.layout-mobile #itemDetailPage .detailLogo {
+  top: calc(50vh - 15vh - 1rem) !important;
+  margin-top: 0 !important;
+  background-position: center bottom !important;
+}
