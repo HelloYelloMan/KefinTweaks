@@ -120,3 +120,18 @@ html:has(link[href*="n00bcodr/Jellyfish/jellyfin-enhanced.css"]) .MuiToolbar-roo
 .MuiToolbar-root > .kefinTweaks-breadcrumbs-wrapper {
   margin-left: 0;
 }
+
+/* Jellyfish's Media Bar slideshow files leave room for the first home row's
+ * title by padding .section0, jellyfin-web's first section. KefinTweaks'
+ * home screen hides that one and draws its own sections, which have no
+ * section0, so the title sat at the top of the rows -- and the full bar's
+ * buttons end 9vh below the rows' top, so on screens over ~1200px tall they
+ * covered it (74px over at 1990px tall). The first KefinTweaks section takes
+ * the padding instead, grown with that 9vh: the title clears the buttons by
+ * about 60px at any height. The compact card's stack ends above the rows, so
+ * it gets Jellyfish's 3em. The row's scroll buttons are placed from the
+ * section's top edge, so they take it too (as Jellyfish's rule does). */
+html:has(link[href*="n00bcodr/Jellyfish/slideshow"]) #indexPage .homeSectionsContainer > .verticalSection:nth-child(1 of .custom-scroller-container),
+html:has(link[href*="n00bcodr/Jellyfish/slideshow"]) #indexPage .homeSectionsContainer > .verticalSection:nth-child(1 of .custom-scroller-container) .emby-scrollbuttons {
+  padding-top: max(3em, calc(var(--sl-stack-bottom) - var(--slideshow-content-top) - 3em));
+}
