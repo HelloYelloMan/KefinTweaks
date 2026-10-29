@@ -703,7 +703,6 @@
                         majorServerVersions: [11, 12],
                         urls: [
                             'https://cdn.jsdelivr.net/gh/n00bcodr/jellyfish@main/theme.css',
-                            'https://cdn.jsdelivr.net/gh/n00bcodr/jellyfish@main/10.11_fixes.css',
                             `${getKefinTweaksRoot()}skins/jellyfish-kefin.css`
                         ]
                     }
@@ -733,6 +732,54 @@
                         name: 'Streamberry logo',
                         url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/streamberry_logo.css',
                         enabled: false
+                    },
+                    {
+                        // The three slideshow files are one choice: each
+                        // imports slideshow.css itself.
+                        name: 'Media Bar slideshow: full bar',
+                        url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/slideshow.css',
+                        enabled: false,
+                        group: 'slideshow',
+                        afterColorScheme: true
+                    },
+                    {
+                        name: 'Media Bar slideshow: compact card',
+                        url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/slideshow-compact.css',
+                        enabled: false,
+                        group: 'slideshow',
+                        afterColorScheme: true
+                    },
+                    {
+                        name: 'Media Bar slideshow: full on desktop, compact on phones',
+                        url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/slideshow-compact-mobile.css',
+                        enabled: false,
+                        group: 'slideshow',
+                        afterColorScheme: true
+                    },
+                    {
+                        name: 'Show Scrollbars',
+                        url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/scrollbar.css',
+                        enabled: false
+                    },
+                    {
+                        name: 'Watched / Favorite Buttons on Card Hover',
+                        url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/card_buttons.css',
+                        enabled: false
+                    },
+                    {
+                        // Turns off blurs the palette turns on (Liquid Glass's
+                        // panels, same selectors, both !important), so it has
+                        // to follow the palette.
+                        name: 'Lite mode',
+                        url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/lite.css',
+                        enabled: false,
+                        afterColorScheme: true
+                    },
+                    {
+                        name: 'Jellyfin Enhanced add-on',
+                        url: 'https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/jellyfin-enhanced.css',
+                        enabled: false,
+                        afterColorScheme: true
                     },
                     {
                         // Jellyfish's 15%-of-the-row poster cards back to

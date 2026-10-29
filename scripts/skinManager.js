@@ -944,15 +944,26 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
         
         // Load enabled skin-specific optional includes
         if (skin.optionalIncludes && skin.optionalIncludes.length > 0) {
+            // Includes sharing a group are alternatives (Jellyfish's three
+            // slideshow files): only the first enabled one loads, should an
+            // admin default and a user choice both be on.
+            const loadedGroups = new Set();
             skin.optionalIncludes.forEach(include => {
                 const author = extractAuthorFromUrl(include.url);
                 const key = generateOptionalIncludeKey(skin.name, author, include.url);
-                
+
                 // Check enabled state (User Config > Admin Config > Default)
                 const isEnabled = isOptionalIncludeEnabled(key, include.enabled || false, userConfig);
-                
+
                 if (isEnabled && include.url) {
-                    withSkinCacheToken(include.url).then((url) => loadOptionalIncludeCSS(url, skin.name, { last: include.loadLast === true }));
+                    if (include.group) {
+                        if (loadedGroups.has(include.group)) return;
+                        loadedGroups.add(include.group);
+                    }
+                    withSkinCacheToken(include.url).then((url) => loadOptionalIncludeCSS(url, skin.name, {
+                        last: include.loadLast === true,
+                        afterColorScheme: include.afterColorScheme === true
+                    }));
                 }
             });
         }
@@ -1077,7 +1088,24 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
             const includes = document.querySelectorAll('link[data-kefin-optional-include="true"]');
             if (includes.length > 0) insertAfter = includes[includes.length - 1];
         }
-        
+
+        // An include flagged afterColorScheme overrides what the colour scheme
+        // sets (Jellyfish's lite.css switches off Liquid Glass's blurs), so it
+        // goes after the scheme's link as well as after the includes. The
+        // scheme is only ever moved to straight after the skin links, which
+        // keeps it ahead of this one; a scheme link created later goes there
+        // too.
+        if (options.afterColorScheme) {
+            const includes = document.querySelectorAll('link[data-kefin-optional-include="true"]');
+            const candidates = [document.getElementById('cssColorSchemes'), includes[includes.length - 1]]
+                .filter(el => el && el.parentNode);
+            candidates.forEach(el => {
+                if (!insertAfter || (insertAfter.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)) {
+                    insertAfter = el;
+                }
+            });
+        }
+
         if (insertAfter && insertAfter.parentNode) {
             insertAfter.parentNode.insertBefore(link, insertAfter.nextSibling);
         } else {
@@ -2007,6 +2035,9 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
                 checkbox.setAttribute('data-include-name', include.name);
                 checkbox.setAttribute('data-include-url', include.url);
                 checkbox.setAttribute('data-is-global', 'false');
+                if (include.group) {
+                    checkbox.setAttribute('data-include-group', include.group);
+                }
                 checkbox.style.cssText = 'width: 18px; height: 18px; cursor: pointer;';
                 
                 const label = document.createElement('label');
@@ -2106,7 +2137,18 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
                             
                             // Save only this specific key (Option 1: only save what user toggled)
                             saveOptionalIncludeState(key, enabled);
-                            
+
+                            // Ticking one of a group unticks the others
+                            const group = checkbox.getAttribute('data-include-group');
+                            if (enabled && group) {
+                                allCheckboxes.forEach(other => {
+                                    if (other === checkbox || other.getAttribute('data-include-group') !== group) return;
+                                    const otherUrl = other.getAttribute('data-include-url');
+                                    other.checked = false;
+                                    saveOptionalIncludeState(generateOptionalIncludeKey(skin.name, extractAuthorFromUrl(otherUrl), otherUrl), false);
+                                });
+                            }
+
                             // Check if this is the currently active skin
                             const currentSkinName = getStoredOrDefaultSkinName();
                             if (currentSkinName === skin.name) {
