@@ -103,3 +103,12 @@ div.characterCard.card-hoverable.card:hover,
 .itemsContainer > .card.characterPairStart.card-hoverable:hover > .cardBox {
   translate: 0 -4px;
 }
+
+/* Jellyfish's Jellyfin Enhanced add-on reserves a strip at the bottom of the
+ * bar for the breadcrumbs and pins them there with bottom: 2px, but
+ * breadcrumbNav.css hangs them below the bar with top: 100%, and with both
+ * set top wins: the strip stayed empty and the breadcrumbs sat under it.
+ * Only while the add-on is loaded; without it they hang below the bar. */
+html:has(link[href*="n00bcodr/Jellyfish/jellyfin-enhanced.css"]) .MuiToolbar-root > .kefinTweaks-breadcrumbs-wrapper {
+  top: auto;
+}
