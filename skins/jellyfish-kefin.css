@@ -207,20 +207,3 @@ html:not(:has(link[href*="n00bcodr/Jellyfish/lite.css"])) :is(.detailPagePrimary
   margin-top: 0 !important;
   background-position: center bottom !important;
 }
-
-/* A season page's title line reads like a series page's: the series name,
- * then the season's original title beside it, with no dash. Jellyfish puts
- * " -" after the series name whenever there is an .itemName.subtitle
- * (theme.css, for an episode's "Show - Season 1 - 1. Title"). A season page
- * has one too, its "Season 2", but vault's branding CSS hides a subtitle
- * with no link in it (.subtitle:not(:has(a))), so the dash led into the
- * small original title ("Monogatari - Kizumonogatari") or into nothing
- * ("Bob and Margaret -"). Same condition as the branding rule, written
- * without a :has() inside :has(), which a browser rejects. The gap is the
- * series page's (.itemName.withOriginalTitle, 0.5em). */
-.nameContainer:has(> .itemName.subtitle):not(:has(> .itemName.subtitle a)) .parentName::after {
-  content: none;
-}
-.nameContainer:has(> .itemName.subtitle):not(:has(> .itemName.subtitle a)) .parentName {
-  padding-right: 0.5em;
-}
