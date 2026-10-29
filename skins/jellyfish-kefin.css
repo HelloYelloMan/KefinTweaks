@@ -207,3 +207,18 @@ html:not(:has(link[href*="n00bcodr/Jellyfish/lite.css"])) :is(.detailPagePrimary
   margin-top: 0 !important;
   background-position: center bottom !important;
 }
+
+/* On a season page the season's original title follows the series name and
+ * Jellyfish's " -" (theme.css adds the dash when there is an .itemName.subtitle;
+ * the season's "Season 2" subtitle is hidden by vault's branding CSS, which
+ * hides a subtitle with no link in it). The title line is a flex row on
+ * baselines, which sat the smaller original title 5px below the series
+ * name's middle (measured from the capitals, cap top to baseline: M 8-27,
+ * K 18-27). Centred instead, as text after a dash should be: both 17.5.
+ * Only there: an episode's original title follows its own title, not the
+ * dash. Desktop only; on a phone the title stacks and align-self would move
+ * it sideways. The condition is the branding rule's, written without a :has()
+ * inside :has(), which a browser rejects. */
+.layout-desktop .nameContainer:has(> .itemName.subtitle):not(:has(> .itemName.subtitle a)) > .originalTitle {
+  align-self: center;
+}
