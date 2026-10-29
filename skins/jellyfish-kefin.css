@@ -146,3 +146,17 @@ html:not(:has(link[href*="n00bcodr/Jellyfish/lite.css"])):is(.layout-desktop, .l
   background: var(--secondary-background-transparent) !important;
   backdrop-filter: blur(var(--blur)) !important;
 }
+
+/* The panel behind a character and their actor (Vault Tweaks' Characters,
+ * .characterPairStart::before) is the same frosted glass as the description
+ * and details boxes: their tint as the plugin's --character-pair-ground, and
+ * their blur. Left to itself the plugin paints jellyfin-web's app-bar colour,
+ * a dark card. Not with Lite mode on, as for the description box. Both name
+ * only the plugin's own variable and class, so with it off they match
+ * nothing. */
+html:not(:has(link[href*="n00bcodr/Jellyfish/lite.css"])) {
+  --character-pair-ground: var(--secondary-background-transparent);
+}
+html:not(:has(link[href*="n00bcodr/Jellyfish/lite.css"])) .characterPairStart::before {
+  backdrop-filter: blur(var(--blur));
+}
