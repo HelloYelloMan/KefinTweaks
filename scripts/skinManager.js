@@ -3071,6 +3071,14 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
         });
     }
     
+    function isSameOriginUrl(url) {
+        try {
+            return new URL(url, window.location.href).origin === window.location.origin;
+        } catch (e) {
+            return false;
+        }
+    }
+
     /**
      * Append a cache token to a stylesheet URL, derived from the file's own validator.
      *
@@ -3096,6 +3104,10 @@ window.KefinTweaksConfig = ${JSON.stringify(configToBackup, null, 2)};`;
      */
     async function withSkinCacheToken(url) {
         if (!url) return url;
+        // FORK: only probe our own origin. On a CDN root (jsDelivr) the file is
+        // versioned by the CDN, and a cross-origin fetch() is what a page's CSP
+        // connect-src blocks -- one console error per file for nothing.
+        if (!isSameOriginUrl(url)) return url;
         const shared = window.KefinTweaksCacheToken;
         if (typeof shared === 'function') {
             try {
